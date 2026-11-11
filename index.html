@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2b3047">
+<title>ON-Lounge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+@font-face { font-family: "Pixelify Sans"; font-weight: 700; font-display: swap; src: url("pixelify-sans-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Silkscreen"; font-weight: 400; font-display: swap; src: url("silkscreen-latin-400-normal.woff2") format("woff2"); }
+
+/* Layout: phone = room on top, controls, optional bottom sheet that shrinks the room (never covers it).
+   Laptop = room left, panel right, controls under the room. Game-UI look: cream panels with ink outlines. */
+:root {
+  --bg: #2b3047;
+  --ink: #251c2c;
+  --cream: #fff8ea;
+  --cream-2: #f3e7d0;
+  --gold: #ffcc4d;
+  --teal: #3fb5a3;
+  --rose: #ff8fa3;
+  --text: #2b2230;
+  --muted: #7c6f80;
+  --on-bg: #f3eefc;
+  --font-title: "Pixelify Sans", "Silkscreen", monospace;
+  --font-body: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", "PingFang SC", system-ui, sans-serif;
+  --font-display: var(--font-body);
+  --font-pixel: "Silkscreen", "Pixelify Sans", "Courier New", monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+img { max-width: 100%; }
+html { -webkit-text-size-adjust: 100%; }
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 14px; line-height: 1.5; overflow: hidden;
+  margin: 0; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
+}
+.app { height: 100%; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+h1 { margin: 0; font-family: var(--font-title); font-weight: 700; font-size: 26px; color: var(--gold); line-height: 1.1; text-shadow: 0 2px 0 var(--ink); letter-spacing: .02em; }
+.live { font-family: var(--font-pixel); font-size: 11px; color: var(--on-bg); display: inline-flex; align-items: center; gap: 6px; }
+.live i { width: 8px; height: 8px; background: #7bd389; display: inline-block; box-shadow: 0 0 0 2px var(--ink); }
+.tabs { display: flex; gap: 6px; }
+button { font: inherit; color: var(--text); cursor: pointer; }
+.btn { white-space: nowrap; background: var(--cream); border: 2px solid var(--ink); border-radius: 6px; padding: 6px 12px; box-shadow: 0 3px 0 var(--ink); font-weight: 600; transition: transform .06s; }
+.btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.btn[aria-pressed="true"] { background: var(--gold); }
+.btn-gold { background: var(--gold); }
+.dnd { font: inherit; color: var(--gold); background: none; border: 0; padding: 0 2px; cursor: pointer; text-shadow: 0 2px 0 var(--ink), 0 0 10px rgba(255,204,77,.7); border-bottom: 3px dotted rgba(255,204,77,.6); }
+.app.off .dnd { color: #8b88a0; text-shadow: 0 2px 0 var(--ink); border-bottom-color: rgba(139,136,160,.6); }
+.app.off h1 { color: #b9b5cc; }
+.off-note { display: none; background: var(--cream-2); border: 2px dashed var(--ink); border-radius: 8px; padding: 14px; text-align: center; color: var(--muted); }
+.app.off .off-note { display: block; }
+.app.off #log { display: none; }
+.app.off .motions .btn, .app.off .chat .btn, .app.off #chatInput { opacity: .45; pointer-events: none; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--rose); outline-offset: 2px; }
+
+.stage { flex: 1 1 auto; min-height: 160px; position: relative; display: flex; align-items: center; justify-content: center; background: #1c1f30; border: 3px solid var(--ink); border-radius: 10px; overflow: hidden; }
+#room { display: block; image-rendering: pixelated; touch-action: manipulation; cursor: pointer; }
+.toast { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--cream); padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; pointer-events: none; white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+.modal { position: absolute; inset: 0; background: rgba(20,16,28,.55); display: flex; align-items: center; justify-content: center; padding: 14px; }
+.modal-card { background: var(--cream); border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 5px 0 var(--ink); width: min(380px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; background: var(--gold); border-bottom: 3px solid var(--ink); }
+.modal-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 20px; }
+.modal-body { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.modal-body p { margin: 0; }
+.tag { align-self: flex-start; font-size: 11px; font-weight: 700; background: var(--rose); color: #fff; border: 2px solid var(--ink); border-radius: 4px; padding: 0 6px; }
+.qt-ref { font-family: var(--font-display); font-size: 22px; color: var(--ink); }
+.qt-date { color: var(--muted); font-size: 12px; }
+.qt-text { white-space: pre-line; background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 12px; line-height: 1.8; }
+.qt-q { background: var(--cream-2); border-radius: 6px; padding: 10px 12px; }
+.qt-q b { display: block; font-size: 12px; color: var(--muted); }
+.ad { background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.ad strong { font-size: 15px; }
+.ad span { color: var(--muted); white-space: pre-line; }
+.small { font-size: 12px; color: var(--muted); }
+
+/* QR pop: image only, sized to the stage */
+.qrpop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(20,16,28,.45); padding: 16px; }
+.qrpop figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%; }
+.qrpop img { display: block; width: min(240px, 62vw); max-width: 100%; height: auto; background: #fff; border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 5px 0 var(--ink); -webkit-touch-callout: default; user-select: auto; }
+.qrpop figcaption { color: #fff; font-size: 12px; font-weight: 600; text-align: center; text-shadow: 0 1px 0 var(--ink); }
+.qr-empty { background: var(--cream); border: 3px solid var(--ink); border-radius: 10px; padding: 18px 16px; max-width: 240px; text-align: center; box-shadow: 0 5px 0 var(--ink); }
+
+.controls { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; gap: 6px; align-items: stretch; }
+.act { background: var(--teal); color: #fff; white-space: nowrap; }
+.chat { display: flex; gap: 6px; flex: 1; min-width: 0; }
+input[type="text"], input[type="password"], input[type="date"], textarea { font: inherit; color: var(--text); background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 7px 10px; width: 100%; min-width: 0; }
+textarea { resize: vertical; min-height: 70px; line-height: 1.6; }
+.motions { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
+.motions .btn { padding: 4px 10px; font-size: 13px; white-space: nowrap; flex: 0 0 auto; }
+.hint { color: var(--on-bg); opacity: .75; font-size: 12px; margin: 0; }
+
+.panel { display: none; flex-direction: column; min-height: 0; background: var(--cream); border: 3px solid var(--ink); border-radius: 10px; overflow: hidden; }
+.app.open .panel { display: flex; flex: 0 0 46%; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--cream-2); border-bottom: 2px solid var(--ink); }
+.panel-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+.pane { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.people { display: flex; flex-wrap: wrap; gap: 6px; }
+.people span { font-size: 12px; background: var(--cream-2); border: 2px solid var(--ink); border-radius: 4px; padding: 0 8px; }
+.people span.me { background: var(--gold); font-weight: 700; }
+#log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+#log li { overflow-wrap: anywhere; }
+#log b { color: #2f8f81; margin-right: 4px; }
+#log li.me b { color: #b07a00; }
+#log li.sys { color: var(--muted); font-size: 12px; }
+
+.preview { display: flex; justify-content: center; gap: 16px; background: #c4915f; border: 2px solid var(--ink); border-radius: 8px; padding: 10px 0 6px; }
+.preview figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.preview canvas { width: 54px; height: 78px; image-rendering: pixelated; }
+.preview figcaption { font-size: 11px; color: #fff; font-weight: 600; text-shadow: 0 1px 0 var(--ink); }
+.opt { display: flex; flex-direction: column; gap: 5px; }
+.lbl, .opt label { font-size: 12px; color: var(--muted); font-weight: 600; }
+.sub { font-size: 11px; color: var(--muted); }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw { width: 28px; height: 28px; border: 2px solid var(--ink); border-radius: 5px; padding: 0; box-shadow: 0 2px 0 var(--ink); }
+.sw[aria-pressed="true"] { outline: 3px solid var(--rose); outline-offset: 1px; }
+.chip { background: #fff; border: 2px solid var(--ink); border-radius: 5px; padding: 3px 9px; font-size: 13px; box-shadow: 0 2px 0 var(--ink); display: inline-flex; align-items: center; gap: 6px; }
+.chip[aria-pressed="true"] { background: var(--gold); font-weight: 700; }
+.chip .dot { width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 3px; display: inline-block; }
+.admin-sec { display: flex; flex-direction: column; gap: 8px; border-top: 2px dashed var(--ink); padding-top: 12px; }
+.admin-sec h3 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 17px; }
+.ad-edit { display: flex; flex-direction: column; gap: 6px; background: var(--cream-2); border-radius: 6px; padding: 8px; }
+.ad-edit .btn { align-self: flex-end; padding: 2px 10px; font-size: 12px; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.qr-thumb { width: 96px; height: 96px; object-fit: contain; background: #fff; border: 2px solid var(--ink); border-radius: 6px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media (min-width: 900px) {
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px 14px; grid-template-areas: "top top" "stage panel" "controls panel"; }
+  .top { grid-area: top; } .stage { grid-area: stage; } .controls { grid-area: controls; }
+  .panel, .app.open .panel { display: flex; grid-area: panel; }
+  .panel-close { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }
+
+.live i.bad { background: #ff7a6b; }
+.mode { font-family: var(--font-pixel); font-size: 10px; color: var(--ink); background: var(--on-bg); border-radius: 3px; padding: 0 5px; }
+.editbar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center;
+  background: var(--cream); border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 4px 0 var(--ink); padding: 8px 10px; max-width: calc(100% - 20px); }
+.editbar b { font-size: 13px; margin-right: 4px; }
+.editbar .btn { padding: 4px 10px; font-size: 13px; }
+.join { position: fixed; inset: 0; z-index: 20; background: var(--bg); display: flex; align-items: center; justify-content: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
+.join-card { width: min(360px, 100%); background: var(--cream); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.join-card h2 { margin: 0 0 4px; font-family: var(--font-title); font-weight: 700; font-size: 30px; color: var(--ink); }
+.join-card h2 span { color: #c99100; }
+.join-load { color: var(--on-bg); font-weight: 600; }
+.err { color: #c0392b; font-size: 13px; margin: 0; min-height: 1.2em; }
+.linkbtn { background: none; border: 0; padding: 2px 0; color: var(--muted); text-decoration: underline; font-size: 12px; align-self: center; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.scene-tag { font-size: 12px; font-weight: 800; color: var(--ink); background: var(--gold); border: 2px solid var(--ink); border-radius: 999px; padding: 0 10px; white-space: nowrap; }
+.fade { position: absolute; inset: 0; background: #0f0d16; opacity: 0; pointer-events: none; transition: opacity .26s ease; }
+.fade.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .fade { transition: none; } }
+.pr-form { display: flex; flex-direction: column; gap: 6px; }
+.pr-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.pr-list { display: flex; flex-direction: column; gap: 8px; }
+.pr-card { background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.pr-body { margin: 0; white-space: pre-line; line-height: 1.6; overflow-wrap: anywhere; }
+.pr-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pr-meta .small { flex: 1; min-width: 0; }
+.pr-amen, .pr-del { padding: 2px 8px; font-size: 12px; }
+.pr-amen[aria-pressed="true"] { background: var(--gold); }
+a.btn { display: inline-flex; align-items: center; text-decoration: none; color: var(--text); }
+.qt-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.qt-nav .btn { padding: 4px 10px; font-size: 13px; }
+.qt-rows { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.qt-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+.qt-row input { padding: 5px 8px; }
+.qt-row .btn { padding: 2px 8px; font-size: 12px; }
+.qt-row.warn input[type="text"] { border-color: #e08a2e; background: #fff4e5; }
+details.paste { background: var(--cream-2); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+details.paste summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+details.paste textarea { margin-block: 6px; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.demo-note { background: var(--cream-2); border-radius: 6px; padding: 6px 8px; }
+.creator { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: flex; align-items: stretch; justify-content: center;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.cr-card { width: min(900px, 100%); background: var(--cream); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.cr-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--gold); border-bottom: 3px solid var(--ink); }
+.cr-head h2 { margin: 0; font-size: 20px; font-weight: 800; }
+.cr-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); }
+.cr-stage { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px; border-right: 2px dashed var(--ink); overflow-y: auto; }
+.cr-stage canvas { width: 144px; height: 200px; image-rendering: pixelated; background: repeating-linear-gradient(0deg, #c4915f 0 24px, #bd8a5a 24px 48px); border: 3px solid var(--ink); border-radius: 10px; padding: 14px 26px; box-sizing: content-box; }
+.cr-turn { display: flex; gap: 6px; }
+.cr-summary { margin: 0; text-align: center; font-size: 13px; color: var(--muted); }
+.cr-stage .field { width: 100%; }
+.cr-pick { display: flex; flex-direction: column; min-height: 0; }
+.cr-tabs { display: flex; gap: 6px; padding: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--cream-2); }
+.cr-tabs .btn { padding: 5px 12px; }
+.cr-options { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.cr-sub { font-size: 12px; font-weight: 700; color: var(--muted); }
+.cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
+.cr-opt { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; box-shadow: 0 2px 0 var(--ink); font-size: 12px; font-weight: 600; cursor: pointer; }
+.cr-opt canvas { width: 54px; height: auto; image-rendering: pixelated; }
+.cr-opt[aria-pressed="true"] { background: var(--gold); }
+.cr-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.cr-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 10px 14px; border-top: 3px solid var(--ink); background: var(--cream-2); }
+.cr-foot .err { flex: 1; }
+@media (max-width: 700px) {
+  .cr-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .cr-stage { border-right: 0; border-bottom: 2px dashed var(--ink); flex-direction: row; flex-wrap: wrap; justify-content: center; padding: 10px; gap: 8px; }
+  .cr-stage canvas { width: 72px; height: 100px; padding: 8px 14px; }
+  .cr-turn { flex-direction: column; }
+  .cr-stage .field { width: auto; flex: 1 1 140px; }
+  .cr-summary { flex-basis: 100%; }
+}
+.join-look { display: flex; gap: 10px; align-items: stretch; }
+.join-look canvas { width: 54px; height: 78px; flex: 0 0 auto; image-rendering: pixelated; background: #c4915f; border: 2px solid var(--ink); border-radius: 8px; padding: 4px; box-sizing: content-box; }
+.join-look textarea { flex: 1; min-width: 0; min-height: 78px; }
+
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <h1><button type="button" class="dnd" id="dndBtn" aria-pressed="true" aria-label="방해금지 모드 켜고 끄기">ON</button>-Lounge</h1>
+      <span class="live"><i id="liveDot"></i><b id="count">1</b>&nbsp;ONLINE <span class="mode" id="modeTag">DEMO</span></span>
+      <span class="scene-tag" id="sceneTag">본당</span>
+    </div>
+    <nav class="tabs" aria-label="패널">
+      <button type="button" class="btn" id="tab-char" data-tab="char" aria-pressed="false">캐릭터</button>
+      <button type="button" class="btn" id="tab-chat" data-tab="chat" aria-pressed="false">대화</button>
+      <button type="button" class="btn" id="tab-admin" data-tab="admin" aria-pressed="false">관리</button>
+    </nav>
+  </header>
+
+  <section class="stage" id="stage">
+    <canvas id="room" aria-label="라운지 공간. 클릭한 곳으로 캐릭터가 이동합니다."></canvas>
+    <div class="fade" id="fade" aria-hidden="true"></div>
+    <div class="qrpop" id="qrPop" hidden>
+      <figure id="qrFig">
+        <img id="qrImg" alt="헌금 위챗 QR 코드">
+        <figcaption>길게 눌러 저장하거나, 위챗에서 길게 눌러 바로 인식할 수 있어요</figcaption>
+      </figure>
+      <div class="qr-empty" id="qrEmpty" hidden>아직 등록된 헌금 QR이 없어요.<br>관리 탭에서 QR 이미지를 올려 주세요.</div>
+    </div>
+    <div class="editbar" id="editBar" hidden>
+      <b>배치 편집 중</b>
+      <button type="button" class="btn btn-gold" id="editSave">저장</button>
+      <button type="button" class="btn" id="editCancel">취소</button>
+      <button type="button" class="btn" id="editReset">처음 배치로</button>
+    </div>
+    <div class="toast" id="toast" hidden></div>
+    <div class="modal" id="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-head"><h2 id="modalTitle"></h2><button type="button" class="btn" id="modalClose">닫기</button></div>
+        <div class="modal-body" id="modalBody"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="row">
+      <button type="button" class="btn act" id="actBtn" hidden></button>
+      <form class="chat" id="chatForm" autocomplete="off">
+        <input type="text" id="chatInput" maxlength="200" placeholder="할 말을 입력하세요">
+        <button type="submit" class="btn btn-gold">보내기</button>
+      </form>
+    </div>
+    <div class="motions" aria-label="모션">
+      <button type="button" class="btn" data-motion="wave">손인사</button>
+      <button type="button" class="btn" data-motion="clap">박수</button>
+      <button type="button" class="btn" data-motion="pray">기도</button>
+      <button type="button" class="btn" data-motion="jump">점프</button>
+      <button type="button" class="btn" data-motion="heart">♥</button>
+      <button type="button" class="btn" data-motion="sleepy">Zz</button>
+    </div>
+    <p class="hint" id="hint">방향키·WASD로 이동 · 바닥 클릭으로 이동 · 말풍선(…)이 뜬 곳 근처에서 E 또는 초록 버튼</p>
+  </section>
+
+  <aside class="panel" id="panel">
+    <div class="panel-head"><h2 id="panelTitle">대화</h2><button type="button" class="btn panel-close" id="panelClose">접기</button></div>
+    <div class="pane" data-pane="chat">
+      <div class="people" id="people"></div>
+      <p class="note" id="where"></p>
+      <div class="off-note">🙏 OFF-Lounge 모드예요.<br>지금은 대화가 보이지 않고 채팅도 할 수 없어요.<br>제목의 OFF를 누르면 다시 ON으로 돌아와요.</div>
+      <ul id="log" aria-live="polite"></ul>
+    </div>
+    <div class="pane" data-pane="char" hidden>
+      <div class="preview">
+        <figure><canvas id="pv0" width="18" height="25"></canvas><figcaption>앞</figcaption></figure>
+        <figure><canvas id="pv1" width="18" height="25"></canvas><figcaption>옆</figcaption></figure>
+        <figure><canvas id="pv2" width="18" height="25"></canvas><figcaption>뒤</figcaption></figure>
+      </div>
+      <div class="opt"><label for="nameInput">이름</label><input type="text" id="nameInput" maxlength="8"></div>
+<div class="btns"><button type="button" class="btn btn-gold" id="editLookBtn">머리·옷 바꾸기</button><button type="button" class="btn" id="logoutBtn">로그아웃</button></div>
+    </div>
+    <div class="pane" data-pane="admin" hidden>
+      <div id="adminLock" style="display:flex;flex-direction:column;gap:8px">
+        <p class="note">관리자만 오늘의 QT, 이번 주 광고, 헌금 QR, 물건 배치를 바꿀 수 있어요.</p>
+        <div id="pinBox" style="display:flex;flex-direction:column;gap:8px">
+          <label class="lbl" for="pinInput">관리자 PIN</label>
+          <div class="row"><input type="password" id="pinInput" inputmode="numeric" maxlength="8"><button type="button" class="btn btn-gold" id="pinBtn">들어가기</button></div>
+          <p class="note" id="pinMsg">체험판 PIN은 0000이에요. 실제 사이트에서는 관리자 계정으로 로그인해요.</p>
+        </div>
+        <p class="note" id="liveLockNote" hidden>관리자로 지정된 계정으로 로그인하면 여기서 바로 고칠 수 있어요.</p>
+      </div>
+      <div id="adminEdit" hidden style="display:flex;flex-direction:column;gap:12px">
+        <div class="admin-sec" style="border-top:0;padding-top:0">
+          <h3>물건 배치</h3>
+          <p class="note">드럼, 피아노, 스피커, 헌금함 같은 물건을 끌어서 옮길 수 있어요. 저장하면 모든 사람에게 똑같이 보여요.</p>
+          <div class="btns"><button type="button" class="btn btn-gold" id="layoutStart">배치 편집 시작</button></div>
+        </div>
+        <div class="admin-sec">
+          <h3>QT 일정 (인도자 보면대)</h3>
+          <p class="note">매달 1일에 그 달 본문표 사진을 올리면 날짜별 본문 범위를 자동으로 읽어요. 저장해 두면 매일 0시(중국 시간)에 그날 본문이 보면대에 올라가요.</p>
+          <div class="field"><label class="lbl" for="qtMonth">달</label><input type="month" id="qtMonth"></div>
+          <div class="field"><label class="lbl" for="qtPhoto">본문표 사진 올리기</label><input type="file" id="qtPhoto" accept="image/*"></div>
+          <p class="note" id="ocrMsg" aria-live="polite"></p>
+          <details class="paste">
+            <summary>사진 대신 글로 붙여넣기 / 읽은 글 확인</summary>
+            <textarea id="qtPaste" rows="6" placeholder="1 요한복음 3:1-15&#10;2 요한복음 3:16-21&#10;3 요한복음 3:22-36"></textarea>
+            <button type="button" class="btn" id="qtPasteBtn">이 글에서 본문 읽기</button>
+          </details>
+          <div class="qt-rows" id="qtRows"></div>
+          <p class="note" id="qtCheck"></p>
+          <p class="note">보면대의 "우리말성경으로 본문 읽기" 버튼은 그날 날짜의 두란노 생명의삶 페이지를 우리말성경으로 자동으로 열어요.</p>
+          <div class="btns"><button type="button" class="btn" id="qtAddRow">줄 추가</button><button type="button" class="btn btn-gold" id="qtSave">이 달 일정 저장</button></div>
+        </div>
+        <div class="admin-sec">
+          <h3>이번 주 광고 (게시판)</h3>
+          <div id="adList" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div class="btns"><button type="button" class="btn" id="adAdd">광고 추가</button></div>
+        </div>
+        <div class="admin-sec">
+          <h3>헌금 QR (헌금함)</h3>
+          <div class="row" style="align-items:center">
+            <img id="qrThumb" class="qr-thumb" alt="등록된 헌금 QR 미리보기" hidden>
+            <input type="file" id="qrFile" accept="image/*">
+          </div>
+          <div class="btns"><button type="button" class="btn" id="qrRemove">QR 지우기</button></div>
+        </div>
+        <div class="btns">
+          <button type="button" class="btn btn-gold" id="adminSave">광고·QR 저장</button>
+          <button type="button" class="btn" id="adminLogout">관리자 나가기</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<div class="join" id="join" hidden>
+  <p class="join-load" id="joinLoading">연결하는 중…</p>
+  <form class="join-card" id="authCard" hidden autocomplete="on" novalidate>
+    <h2><span>ON</span>-Lounge</h2>
+    <p class="note">청년부 라운지에 오신 걸 환영해요.</p>
+    <p class="note demo-note" id="demoNote">체험판이라 아무 이메일·비밀번호나 넣어도 들어가져요.</p>
+    <div class="auth-tabs" role="group" aria-label="로그인 또는 회원가입">
+      <button type="button" class="btn" data-auth="login" aria-pressed="true">로그인</button>
+      <button type="button" class="btn" data-auth="signup" aria-pressed="false">회원가입</button>
+    </div>
+    <div class="field"><label class="lbl" for="authEmail">이메일</label><input type="text" id="authEmail" inputmode="email" autocomplete="username"></div>
+    <div class="field"><label class="lbl" for="authPw">비밀번호 (6자 이상)</label><input type="password" id="authPw" autocomplete="current-password"></div>
+    <div id="signupFields" hidden style="display:flex;flex-direction:column;gap:8px">
+      <div class="field"><label class="lbl" for="authPw2">비밀번호 확인</label><input type="password" id="authPw2" autocomplete="new-password"></div>
+      <div class="field"><label class="lbl" for="authCode">초대 코드</label><input type="text" id="authCode" autocomplete="off"></div>
+    </div>
+    <p class="err" id="authErr" role="alert"></p>
+    <button type="submit" class="btn btn-gold" id="authBtn">로그인</button>
+  </form>
+</div>
+
+<div class="creator" id="creator" hidden>
+  <div class="cr-card" role="dialog" aria-modal="true" aria-labelledby="crTitle">
+    <div class="cr-head"><h2 id="crTitle">캐릭터 만들기</h2><button type="button" class="btn" id="crCancel">취소</button></div>
+    <div class="cr-body">
+      <div class="cr-stage">
+        <canvas id="crPv" width="18" height="25" aria-label="내 캐릭터 미리보기"></canvas>
+        <div class="cr-turn">
+          <button type="button" class="btn" id="crLeft" aria-label="왼쪽으로 돌리기">◀</button>
+          <button type="button" class="btn" id="crRandom">랜덤</button>
+          <button type="button" class="btn" id="crRight" aria-label="오른쪽으로 돌리기">▶</button>
+        </div>
+        <p class="cr-summary" id="crSummary"></p>
+        <div class="field" id="crNameRow"><label class="lbl" for="crName">이름 (8자까지)</label><input type="text" id="crName" maxlength="8"></div>
+        <div class="field" id="crCodeRow" hidden><label class="lbl" for="crCode">초대 코드</label><input type="text" id="crCode"></div>
+      </div>
+      <div class="cr-pick">
+        <div class="cr-tabs" id="crTabs" role="group" aria-label="바꿀 부분">
+          <button type="button" class="btn" data-cat="hair">헤어스타일</button>
+          <button type="button" class="btn" data-cat="hairColor">머리 색</button>
+          <button type="button" class="btn" data-cat="top">상의</button>
+          <button type="button" class="btn" data-cat="bottom">하의</button>
+        </div>
+        <div class="cr-options" id="crOptions"></div>
+      </div>
+    </div>
+    <div class="cr-foot"><p class="err" id="crErr" role="alert"></p><button type="button" class="btn btn-gold" id="crDone">이 모습으로 입장</button></div>
+  </div>
+</div>
+
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script src="sprite.js"></script>
+<script src="parse.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
