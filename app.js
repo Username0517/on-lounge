@@ -910,18 +910,28 @@
   const isTyping = () => { const t = document.activeElement; return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && t.offsetParent !== null && !t.disabled; };
   const MOVE = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'w', 'a', 's', 'd'];
   const KEY_MOTION = { 1: 'wave', 2: 'clap', 3: 'pray', 4: 'heart', 5: 'sleepy' };
+  // read the physical key, so shortcuts also work while the keyboard is in Korean (ㄹ is still the F key)
+  function keyName(e) {
+    const c = e.code || '';
+    if (/^Key[A-Z]$/.test(c)) return c.slice(3).toLowerCase();
+    if (/^(Digit|Numpad)[0-9]$/.test(c)) return c.slice(-1);
+    if (c === 'Space') return ' ';
+    if (c === 'Enter' || c === 'NumpadEnter') return 'enter';
+    return (e.key || '').toLowerCase();
+  }
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
     if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden) return;
-    const k = e.key.toLowerCase();
+    const k = keyName(e);
+    // a button focused by an earlier click must not also fire on Enter/Space
+    if ((k === 'enter' || k === ' ') && document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
     if (MOVE.includes(k)) { keys.add(k); e.preventDefault(); if (!$('modal').hidden) closeModal(); }
-    else if (k === 'e') { if (near && $('modal').hidden) near.run(); e.preventDefault(); }
+    else if (k === 'e' || k === 'enter') { if (near && $('modal').hidden && !e.repeat) near.run(); e.preventDefault(); }
     else if (k === ' ') { if (!player.dnd && !e.repeat) doMotion(player, 'jump'); e.preventDefault(); }
     else if (k === 'f') { if (!e.repeat) doPunch(); e.preventDefault(); }
     else if (KEY_MOTION[k] && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) { if (!player.dnd) doMotion(player, KEY_MOTION[k]); }
-    else if (k === 'enter') { if (!isDesktop()) { open = true; setTab('chat'); } $('chatInput').focus(); e.preventDefault(); }
   });
-  window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+  window.addEventListener('keyup', e => { keys.delete(keyName(e)); keys.delete(e.key.toLowerCase()); });
   window.addEventListener('blur', () => keys.clear());
   $('actBtn').addEventListener('click', () => { if (near) near.run(); });
 
@@ -1689,7 +1699,10 @@
     if (player.dnd) { toast('OFF 모드에서는 펀치를 날릴 수 없어요 🙏'); return; }
     const now = performance.now(); if (now - punchAt < 1100) return; punchAt = now;
     const tgt = punchTarget();
-    if (!tgt) { if (player.seat) { toast('주먹을 날릴 사람이 근처에 없어요'); return; } swing(null); return; }
+    if (!tgt) {
+      if (player.seat) { toast('주먹을 날릴 사람이 근처에 없어요'); return; }
+      swing(null); floaters.push({ x: player.x, y: player.y - 26, t0: now, text: '👊 슉! 허공에 펀치' }); return;
+    }
     const seat = player.seat, back = () => { if (seat && !seat.occ) goTo(player, seatApproach(seat), () => sit(player, seat)); };
     if (!seat && Math.hypot(tgt.x - player.x, tgt.y - player.y) < 14) { swing(tgt); return; }
     // stand up, walk over, punch, and go back to the same chair
