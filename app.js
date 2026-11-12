@@ -96,14 +96,18 @@
     for (let y = 8; y < 50; y += 4) { P(g, x + 2, y, 4, 2, '#3a3744'); P(g, x + 3, y, 2, 1, '#17151c'); }
     P(g, x + 1, 52, 6, 2, '#3a3744');
   }
-  function guitar(g, x, body, accent, bass) {
-    const top = bass ? 50 : 56;
-    P(g, x - 4, 93, 9, 1, '#121117'); P(g, x - 4, 92, 1, 2, '#121117'); P(g, x + 4, 92, 1, 2, '#121117'); P(g, x, 84, 1, 9, '#121117');
-    P(g, x, top, 2, 26, '#121117'); P(g, x, top + 1, 1, 24, '#6b4a33'); P(g, x + 1, top + 1, 1, 24, '#d8c3a0');
-    P(g, x - 1, top - 4, 4, 5, '#121117'); P(g, x, top - 3, 3, 3, bass ? '#3a2418' : '#e9e4da');
-    pixCircle(g, x, 84, 5, '#121117'); pixCircle(g, x, 81, 4, '#121117'); pixCircle(g, x, 84, 4, body); pixCircle(g, x, 81, 3, body);
-    P(g, x + 1, 79, 2, 8, accent); P(g, x - 2, 83, 3, 1, '#d8d4cc'); P(g, x - 2, 86, 3, 1, '#d8d4cc'); P(g, x + 3, 81, 1, 5, shade(body, 1.3));
+  // guitars on stands, drawn from a pixel map so the neck always meets the body
+  const GUITAR_BODY = ['kk..knk..kk', 'khk.knk.kBk', 'kBhkknkkBBk', 'kBBBWpWBBBk', '.kBBWWWBBk.', '.kBBWpWBBk.', 'kBBBBWBBBBk', 'kBBBBdBBBBk', 'kBBBBBBKBBk', 'kbBBBBBBBbk', '.kbBBBBBbk.', '..kkkkkkk..'];
+  const GUITAR_HEAD = ['....kkk....', '....kHHk...', '....kHHk...', '....kHHk...', '....kHk....', '....kNk....'];
+  const GUITAR_STAND = ['...k...k...', '..k.....k..', '.kk.....kk.'];
+  function guitar(g, x, pal, neckLen) {
+    const neck = []; for (let i = 0; i < neckLen; i++) neck.push(i % 3 === 2 && i < neckLen - 2 ? '....kfk....' : '....knk....');
+    const rows = GUITAR_HEAD.concat(neck, GUITAR_BODY, GUITAR_STAND), top = 94 - rows.length;
+    const col = Object.assign({ k: '#121117', N: '#f4f1ea', p: '#2a2830', d: '#c9c9d4', K: '#c9c9d4' }, pal);
+    rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] !== '.') P(g, x - 5 + i, top + j, 1, 1, col[r[i]]); });
   }
+  const ELEC = { B: '#d84b3a', b: '#9e2f24', h: '#f58a72', W: '#f4f1ea', H: '#d8b98a', n: '#d8b98a', f: '#3a2418' };
+  const BASS = { B: '#7a4222', b: '#2e1a10', h: '#b36e34', W: '#e9e0cc', H: '#3a2418', n: '#5a3a26', f: '#e9e4da' };
   const DOOR = { frame: '#0e0d12', slab: '#24232a', hi: '#3c3b46', knob: '#c9c9d4' };
   function sideDoor(g, x, y, right) {
     const fx = right ? x - 7 : x;
@@ -135,8 +139,8 @@
       P(g, 25, 74, 5, 4, '#121117'); P(g, 26, 75, 3, 2, '#5aa9e6');
       pixCircle(g, 16, 82, 3, '#121117'); pixCircle(g, 16, 82, 2, '#3a2c36');
     } },
-    { id: 'bass', label: '베이스', box: [49, 45, 11, 50], sortY: 95, obs: [[48, 84, 12, 11]], draw: g => guitar(g, 54, '#4a2c1c', '#b5702e', true) },
-    { id: 'elec', label: '일렉기타', box: [61, 51, 11, 44], sortY: 95, obs: [[60, 84, 12, 11]], draw: g => guitar(g, 66, '#d84b3a', '#f4f1ea', false) },
+    { id: 'bass', label: '베이스', box: [49, 59, 11, 35], sortY: 95, obs: [[48, 84, 12, 11]], draw: g => guitar(g, 54, BASS, 14) },
+    { id: 'elec', label: '일렉기타', box: [61, 62, 11, 32], sortY: 95, obs: [[60, 84, 12, 11]], draw: g => guitar(g, 66, ELEC, 11) },
     { id: 'stand', label: '인도자 보면대(QT)', box: [90, 56, 14, 17], sortY: 72, obs: [[91, 66, 11, 7]], draw: g => {
       P(g, 91, 57, 12, 7, '#121117'); P(g, 92, 58, 10, 5, '#3a3a44'); P(g, 93, 58, 8, 4, '#f4f1ec');
       P(g, 94, 59, 4, 1, '#9aa0ab'); P(g, 94, 61, 5, 1, '#9aa0ab');
@@ -343,12 +347,14 @@
     obstacles = chairs.map(seatObstacle).filter(Boolean);
     for (const it of ITEMS) { const o = off(it.id); for (const [x, y, w, h] of it.obs) obstacles.push({ x: x + o.dx, y: y + o.dy, w, h }); }
   }
-  function blocked(x, y) {
+  // pad > 0 keeps planned paths a little away from edges, so walking never grazes a corner and stalls
+  function blocked(x, y, pad = 0) {
     const [x0, y0, x1, y1] = scene.bounds;
-    if (x < x0 || x > x1 || y < y0 || y > y1) return true;
-    for (const o of obstacles) if (x + 4 > o.x && x - 4 < o.x + o.w && y > o.y && y - 3 < o.y + o.h) return true;
+    if (x < x0 + pad || x > x1 - pad || y < y0 + pad || y > y1 - pad) return true;
+    for (const o of obstacles) if (x + 4 + pad > o.x && x - 4 - pad < o.x + o.w && y + pad > o.y && y - 3 - pad < o.y + o.h) return true;
     return false;
   }
+  const PAD = 0.75;
 
   // ================= pathfinding =================
   const CS = 4;
@@ -356,12 +362,12 @@
   function rebuildWalk() {
     GW = Math.ceil(W / CS); GH = Math.ceil(H / CS);
     if (walk.length !== GW * GH) walk = new Uint8Array(GW * GH);
-    for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) walk[j * GW + i] = blocked(i * CS + 2, j * CS + 2) ? 0 : 1;
+    for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) walk[j * GW + i] = blocked(i * CS + 2, j * CS + 2, PAD) ? 0 : 1;
   }
   function nearestCell(p) {
     const ci = clamp(Math.floor(p.x / CS), 0, GW - 1), cj = clamp(Math.floor(p.y / CS), 0, GH - 1);
     if (walk[cj * GW + ci]) return cj * GW + ci;
-    for (let rad = 1; rad < 14; rad++) for (let dj = -rad; dj <= rad; dj++) for (let di = -rad; di <= rad; di++) {
+    for (let rad = 1; rad < 28; rad++) for (let dj = -rad; dj <= rad; dj++) for (let di = -rad; di <= rad; di++) {
       const i = ci + di, j = cj + dj;
       if (i >= 0 && j >= 0 && i < GW && j < GH && walk[j * GW + i]) return j * GW + i;
     }
@@ -369,18 +375,22 @@
   }
   function clearLine(a, c) {
     const d = Math.hypot(c.x - a.x, c.y - a.y), n = Math.ceil(d / 1.5);
-    for (let k = 1; k <= n; k++) { const t = k / n; if (blocked(a.x + (c.x - a.x) * t, a.y + (c.y - a.y) * t)) return false; }
+    for (let k = 1; k <= n; k++) { const t = k / n; if (blocked(a.x + (c.x - a.x) * t, a.y + (c.y - a.y) * t, k < n ? PAD : 0)) return false; }
     return true;
   }
   function findPath(from, to) {
-    const s = nearestCell(from), t = nearestCell(to);
+    const [bx0, by0, bx1, by1] = scene.bounds;
+    to = { x: clamp(to.x, bx0 + 2, bx1 - 2), y: clamp(to.y, by0 + 2, by1 - 2) };   // a click on a wall means "go as close as you can"
+    const s = nearestCell(from); let t = nearestCell(to);
     if (s < 0 || t < 0) return [];
+    let bestC = s, bestD = Infinity;
     const prev = new Int32Array(GW * GH).fill(-1); prev[s] = s;
     const q = [s]; let head = 0;
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
     while (head < q.length) {
       const cur = q[head++]; if (cur === t) break;
       const ci = cur % GW, cj = (cur - ci) / GW;
+      const dd = (ci * CS + 2 - to.x) ** 2 + (cj * CS + 2 - to.y) ** 2; if (dd < bestD) { bestD = dd; bestC = cur; }
       for (const [di, dj] of dirs) {
         const i = ci + di, j = cj + dj;
         if (i < 0 || j < 0 || i >= GW || j >= GH) continue;
@@ -390,7 +400,8 @@
         prev[n] = cur; q.push(n);
       }
     }
-    if (prev[t] === -1) return [];
+    if (prev[t] === -1) { t = bestC; to = { x: (t % GW) * CS + 2, y: Math.floor(t / GW) * CS + 2 }; }   // can't reach it: walk as close as possible
+    if (t === s) return [];
     const cells = []; for (let c = t; c !== s; c = prev[c]) cells.push(c); cells.reverse();
     const raw = cells.map(c => ({ x: (c % GW) * CS + 2, y: Math.floor(c / GW) * CS + 2 }));
     if (!raw.length) return blocked(to.x, to.y) ? [] : [{ x: to.x, y: to.y }];
@@ -429,7 +440,7 @@
 
   // ================= entities =================
   const mkEnt = (name, look, x, y, sc) => ({ name, look, x, y, scene: sc || 'sanctuary', dir: 'right', moving: false, animT: 0, seat: null, action: null, actionUntil: 0, actionT0: 0,
-    bubble: null, emote: null, path: [], goal: null, onArrive: null, onFail: null, stuck: 0, noteAt: 0, playing: null, dnd: false });
+    bubble: null, emote: null, path: [], goal: null, onArrive: null, onFail: null, stuck: 0, noteAt: 0, playing: null, dnd: false, hold: null, brew: null, zz: false, hitT0: -1e9 });
   const player = mkEnt(store.get('onl-name') || '나', validLook(loadJSON('onus-look', null)) || randomLook(), 14, 217);
   player.isPlayer = true;
   const entities = [player];
@@ -459,9 +470,9 @@
     if (sp.room) return () => goScene(sp.room, 'door');
     const RUN = {
       stand: () => openQt(), qr: () => openQr(), board: () => openModal('board'), prayer: () => openPrayers(),
-      eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; toast(`${LIGHTS[lightMode].n}으로 바꿨어요`); lobbySend('lights', { mode: lightMode }); },
-      water: () => { doMotion(player, 'water'); toast('시원한 물 한 잔 마셨어요'); },
-      coffee: () => { doMotion(player, 'coffee'); toast('커피 향이 퍼져요'); }
+      eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; const inst = EQ_INST[eqStep++ % EQ_INST.length]; eqFx(inst, 1); lobbySend('lights', { mode: lightMode, inst }); },
+      water: () => useMachine('water'),
+      coffee: () => useMachine('coffee')
     };
     return RUN[sp.id] || (() => {});
   }
@@ -476,11 +487,12 @@
   function standUp(ent) { if (!ent.seat) return; const a = seatApproach(ent.seat); ent.dir = ent.seat.face; ent.x = a.x; ent.y = a.y; if (ent.seat.occ === ent) ent.seat.occ = null; ent.seat = null; }
   function startPlay(ent, sp) {
     if (chars.some(c => c !== ent && c.playing === sp.id)) { if (ent.isPlayer) toast(`다른 사람이 ${INSTRUMENTS[sp.id]}를 연주하고 있어요`); return; }
-    standUp(ent); ent.path = []; ent.goal = null;
+    const again = ent.playing === sp.id;
+    standUp(ent); ent.path = []; ent.goal = null; ent.hold = null;
     if (!blocked(sp.sx, sp.sy)) { ent.x = sp.sx; ent.y = sp.sy; }
     ent.dir = sp.face; ent.moving = false;
     ent.action = 'play'; ent.actionUntil = Infinity; ent.actionT0 = performance.now(); ent.playing = sp.id;
-    if (ent.isPlayer) toast(`${INSTRUMENTS[sp.id]} 연주 중이에요. 움직이면 멈춰요.`);
+    if (ent.isPlayer) { sfx(sp.id); ent.riffAt = performance.now() + 3200; if (!again) toast(`${INSTRUMENTS[sp.id]} 연주 중이에요. 다시 누르면 한 번 더, 움직이면 멈춰요.`); }
   }
   function doMotion(ent, m) {
     const now = performance.now();
@@ -495,6 +507,7 @@
     if (m === 'pray' && ent.action === 'pray') { ent.action = null; return; }
     ent.playing = null; ent.action = m; ent.actionT0 = now;
     ent.actionUntil = m === 'pray' ? Infinity : m === 'jump' ? now + 650 : now + 2400;
+    if (ent.isPlayer && m === 'jump') sfx('whoosh', 0.5);
   }
   function nearestFreeChair(ent, maxD) {
     let best = null, bd = maxD;
@@ -522,9 +535,11 @@
     if (!len) { ent.moving = false; return false; }
     vx /= len; vy /= len;
     const sp = SPEED * mul * dt, nx = ent.x + vx * sp, ny = ent.y + vy * sp;
-    let moved = false;
-    if (!blocked(nx, ent.y)) { ent.x = nx; moved = true; }
-    if (!blocked(ent.x, ny)) { ent.y = ny; moved = true; }
+    if (blocked(ent.x, ent.y)) { ent.x = nx; ent.y = ny; ent.moving = true; return true; }   // stuck inside something (e.g. an item was moved onto us): walk out freely
+    const ox = ent.x, oy = ent.y;
+    if (!blocked(nx, ent.y)) ent.x = nx;
+    if (!blocked(ent.x, ny)) ent.y = ny;
+    const moved = Math.hypot(ent.x - ox, ent.y - oy) > sp * 0.2;
     if (Math.abs(vx) > Math.abs(vy)) ent.dir = vx > 0 ? 'right' : 'left'; else ent.dir = vy > 0 ? 'down' : 'up';
     ent.moving = moved;
     return moved;
@@ -534,17 +549,27 @@
     const wp = ent.path[0], dx = wp.x - ent.x, dy = wp.y - ent.y;
     if (Math.hypot(dx, dy) < 1.2) {
       ent.path.shift();
-      if (!ent.path.length) { ent.moving = false; ent.goal = null; const cb = ent.onArrive; ent.onArrive = null; ent.onFail = null; if (cb) cb(); }
+      if (!ent.path.length) { ent.moving = false; ent.goal = null; ent.retries = 0; const cb = ent.onArrive; ent.onArrive = null; ent.onFail = null; if (cb) cb(); }
       return;
     }
     const ok = step(ent, dx, dy, dt, mul);
     ent.stuck = ok ? 0 : ent.stuck + dt;
-    if (ent.stuck > 0.4) { ent.path = []; ent.goal = null; ent.moving = false; ent.stuck = 0; const f = ent.onFail; ent.onArrive = null; ent.onFail = null; if (f) f(); }
+    if (ent.stuck > 0.25) {
+      ent.stuck = 0;
+      // something got in the way (a person sat down, an item moved): plan again from here, up to twice
+      const end = ent.path[ent.path.length - 1];
+      if ((ent.retries || 0) < 2 && end) {
+        ent.retries = (ent.retries || 0) + 1;
+        const np = findPath(ent, end);
+        if (np.length) { ent.path = np; return; }
+      }
+      ent.retries = 0; ent.path = []; ent.goal = null; ent.moving = false; const f = ent.onFail; ent.onArrive = null; ent.onFail = null; if (f) f();
+    }
   }
   function goTo(ent, target, onArrive, onFail) {
     if (ent.seat) standUp(ent);
     ent.action = null; ent.playing = null;
-    ent.path = findPath(ent, target); ent.onArrive = onArrive || null; ent.onFail = onFail || null;
+    ent.retries = 0; ent.path = findPath(ent, target); ent.onArrive = onArrive || null; ent.onFail = onFail || null;
     ent.goal = ent.path.length ? [Math.round(ent.path[ent.path.length - 1].x), Math.round(ent.path[ent.path.length - 1].y)] : null;
     if (!ent.path.length) { if (Math.hypot(target.x - ent.x, target.y - ent.y) < 3 && onArrive) onArrive(); else if (onFail) onFail(); }
   }
@@ -560,8 +585,13 @@
       player.path = []; player.goal = null; player.onArrive = null;
       if (player.action && player.action !== 'jump') { player.action = null; player.playing = null; }
       if (!$('qrPop').hidden) closeQr();
+      if (player.brew) player.brew = null;
       step(player, vx, vy, dt);
     } else follow(player, dt, 1);
+    if (player.brew && player.path.length) player.brew = null;
+    if (player.hold && now - player.hold.t0 > HOLD_MS) player.hold = null;
+    if (player.playing && now > (player.riffAt || 0)) { player.riffAt = now + 3200; sfx(player.playing, 0.55); }
+    updateZz(now);
     if (player.dnd && !player.moving && !player.path.length && !player.action) { player.action = 'pray'; player.actionUntil = Infinity; player.actionT0 = now; }
 
     if (LIVE) updateRemotes(dt);
@@ -574,6 +604,7 @@
       if (c.action === 'play' && now > c.noteAt) { c.noteAt = now + 700; notes.push({ x: c.x + (Math.random() * 10 - 5), y: c.y - 22, t0: now, sym: pick(['♪', '♫']) }); }
     }
     for (let i = notes.length - 1; i >= 0; i--) if (now - notes[i].t0 > 1500) notes.splice(i, 1);
+    for (let i = floaters.length - 1; i >= 0; i--) if (now - floaters[i].t0 > 2200) floaters.splice(i, 1);
     const nn = computeNear();
     if ((nn && nn.label) !== (near && near.label)) { const btn = $('actBtn'); if (nn) { btn.textContent = nn.label; btn.hidden = false; } else btn.hidden = true; }
     near = nn;
@@ -588,12 +619,12 @@
   function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd }); }
   function myState() {
     return { id: net.uid, x: Math.round(player.x * 10) / 10, y: Math.round(player.y * 10) / 10, dir: player.dir, mv: player.moving, seat: seatIdx(player),
-      act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, to: player.path.length ? player.goal : null };
+      act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, zz: player.zz ? 1 : 0, hold: player.hold ? player.hold.k : null, brew: player.brew ? player.brew.k : null, to: player.path.length ? player.goal : null };
   }
   function netTick(now) {
     if (!net.ready) return;
     const st = myState(), kb = player.moving && !player.path.length;
-    const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
+    const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
     if (sig !== net.sig && now - net.lastSend > (kb ? 250 : 60)) { net.sig = sig; net.lastSend = now; net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.dirty = true; }
     if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look }, st)); }
   }
@@ -631,8 +662,12 @@
       }
     }
     const act = p.act || null;
-    if (act !== ent.action) { ent.action = act; ent.actionT0 = now; ent.actionUntil = !act ? 0 : (act === 'pray' || act === 'play') ? Infinity : act === 'jump' ? now + 650 : now + 2400; }
-    ent.playing = p.play || null; ent.dnd = !!p.dnd; ent.og = !!p.og;
+    if (act !== ent.action && !(act === 'punch' && ent.action === 'punch')) { ent.action = act; ent.actionT0 = now; ent.actionUntil = !act ? 0 : (act === 'pray' || act === 'play') ? Infinity : act === 'jump' ? now + 650 : act === 'punch' ? now + 450 : now + 2400; }
+    const play = p.play || null;
+    if (play && play !== ent.playing && !snap && ent.scene === sceneId && INSTRUMENTS[play]) sfx(play, 0.35);
+    ent.playing = play; ent.dnd = !!p.dnd; ent.og = !!p.og; ent.zz = !!p.zz;
+    if ((p.hold || null) !== (ent.hold && ent.hold.k)) ent.hold = p.hold ? { k: p.hold, t0: now } : null;
+    if ((p.brew || null) !== (ent.brew && ent.brew.k)) { ent.brew = p.brew ? { k: p.brew, t0: now } : null; if (ent.brew && !snap && sceneId === 'room2') sfx(p.brew === 'coffee' ? 'brew' : 'pour', 0.3); }
   }
   function updateRemotes(dt) {
     for (const ent of net.remotes.values()) {
@@ -659,7 +694,7 @@
       if (!ent) { ent = addRemote(key, meta); applyRemote(ent, meta, now, true); }
       if (meta.name) ent.name = meta.name;
       if (validLook(meta.look)) ent.look = meta.look;
-      ent.dnd = !!meta.dnd; ent.og = !!meta.og;
+      ent.dnd = !!meta.dnd; ent.og = !!meta.og; ent.zz = !!meta.zz;
     }
     for (const key of [...net.remotes.keys()]) if (!seen.has(key)) removeRemote(key);
     renderPeople();
@@ -674,7 +709,7 @@
     const lob = sb.channel('lounge:lobby', { config: { private: true, broadcast: { self: false }, presence: { key: net.uid } } });
     net.lobby = lob;
     lob.on('presence', { event: 'sync' }, onLobbySync)
-      .on('broadcast', { event: 'lights' }, ({ payload: p }) => { if (p && LIGHTS[p.mode]) lightMode = p.mode; })
+      .on('broadcast', { event: 'lights' }, ({ payload: p }) => { if (p && LIGHTS[p.mode]) { lightMode = p.mode; if (sceneId === 'sanctuary' && EQ_INST.includes(p.inst)) eqFx(p.inst, 0.4); } })
       .on('broadcast', { event: 'content' }, () => { loadContent(); })
       .subscribe(status => { if (status === 'SUBSCRIBED') lobbyTrack(); });
     joinSceneChannel();
@@ -697,6 +732,7 @@
         if (ent) ent.bubble = { text: p.text, until: performance.now() + 4500 };
         log(p.name, p.text, '');
       })
+      .on('broadcast', { event: 'hit' }, ({ payload: p }) => { if (net.ch === ch) onHit(p); })
       .on('broadcast', { event: 'gm' }, ({ payload: p }) => { if (net.ch === ch) onGm(p); })
       .on('broadcast', { event: 'emote' }, ({ payload: p }) => { const ent = p && net.remotes.get(p.id); if (ent) ent.emote = { sym: p.sym, until: performance.now() + 2400 }; })
       .subscribe(status => {
@@ -721,7 +757,7 @@
     const { data } = await sb.from('messages').select('name, body, user_id, created_at').eq('scene', forScene).gte('created_at', since).order('created_at', { ascending: false }).limit(40);
     if (forScene !== sceneId) return;
     if (!data) return;
-    data.reverse().forEach(m => log(m.name, m.body, m.user_id === net.uid ? 'me' : ''));
+    data.reverse().forEach(m => log(m.name, m.body, m.user_id === net.uid ? 'me' : '', m.created_at));
     if (data.length) log('', '── 여기까지 오늘 대화 ──', 'sys');
   }
   // chat resets every day at 00:00 China time (01:00 Korea): clear the log and bubbles for people who are still online
@@ -731,7 +767,7 @@
     if (chatDay === null) { chatDay = d; return; }
     if (d === chatDay) return;
     chatDay = d;
-    logEl.innerHTML = '';
+    logEl.innerHTML = ''; lastFrom = null;
     for (const c of entities) c.bubble = null;
     log('', '0시가 지나 대화가 초기화됐어요. 새로운 하루도 함께해요!', 'sys');
   }, 20000);
@@ -745,13 +781,30 @@
 
   // ================= chat =================
   const logEl = $('log');
-  function log(name, text, cls) {
-    const li = document.createElement('li'); if (cls) li.className = cls;
-    if (name) { const bEl = document.createElement('b'); bEl.textContent = name; li.appendChild(bEl); }
-    li.appendChild(document.createTextNode(text)); logEl.appendChild(li);
-    while (logEl.children.length > 80) logEl.removeChild(logEl.firstChild);
-    const pane = logEl.parentElement; pane.scrollTop = pane.scrollHeight;
+  let lastFrom = null, unread = 0;
+  const hhmm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  function log(name, text, cls, at) {
+    const pane = logEl.parentElement, atBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 60;
+    const li = document.createElement('li'), c = cls || '';
+    const kind = /\bsys\b/.test(c) ? 'sys' : /\bme\b/.test(c) ? 'me' : 'them';
+    li.className = ['msg', kind, c].filter(Boolean).join(' ');
+    if (kind === 'sys') { li.textContent = text; lastFrom = null; }
+    else {
+      const from = kind === 'me' ? '\u0000me' : name;
+      if (from === lastFrom) li.classList.add('cont');
+      else if (kind === 'them') { const bEl = document.createElement('b'); bEl.textContent = name; li.appendChild(bEl); }
+      const row = document.createElement('div'); row.className = 'bub-row';
+      const bub = document.createElement('span'); bub.className = 'bub'; bub.textContent = text;
+      const tm = document.createElement('i'); tm.className = 'tm'; tm.textContent = hhmm(at ? new Date(at) : new Date());
+      row.append(bub, tm); li.appendChild(row);
+      lastFrom = from;
+      try { if (!isDesktop() && (!open || tab !== 'chat') && kind === 'them') { unread++; syncUnread(); } } catch (e) {}
+    }
+    logEl.appendChild(li);
+    while (logEl.children.length > 120) logEl.removeChild(logEl.firstChild);
+    if (atBottom || kind === 'me') pane.scrollTop = pane.scrollHeight;
   }
+  function syncUnread() { const t = $('tab-chat'); t.dataset.unread = unread > 9 ? '9+' : unread || ''; }
   function say(ent, text) { ent.bubble = { text, until: performance.now() + 4500 }; if (ent.scene === sceneId) log(ent.name, text, ent.isPlayer ? 'me' : ''); }
   $('chatForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -765,6 +818,7 @@
     }
   });
   document.querySelectorAll('[data-motion]').forEach(btn => btn.addEventListener('click', () => { if (!player.dnd) doMotion(player, btn.dataset.motion); }));
+  $('punchBtn').addEventListener('click', () => doPunch());
 
 
   // ================= QT plan: monthly schedule, today's passage switches at 00:00 China time =================
@@ -853,15 +907,19 @@
 
   // ================= input =================
   const canvas = $('room'), ctx = canvas.getContext('2d'), stageEl = $('stage');
-  const isTyping = () => { const t = document.activeElement; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'); };
+  const isTyping = () => { const t = document.activeElement; return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && t.offsetParent !== null && !t.disabled; };
   const MOVE = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'w', 'a', 's', 'd'];
+  const KEY_MOTION = { 1: 'wave', 2: 'clap', 3: 'pray', 4: 'heart', 5: 'sleepy' };
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
     if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden) return;
     const k = e.key.toLowerCase();
     if (MOVE.includes(k)) { keys.add(k); e.preventDefault(); if (!$('modal').hidden) closeModal(); }
-    else if ((k === 'e' || k === ' ') && near && $('modal').hidden) { near.run(); e.preventDefault(); }
-    else if (k === 'enter') { $('chatInput').focus(); e.preventDefault(); }
+    else if (k === 'e') { if (near && $('modal').hidden) near.run(); e.preventDefault(); }
+    else if (k === ' ') { if (!player.dnd && !e.repeat) doMotion(player, 'jump'); e.preventDefault(); }
+    else if (k === 'f') { if (!e.repeat) doPunch(); e.preventDefault(); }
+    else if (KEY_MOTION[k] && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) { if (!player.dnd) doMotion(player, KEY_MOTION[k]); }
+    else if (k === 'enter') { if (!isDesktop()) { open = true; setTab('chat'); } $('chatInput').focus(); e.preventDefault(); }
   });
   window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
   window.addEventListener('blur', () => keys.clear());
@@ -922,8 +980,17 @@
     }
     goTo(player, { x: g.x, y: g.y });
   });
+  let hoverSpot = null;
+  canvas.addEventListener('pointerleave', () => { hoverSpot = null; });
   canvas.addEventListener('pointermove', e => {
-    if (!editMode) return;
+    if (!editMode) {
+      if (e.pointerType !== 'mouse') return;
+      const g = toGame(e);
+      hoverSpot = spots.find(sp => g.x >= sp.hit[0] && g.x <= sp.hit[0] + sp.hit[2] && g.y >= sp.hit[1] && g.y <= sp.hit[1] + sp.hit[3]) || null;
+      const chair = !hoverSpot && chairs.some(c => { const [hx, hy, hw, hh] = seatHit(c); return !c.occ && g.x >= hx && g.x <= hx + hw && g.y >= hy && g.y <= hy + hh; });
+      canvas.style.cursor = hoverSpot || chair ? 'pointer' : 'default';
+      return;
+    }
     if (!drag) { const g = toGame(e); hoverItem = itemAt(g.x, g.y); canvas.style.cursor = hoverItem ? 'grab' : 'move'; return; }
     if (drag.pan) { camX = drag.camX - (e.clientX - drag.cx) / s; camY = drag.camY - (e.clientY - drag.cy) / s; return; }
     const g = toGame(e), [bx, by, bw, bh] = drag.it.box;
@@ -957,7 +1024,9 @@
     const x = Math.round(c.x), y = Math.round(c.y);
     const jump = c.action === 'jump' ? Math.round(Math.sin(clamp((now - c.actionT0) / 650, 0, 1) * Math.PI) * 8) : 0;
     if (!c.seat) { b.fillStyle = 'rgba(60,30,10,.28)'; b.fillRect(x - 5, y - 1, 10, 2); b.fillRect(x - 3, y + 1, 6, 1); }
-    b.drawImage(spr, x - 9, y - 22 + (c.seat ? 3 : 0) - jump);
+    const shake = now - c.hitT0 < 320 ? (Math.floor(now / 40) % 2 ? 1 : -1) : 0;
+    b.drawImage(spr, x - 9 + shake, y - 22 + (c.seat ? 3 : 0) - jump);
+    drawHeld(c, x + shake, y - jump, now); drawFist(c, x, y - jump, now);
   }
   function drawWorld(now) {
     b.drawImage(bg, 0, 0);
@@ -975,6 +1044,7 @@
       else if (e.chair) drawSeatBack(b, e.chair);
       else drawChar(e.c, now);
     }
+    drawMachineFx(now); drawEqFx(now);
     if (!scene.lights) return;
     b.save(); b.globalCompositeOperation = 'lighter';
     const L = LIGHTS[lightMode].c;
@@ -1014,8 +1084,17 @@
       }
       ctx.setLineDash([]);
     } else for (const sp of spots) {
-      if (Math.hypot(sp.x - player.x, sp.y - player.y) > 80) continue;
+      const hov = hoverSpot === sp;
+      if (Math.hypot(sp.x - player.x, sp.y - player.y) > 80 && !hov) continue;
       const active = near === sp;
+      if (hov) {
+        ctx.font = `700 ${fs}px ${getComputedStyle(document.body).fontFamily}`;
+        const tw = ctx.measureText(sp.label).width + 14, th = fs * 1.6, x = clamp(SX(sp.ax), tw / 2 + 4, cw - tw / 2 - 4), y = Math.max(th / 2 + 4, SY(sp.ay) - 4);
+        ctx.fillStyle = active ? '#3fb5a3' : '#ffcc4d'; ctx.strokeStyle = '#251c2c'; ctx.lineWidth = 2;
+        rrect(ctx, x - tw / 2, y - th / 2, tw, th, 5); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = active ? '#ffffff' : '#251c2c'; ctx.fillText(sp.label, x, y + 0.5);
+        continue;
+      }
       const bw = 18, bh = 11, x = SX(sp.ax), y = SY(sp.ay) - 4 + Math.sin(now / 260 + sp.ax) * 1.5;
       ctx.fillStyle = active ? '#3fb5a3' : '#fffdf7'; ctx.strokeStyle = '#251c2c'; ctx.lineWidth = 1.5;
       rrect(ctx, x - bw / 2, y - bh / 2, bw, bh, 4); ctx.fill(); ctx.stroke();
@@ -1044,6 +1123,14 @@
     }
     ctx.globalAlpha = 1;
     const fam = getComputedStyle(document.body).fontFamily;
+    for (const f of floaters) {
+      const t = (now - f.t0) / 2200; ctx.globalAlpha = t < 0.75 ? 1 : (1 - t) * 4;
+      ctx.font = `800 ${fs}px ${fam}`;
+      const tw = ctx.measureText(f.text).width + 12, th = fs * 1.5, x = clamp(SX(f.x), tw / 2 + 4, cw - tw / 2 - 4), y = SY(f.y) - t * 14 * s / 2;
+      ctx.fillStyle = 'rgba(37,28,44,.88)'; rrect(ctx, x - tw / 2, y - th / 2, tw, th, 5); ctx.fill();
+      ctx.fillStyle = '#ffcc4d'; ctx.fillText(f.text, x, y + 0.5);
+    }
+    ctx.globalAlpha = 1;
     const sorted = chars.slice().sort((a, z) => a.y - z.y);
     for (const c of sorted) {
       const headTop = c.y - 20 + (c.seat ? 3 : 0) - (c.action === 'jump' ? 8 : 0);
@@ -1059,6 +1146,26 @@
         const r = Math.max(3, fs * 0.42), gy = top - r - 2;
         for (const [dx, col] of [[-r - 1, '#16131a'], [r + 1, '#fbf8f2']]) { ctx.beginPath(); ctx.arc(sx + dx, gy, r, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#251c2c'; ctx.stroke(); }
         top -= r * 2 + 4;
+      }
+      const ht = now - c.hitT0;
+      if (ht < 1500) {
+        const hx = SX(c.x), hy = SY(c.y - 16);
+        if (ht < 420) {
+          const r = fs * (1.2 + ht / 420 * 0.6);
+          ctx.fillStyle = '#ffcc4d'; ctx.strokeStyle = '#251c2c'; ctx.lineWidth = 2; ctx.beginPath();
+          for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, rr = i % 2 ? r * 0.5 : r; ctx.lineTo(hx + Math.cos(a) * rr, hy + Math.sin(a) * rr); }
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.font = `800 ${fs * 0.8}px ${fam}`; ctx.fillStyle = '#d84b3a'; ctx.fillText('퍽!', hx, hy + 1);
+        } else {
+          ctx.font = `700 ${fs}px sans-serif`; ctx.fillStyle = '#ffcc4d'; ctx.strokeStyle = '#251c2c'; ctx.lineWidth = 2.5;
+          for (let i = 0; i < 3; i++) { const a = now / 180 + i * 2.09, x = sx + Math.cos(a) * fs * 1.1, y = top - fs * 0.3 + Math.sin(a) * fs * 0.35; ctx.strokeText('★', x, y); ctx.fillText('★', x, y); }
+          top -= fs * 0.9;
+        }
+      }
+      if (c.zz && !c.dnd && !c.emote) {
+        ctx.font = `700 ${fs * 1.2}px "Pixelify Sans", sans-serif`; ctx.lineWidth = 3; ctx.strokeStyle = '#251c2c'; ctx.fillStyle = '#c9d6ff';
+        for (let i = 0; i < 3; i++) { const ph = ((now / 1400) + i / 3) % 1, x = sx + 4 + ph * fs * 0.9, y = top - fs * 0.4 - ph * fs * 1.6; ctx.globalAlpha = ph < 0.8 ? 1 : (1 - ph) * 5; ctx.font = `700 ${fs * (0.8 + ph * 0.6)}px "Pixelify Sans", sans-serif`; ctx.strokeText('z', x, y); ctx.fillText('z', x, y); }
+        ctx.globalAlpha = 1; top -= fs * 1.6;
       }
       if (c.emote && !c.dnd) {
         ctx.font = `700 ${fs * 1.5}px "Pixelify Sans", sans-serif`;
@@ -1127,7 +1234,7 @@
     tab = t;
     document.querySelectorAll('[data-pane]').forEach(p => { p.hidden = p.dataset.pane !== t; });
     $('panelTitle').textContent = TITLES[t]; syncTabs();
-    if (t === 'chat') { const pane = logEl.parentElement; pane.scrollTop = pane.scrollHeight; }
+    if (t === 'chat') { const pane = logEl.parentElement; pane.scrollTop = pane.scrollHeight; if (open || isDesktop()) { unread = 0; syncUnread(); } }
   }
   function syncTabs() {
     document.querySelectorAll('.tabs [data-tab]').forEach(btn => btn.setAttribute('aria-pressed', String((isDesktop() || open) && btn.dataset.tab === tab)));
@@ -1176,7 +1283,7 @@
     $('crErr').textContent = '';
     renderCreator();
   }
-  function closeCreator() { $('creator').hidden = true; }
+  function closeCreator() { $('creator').hidden = true; if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); }
   function thumb(look, view, crop) {
     const cv = document.createElement('canvas'); cv.width = SW; cv.height = crop ? 14 : SH;
     const c = cv.getContext('2d'); c.drawImage(sprite(look, view, 'stand', 'none', 0), 0, crop ? -1 : 0);
@@ -1433,6 +1540,250 @@
     toast(`${planYm.replace('-', '년 ')}월 QT 일정 ${rows.length}일을 저장했어요`);
   });
 
+
+  // ================= sound effects (made in the browser, no audio files) =================
+  let actx = null, sfxOn = store.get('onl-sfx') !== '0';
+  function ac() {
+    if (!sfxOn) return null;
+    try {
+      if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); actx.__out = actx.createGain(); actx.__out.gain.value = 0.5; actx.__out.connect(actx.destination); }
+      if (actx.state === 'suspended') actx.resume();
+    } catch (e) { return null; }
+    return actx;
+  }
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  function tone(a, t, f, d, type, v, o2) {
+    const o = a.createOscillator(), g = a.createGain(); let node = o;
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (o2 && o2.slide) o.frequency.exponentialRampToValueAtTime(o2.slide, t + d);
+    if (o2 && o2.lp) { const fl = a.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o2.lp; o.connect(fl); node = fl; }
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    node.connect(g); g.connect(a.__out); o.start(t); o.stop(t + d + 0.03);
+  }
+  let noiseBuf = null;
+  function noise(a, t, d, v, type, freq, q) {
+    if (!noiseBuf) { noiseBuf = a.createBuffer(1, a.sampleRate, a.sampleRate); const ch0 = noiseBuf.getChannelData(0); for (let i = 0; i < ch0.length; i++) ch0[i] = Math.random() * 2 - 1; }
+    const src = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain();
+    src.buffer = noiseBuf; src.loop = true; fl.type = type; fl.frequency.value = freq; if (q) fl.Q.value = q;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    src.connect(fl); fl.connect(g); g.connect(a.__out); src.start(t, Math.random() * 0.5); src.stop(t + d + 0.03);
+  }
+  const RIFFS = [[60, 64, 67, 72], [62, 65, 69, 74], [57, 60, 64, 69], [65, 69, 72, 77]];
+  function sfx(kind, vol = 1) {
+    const a = ac(); if (!a || vol <= 0) return;
+    const t = a.currentTime + 0.02, v = x => Math.max(0.0002, x * vol), R = pick(RIFFS);
+    switch (kind) {
+      case 'piano': R.forEach((m, i) => { tone(a, t + i * 0.13, mtof(m), 1.1, 'triangle', v(0.22)); tone(a, t + i * 0.13, mtof(m + 12), 0.5, 'sine', v(0.06)); }); break;
+      case 'synth': R.concat(R[0] + 12).forEach((m, i) => tone(a, t + i * 0.09, mtof(m + 12), 0.32, 'square', v(0.07), { lp: 2400 })); break;
+      case 'bass': [R[0] - 24, R[0] - 24, R[2] - 24, R[1] - 24].forEach((m, i) => tone(a, t + i * 0.17, mtof(m), 0.3, 'sawtooth', v(0.3), { lp: 420 })); break;
+      case 'elec': [[R[0] - 12, R[2] - 12, R[0]], [R[1] - 12, R[3] - 12, R[1]]].forEach((ch, k) => ch.forEach((m, i) => tone(a, t + k * 0.32 + i * 0.018, mtof(m), 0.5, 'sawtooth', v(0.09), { lp: 2600 }))); break;
+      case 'drum':
+        [0, 0.48].forEach(d => tone(a, t + d, 150, 0.32, 'sine', v(0.5), { slide: 45 }));
+        [0.24, 0.72].forEach(d => noise(a, t + d, 0.16, v(0.28), 'bandpass', 1800, 0.8));
+        [0, 0.12, 0.24, 0.36, 0.48, 0.6, 0.72].forEach(d => noise(a, t + d, 0.05, v(0.08), 'highpass', 7000));
+        break;
+      case 'punch': noise(a, t, 0.12, v(0.45), 'lowpass', 1400); tone(a, t, 180, 0.22, 'sine', v(0.55), { slide: 50 }); break;
+      case 'whoosh': noise(a, t, 0.22, v(0.12), 'bandpass', 900, 1.2); break;
+      case 'pour': noise(a, t, 1.0, v(0.12), 'bandpass', 1500, 2); for (let i = 0; i < 4; i++) tone(a, t + 0.15 + i * 0.2, 900 + i * 120, 0.08, 'sine', v(0.05)); break;
+      case 'brew': noise(a, t, 1.6, v(0.09), 'lowpass', 500); for (let i = 0; i < 7; i++) tone(a, t + 0.25 + i * 0.18 + Math.random() * 0.05, 300 + Math.random() * 400, 0.06, 'sine', v(0.06)); tone(a, t + 1.65, mtof(84), 0.25, 'sine', v(0.08)); tone(a, t + 1.8, mtof(88), 0.35, 'sine', v(0.08)); break;
+      case 'sip': tone(a, t, 520, 0.09, 'sine', v(0.06), { slide: 760 }); break;
+      case 'pop': tone(a, t, mtof(76), 0.12, 'sine', v(0.08)); tone(a, t + 0.07, mtof(83), 0.16, 'sine', v(0.07)); break;
+    }
+  }
+  function syncSfxBtn() { const b2 = $('sfxBtn'); b2.textContent = sfxOn ? '🔊' : '🔇'; b2.setAttribute('aria-label', sfxOn ? '효과음 끄기' : '효과음 켜기'); b2.setAttribute('aria-pressed', String(!sfxOn)); }
+  $('sfxBtn').addEventListener('click', () => { sfxOn = !sfxOn; store.set('onl-sfx', sfxOn ? '1' : '0'); syncSfxBtn(); if (sfxOn) sfx('pop'); toast(sfxOn ? '효과음을 켰어요' : '효과음을 껐어요'); });
+  syncSfxBtn();
+
+  // ================= EQ desk: each touch changes the stage light and plays an instrument through the speakers =================
+  const EQ_INST = ['piano', 'elec', 'drum', 'bass', 'synth'];
+  let eqStep = 0, eqPulse = -1e9;
+  const floaters = [];
+  function eqFx(inst, vol) {
+    const now = performance.now(); eqPulse = now;
+    sfx(inst, vol);
+    const L = off('spkL'), Rr = off('spkR'), E = off('eq');
+    for (let i = 0; i < 3; i++) {
+      notes.push({ x: 74 + L.dx + (Math.random() * 6 - 3), y: 30 + L.dy + i * 6, t0: now + i * 180, sym: pick(['♪', '♫']) });
+      notes.push({ x: 118 + Rr.dx + (Math.random() * 6 - 3), y: 30 + Rr.dy + i * 6, t0: now + 90 + i * 180, sym: pick(['♪', '♫']) });
+    }
+    floaters.push({ x: 143 + E.dx, y: 326 + E.dy, t0: now, text: `${LIGHTS[lightMode].n} · ${INSTRUMENTS[inst]}` });
+  }
+  function drawEqFx(now) {
+    const t = now - eqPulse; if (t > 2600 || sceneId !== 'sanctuary') return;
+    const E = off('eq'), col = LIGHTS[lightMode].c ? `rgb(${LIGHTS[lightMode].c})` : '#9aa0ab';
+    for (let x = 125; x < 161; x += 4) {
+      const h = 1 + Math.round((Math.sin(now / 70 + x * 1.7) * 0.5 + 0.5) * 6 * (1 - t / 2600));
+      b.fillStyle = '#121117'; b.fillRect(x + E.dx - 1, 333 + E.dy, 3, 8);
+      b.fillStyle = col; b.fillRect(x + E.dx, 340 + E.dy - h, 1, h);
+    }
+    const flash = Math.floor(now / 120) % 2 ? col : '#f4f1ea';
+    for (const [id, x] of [['spkL', 70], ['spkR', 114]]) { const o = off(id); for (let y = 8; y < 50; y += 8) { b.fillStyle = flash; b.globalAlpha = 0.55 * (1 - t / 2600); b.fillRect(x + o.dx + 2, y + o.dy, 4, 2); } }
+    b.globalAlpha = 1;
+  }
+
+  // ================= 탕비실: coffee machine & water dispenser =================
+  const HOLD_MS = 45000;
+  function useMachine(kind) {
+    if (player.brew) return;
+    const t0 = performance.now();
+    player.brew = { k: kind, t0 }; player.hold = null; player.dir = 'up';
+    sfx(kind === 'coffee' ? 'brew' : 'pour');
+    setTimeout(() => {
+      if (!player.brew || player.brew.t0 !== t0) return;
+      player.brew = null; player.hold = { k: kind, t0: performance.now() }; sfx('pop');
+    }, kind === 'coffee' ? 1900 : 1200);
+  }
+  function drawMachineFx(now) {
+    if (sceneId !== 'room2') return;
+    for (const c of chars) {
+      if (!c.brew) continue;
+      const t = now - c.brew.t0, f = Math.floor(now / 110);
+      if (c.brew.k === 'coffee') {
+        const o = off('r2-counter');
+        b.fillStyle = f % 2 ? '#7bd389' : '#2f8a55'; b.fillRect(91 + o.dx, 29 + o.dy, 2, 1);
+        b.fillStyle = '#251c2c'; b.fillRect(93 + o.dx, 38 + o.dy, 6, 5); b.fillStyle = '#f4f1ea'; b.fillRect(94 + o.dx, 39 + o.dy, 4, 3); b.fillRect(98 + o.dx, 39 + o.dy, 1, 2);
+        const fill = Math.min(2, Math.floor(t / 600)); b.fillStyle = '#6b3a1e'; if (fill) b.fillRect(94 + o.dx, 42 + o.dy - fill, 4, fill);
+        b.fillStyle = '#6b3a1e'; b.fillRect(96 + o.dx, 35 + o.dy + (f % 3), 1, 1);
+      } else {
+        const o = off('r2-water');
+        b.fillStyle = '#9ad0f5'; b.fillRect(170 + o.dx, 41 + o.dy, 1, 3 + (f % 2));
+        b.fillStyle = '#251c2c'; b.fillRect(168 + o.dx, 43 + o.dy, 5, 5); b.fillStyle = '#dff1fc'; b.fillRect(169 + o.dx, 44 + o.dy, 3, 3);
+        const fill = Math.min(3, Math.floor(t / 350)); b.fillStyle = '#5aa9e6'; if (fill) b.fillRect(169 + o.dx, 47 + o.dy - fill, 3, fill);
+      }
+    }
+  }
+  // the cup in someone's hand (drawn right after their sprite)
+  function drawHeld(c, x, y, now) {
+    if (!c.hold || c.dir === 'up') return;
+    const t = now - c.hold.t0, sip = t % 6000 > 5300;
+    const hx = c.dir === 'left' ? x - 8 : c.dir === 'right' ? x + 5 : x + 4, hy = y - (c.seat ? 6 : 9) - (sip ? 3 : 0);
+    b.fillStyle = '#251c2c'; b.fillRect(hx - 1, hy - 1, 5, 5);
+    if (c.hold.k === 'coffee') {
+      b.fillStyle = '#f4f1ea'; b.fillRect(hx, hy, 3, 3); b.fillStyle = '#6b3a1e'; b.fillRect(hx, hy, 3, 1);
+      b.fillStyle = '#251c2c'; b.fillRect(c.dir === 'left' ? hx - 2 : hx + 4, hy + 1, 1, 1);
+      if (Math.floor(now / 400) % 3) { b.fillStyle = 'rgba(255,255,255,.75)'; b.fillRect(hx + 1, hy - 3 - (Math.floor(now / 400) % 2), 1, 1); b.fillRect(hx + 2, hy - 5 + (Math.floor(now / 400) % 2), 1, 1); }
+    } else {
+      b.fillStyle = '#dff1fc'; b.fillRect(hx, hy, 3, 3); b.fillStyle = '#5aa9e6'; b.fillRect(hx, hy + 1, 3, 2);
+    }
+  }
+
+  // ================= 펀치! =================
+  let punchAt = 0;
+  function punchTarget() {
+    let best = null, bd = 70;
+    for (const c of chars) {
+      if (c === player || c.dnd) continue;
+      const d = Math.hypot(c.x - player.x, c.y - player.y);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  }
+  function swing(tgt) {
+    const now = performance.now();
+    if (tgt) faceToward(player, tgt.x, tgt.y);
+    player.action = 'punch'; player.actionT0 = now; player.actionUntil = now + 450; player.playing = null;
+    if (tgt) { netSend('hit', { id: net.uid, to: tgt.id }); setTimeout(() => takeHit(tgt, player), 140); }
+    else sfx('whoosh');
+  }
+  function doPunch() {
+    if (player.dnd) { toast('OFF 모드에서는 펀치를 날릴 수 없어요 🙏'); return; }
+    const now = performance.now(); if (now - punchAt < 1100) return; punchAt = now;
+    const tgt = punchTarget();
+    if (!tgt) { if (player.seat) { toast('주먹을 날릴 사람이 근처에 없어요'); return; } swing(null); return; }
+    const seat = player.seat, back = () => { if (seat && !seat.occ) goTo(player, seatApproach(seat), () => sit(player, seat)); };
+    if (!seat && Math.hypot(tgt.x - player.x, tgt.y - player.y) < 14) { swing(tgt); return; }
+    // stand up, walk over, punch, and go back to the same chair
+    const side = player.x < tgt.x ? -9 : 9;
+    let spot = { x: tgt.x + side, y: tgt.y };
+    if (blocked(spot.x, spot.y)) spot = { x: tgt.x - side, y: tgt.y };
+    if (blocked(spot.x, spot.y)) spot = { x: tgt.x, y: tgt.y + 8 };
+    goTo(player, spot, () => { swing(tgt); setTimeout(back, 650); }, () => { if (Math.hypot(tgt.x - player.x, tgt.y - player.y) < 20) { swing(tgt); setTimeout(back, 650); } });
+  }
+  function takeHit(tgt, from) {
+    const now = performance.now();
+    tgt.hitT0 = now;
+    if (tgt.isPlayer && !tgt.seat) {
+      // a little knock-back away from whoever threw it
+      const dx = tgt.x - from.x, dy = tgt.y - from.y, d = Math.hypot(dx, dy) || 1;
+      for (let i = 0; i < 6; i++) { const nx = tgt.x + dx / d, ny = tgt.y + dy / d; if (blocked(nx, ny)) break; tgt.x = nx; tgt.y = ny; }
+      tgt.path = []; tgt.goal = null;
+    }
+    if (tgt.scene === sceneId) sfx('punch', tgt.isPlayer || from.isPlayer ? 1 : 0.5);
+  }
+  function onHit(p) {
+    if (!p) return;
+    const atk = net.remotes.get(p.id), tgt = p.to === net.uid ? player : net.remotes.get(p.to);
+    if (atk) { const now = performance.now(); atk.action = 'punch'; atk.actionT0 = now; atk.actionUntil = now + 450; if (tgt) faceToward(atk, tgt.x, tgt.y); }
+    if (tgt) setTimeout(() => takeHit(tgt, atk || tgt), 140);
+  }
+  function drawFist(c, x, y, now) {
+    if (c.action !== 'punch') return;
+    const k = clamp((now - c.actionT0) / 450, 0, 1), ext = Math.round(Math.sin(k * Math.PI) * 5);
+    let fx, fy = y - 11;
+    if (c.dir === 'right') fx = x + 5 + ext; else if (c.dir === 'left') fx = x - 7 - ext; else if (c.dir === 'down') { fx = x + 3; fy = y - 9 + Math.round(ext / 2); } else return;
+    b.fillStyle = '#251c2c'; b.fillRect(fx - 1, fy - 1, 4, 4); b.fillStyle = '#f5cda6'; b.fillRect(fx, fy, 2, 2);
+  }
+
+  // ================= away / idle (Zz) and leaving properly =================
+  const IDLE_MS = 3 * 60 * 1000, PHONE = window.matchMedia('(hover: none)').matches;
+  let lastInput = performance.now(), hiddenAway = false, awayTimer = 0, sleptOff = false, exited = false, inLounge = false;
+  const touched = () => { lastInput = performance.now(); };
+  ['keydown', 'pointerdown', 'wheel'].forEach(ev => window.addEventListener(ev, touched, { passive: true }));
+  function updateZz(now) {
+    const idleRoom = sceneId === 'sanctuary' || sceneId === 'hall';
+    const zz = !player.dnd && (hiddenAway || (idleRoom && now - lastInput > IDLE_MS && !player.playing && !player.brew && !gmActive()));
+    if (zz !== !!player.zz) { player.zz = zz; net.dirty = true; net.lastTrack = 0; }
+  }
+  function pushState() {
+    if (!LIVE || !net.ready || !net.ch) return;
+    const st = myState(); net.sig = '';
+    try { net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.ch.track(Object.assign({ name: player.name, look: player.look }, st)); } catch (e) {}
+  }
+  function leaveRealtime() {
+    if (!LIVE) return;
+    for (const c of [net.ch, net.lobby]) if (c) { try { c.untrack(); } catch (e) {} try { sb.removeChannel(c); } catch (e) {} }
+    net.ch = null; net.lobby = null; net.ready = false;
+    for (const id of [...net.remotes.keys()]) removeRemote(id);
+    renderPeople();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!inLounge || exited) return;
+    if (document.hidden) {
+      hiddenAway = true; player.zz = true; pushState();
+      clearTimeout(awayTimer);
+      // a tab left open in the background should not leave a character standing in the lounge
+      awayTimer = setTimeout(() => { if (document.hidden && LIVE && net.ch) { if (gmActive() && !gm.practice) gmSend({ t: 'end', id: gm.id, to: gm.oppId, why: 'left' }); leaveRealtime(); sleptOff = true; } }, PHONE ? 45000 : 180000);
+    } else {
+      hiddenAway = false; touched(); clearTimeout(awayTimer);
+      if (sleptOff && LIVE) {
+        sleptOff = false;
+        if (gmActive() && !gm.practice) gmFinish(3 - gm.me, 'left-me');
+        log('', '다시 연결했어요. 잠깐 자리를 비운 사이 라운지에서 나가 있었어요.', 'sys'); connectRealtime();
+      }
+    }
+  });
+  window.addEventListener('beforeunload', e => { if (LIVE && inLounge && !exited) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('pagehide', () => { if (!exited) leaveRealtime(); });
+  function askExit() {
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '라운지 종료';
+    body.appendChild(el('p', '', '라운지에서 나갈까요?'));
+    body.appendChild(el('p', 'small', gmActive() && !gm.practice ? '지금 두고 있는 오목은 기권 처리돼요. 내 캐릭터도 라운지에서 바로 사라져요.' : '내 캐릭터도 라운지에서 바로 사라져요. 다음에 들어오면 다시 만나요!'));
+    const row = el('div', 'btns');
+    const yes = el('button', 'btn btn-gold', '종료하기'), no = el('button', 'btn', '계속 있기');
+    yes.type = no.type = 'button';
+    yes.addEventListener('click', doExit); no.addEventListener('click', closeModal);
+    row.append(yes, no); body.appendChild(row);
+    $('modal').hidden = false; yes.focus();
+  }
+  function doExit() {
+    closeModal();
+    if (sceneId === GM_ROOM) gmLeaveRoom();
+    leaveRealtime(); exited = true;
+    $('bye').hidden = false;
+  }
+  $('exitBtn').addEventListener('click', askExit);
+  $('byeBack').addEventListener('click', () => location.reload());
 
   // ================= moving between scenes (본당 <-> 복도 <-> ROOM 1-4) =================
   let switching = false;
@@ -2018,6 +2369,7 @@
     const a = await sb.rpc('is_admin'); isAdmin = a.data === true; showAdmin();
     await loadHistory();
     log('', '왼쪽 출입구로 들어왔어요. 말풍선(…)이 뜬 곳에 가까이 가 보세요.', 'sys');
+    inLounge = true;
     connectRealtime();
   }
   async function bootLive() {
@@ -2028,7 +2380,7 @@
   }
   let demoStarted = false;
   function startDemo() {
-    if (demoStarted) return; demoStarted = true;
+    if (demoStarted) return; demoStarted = true; inLounge = true;
     renderPeople();
     log('', '체험판이에요. 실제 사이트에서는 접속한 사람들이 여기 함께 보여요. 저장은 이 기기에만 돼요.', 'sys');
   }
@@ -2036,11 +2388,11 @@
   // ================= boot =================
   loadSceneArt(); refreshChars(); applyLayout(); resize(); setTab('chat'); showAdmin(); $('sceneTag').textContent = scene.name;
   $('modeTag').textContent = LIVE ? 'LIVE' : 'DEMO';
-  if (window.matchMedia('(hover: none)').matches) $('hint').textContent = '바닥을 눌러 이동 · 의자를 누르면 앉아요 · 말풍선(…)이 뜬 곳을 눌러 살펴보기';
+  if (window.matchMedia('(hover: none)').matches) $('hint').textContent = '바닥을 눌러 이동 · 의자를 누르면 앉아요 · 말풍선(…)이 뜬 곳을 눌러 살펴보기 · 펀치는 가까운 사람에게!';
   if (store.get('onl-off') === '1') setDnd(true, true);
   if (LIVE) bootLive();
   else if (store.get('onl-demo-auth')) afterLogin(null);
   else showAuth('');
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), doPunch, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk] };
   requestAnimationFrame(loop);
 })();
