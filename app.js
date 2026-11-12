@@ -715,12 +715,24 @@
   }
   async function loadHistory() {
     const forScene = sceneId;
-    const { data } = await sb.from('messages').select('name, body, user_id, created_at').eq('scene', forScene).order('created_at', { ascending: false }).limit(40);
+    const since = new Date(`${chinaYmd()}T00:00:00+08:00`).toISOString();   // today 00:00 China time
+    const { data } = await sb.from('messages').select('name, body, user_id, created_at').eq('scene', forScene).gte('created_at', since).order('created_at', { ascending: false }).limit(40);
     if (forScene !== sceneId) return;
     if (!data) return;
     data.reverse().forEach(m => log(m.name, m.body, m.user_id === net.uid ? 'me' : ''));
-    if (data.length) log('', '── 여기까지 지난 대화 ──', 'sys');
+    if (data.length) log('', '── 여기까지 오늘 대화 ──', 'sys');
   }
+  // chat resets every day at 00:00 China time (01:00 Korea): clear the log and bubbles for people who are still online
+  let chatDay = null;
+  setInterval(() => {
+    const d = chinaYmd();
+    if (chatDay === null) { chatDay = d; return; }
+    if (d === chatDay) return;
+    chatDay = d;
+    logEl.innerHTML = '';
+    for (const c of entities) c.bubble = null;
+    log('', '0시가 지나 대화가 초기화됐어요. 새로운 하루도 함께해요!', 'sys');
+  }, 20000);
   let saveProfileTimer = 0;
   function saveProfileSoon() {
     if (!LIVE || !net.uid) return;
