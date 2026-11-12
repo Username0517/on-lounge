@@ -616,7 +616,26 @@
   const seatIdx = ent => ent.seat ? chairs.indexOf(ent.seat) : -1;
   function netSend(event, payload) { if (LIVE && net.ready && net.ch) net.ch.send({ type: 'broadcast', event, payload }); }
   function lobbySend(event, payload) { if (LIVE && net.lobby) net.lobby.send({ type: 'broadcast', event, payload }); }
-  function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd }); }
+  function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd, hb: Date.now() }); }
+
+  // ---- liveness ----
+  // The server can keep a closed phone or a frozen tab "present" for a long time, so every client
+  // re-announces itself every 20 s (hb) and anyone not heard from for 75 s is treated as gone.
+  const ALIVE_MS = 75000, HB_MS = 20000;
+  const heard = new Map(), lastHb = new Map(), lobbyHeard = new Map(), lobbyHb = new Map(), oldClient = new Set();
+  const markHeard = id => heard.set(id, performance.now());
+  const isAlive = id => performance.now() - (heard.get(id) || 0) < ALIVE_MS;
+  setInterval(() => {
+    if (!LIVE || exited) return;
+    if (net.ready && net.ch) { net.dirty = true; net.lastTrack = 0; if (document.hidden) pushState(); }
+    lobbyTrack();
+  }, HB_MS);
+  setInterval(() => {
+    if (!LIVE) return;
+    let changed = false;
+    for (const id of [...net.remotes.keys()]) if (!oldClient.has(id) && !isAlive(id)) { removeRemote(id); changed = true; }
+    if (net.lobby) onLobbySync(); else if (changed) renderPeople();
+  }, 5000);
   function myState() {
     return { id: net.uid, x: Math.round(player.x * 10) / 10, y: Math.round(player.y * 10) / 10, dir: player.dir, mv: player.moving, seat: seatIdx(player),
       act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, zz: player.zz ? 1 : 0, hold: player.hold ? player.hold.k : null, brew: player.brew ? player.brew.k : null, to: player.path.length ? player.goal : null };
@@ -626,7 +645,7 @@
     const st = myState(), kb = player.moving && !player.path.length;
     const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
     if (sig !== net.sig && now - net.lastSend > (kb ? 250 : 60)) { net.sig = sig; net.lastSend = now; net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.dirty = true; }
-    if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look }, st)); }
+    if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look, hb: Date.now() }, st)); }
   }
   function addRemote(id, meta) {
     const sp = Object.values(scene.spawns)[0];
@@ -689,6 +708,11 @@
       if (key === net.uid) continue;
       const metas = state[key], meta = metas && metas[metas.length - 1];
       if (!meta) continue;
+      // only a new heartbeat counts as a sign of life; an old entry the server still holds does not
+      if (meta.hb && meta.hb !== lastHb.get(key)) { lastHb.set(key, meta.hb); markHeard(key); }
+      else if (!meta.hb) { oldClient.add(key); markHeard(key); }   // someone still on an older version of the page
+      else if (!heard.has(key)) markHeard(key);
+      if (!isAlive(key)) continue;
       seen.add(key);
       let ent = net.remotes.get(key);
       if (!ent) { ent = addRemote(key, meta); applyRemote(ent, meta, now, true); }
@@ -697,11 +721,24 @@
       ent.dnd = !!meta.dnd; ent.og = !!meta.og; ent.zz = !!meta.zz;
     }
     for (const key of [...net.remotes.keys()]) if (!seen.has(key)) removeRemote(key);
-    renderPeople();
+    if (net.lobby) onLobbySync(); else renderPeople();
   }
   function onLobbySync() {
-    const st = net.lobby.presenceState(), counts = {}; let total = 0;
-    for (const k in st) { const m = st[k][st[k].length - 1]; if (!m) continue; total++; counts[m.scene] = (counts[m.scene] || 0) + 1; }
+    if (!net.lobby) return;
+    const st = net.lobby.presenceState(), counts = {}, now = performance.now(); let total = 1;
+    counts[sceneId] = 1;   // me
+    for (const k in st) {
+      if (k === net.uid) continue;
+      const m = st[k][st[k].length - 1]; if (!m) continue;
+      if (m.hb && m.hb !== lobbyHb.get(k)) { lobbyHb.set(k, m.hb); lobbyHeard.set(k, now); }
+      else if (!m.hb || !lobbyHeard.has(k)) lobbyHeard.set(k, now);
+      const alive = now - lobbyHeard.get(k) < ALIVE_MS || (m.scene === sceneId && net.remotes.has(k));
+      if (!alive || m.scene === sceneId) continue;   // my room is counted from the people actually here (below)
+      total++; counts[m.scene] = (counts[m.scene] || 0) + 1;
+    }
+    // people in my room: exactly the characters I can see, so the number and the name tags always agree
+    const here = [...net.remotes.keys()].length;
+    counts[sceneId] += here; total += here;
     net.counts = counts; net.total = total; renderPeople();
   }
   async function connectRealtime() {
@@ -723,12 +760,15 @@
     ch.on('presence', { event: 'sync' }, () => { if (net.ch === ch) onSync(); })
       .on('broadcast', { event: 'st' }, ({ payload: p }) => {
         if (net.ch !== ch || !p || p.id === net.uid) return;
+        markHeard(p.id);
+        const fresh = !net.remotes.has(p.id);
         const ent = net.remotes.get(p.id) || addRemote(p.id, p);
+        if (fresh) onLobbySync();
         applyRemote(ent, p, performance.now(), false);
       })
       .on('broadcast', { event: 'chat' }, ({ payload: p }) => {
         if (net.ch !== ch || !p || p.id === net.uid) return;
-        const ent = net.remotes.get(p.id);
+        const ent = net.remotes.get(p.id); markHeard(p.id);
         if (ent) ent.bubble = { text: p.text, until: performance.now() + 4500 };
         log(p.name, p.text, '');
       })
@@ -1380,7 +1420,7 @@
   function renderPeople() {
     const p = $('people'); p.innerHTML = '';
     chars.forEach(c => p.appendChild(el('span', c.isPlayer ? 'me' : '', c.dnd ? `🙏 ${c.name || '…'}` : (c.name || '…'))));
-    $('count').textContent = LIVE ? Math.max(net.total, 1) : entities.length;
+    $('count').textContent = LIVE ? Math.max(net.total || 1, 1) : entities.length;
     const where = Object.keys(SCENES).map(id => [id, sceneCount(id)]).filter(([, n]) => n).map(([id, n]) => `${SCENES[id].name.replace(/ · .*/, m => m)} ${n}명`);
     $('where').textContent = where.length ? '지금 접속: ' + where.join(' · ') : '';
   }
