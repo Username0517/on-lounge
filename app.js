@@ -1135,6 +1135,7 @@
     const fam = getComputedStyle(document.body).fontFamily;
     for (const f of floaters) {
       const t = (now - f.t0) / 2200; ctx.globalAlpha = t < 0.75 ? 1 : (1 - t) * 4;
+      if (f.bare) { ctx.font = `${fs * 1.6}px sans-serif`; ctx.fillText(f.text, SX(f.x), SY(f.y) - t * 14 * s / 2); continue; }
       ctx.font = `800 ${fs}px ${fam}`;
       const tw = ctx.measureText(f.text).width + 12, th = fs * 1.5, x = clamp(SX(f.x), tw / 2 + 4, cw - tw / 2 - 4), y = SY(f.y) - t * 14 * s / 2;
       ctx.fillStyle = 'rgba(37,28,44,.88)'; rrect(ctx, x - tw / 2, y - th / 2, tw, th, 5); ctx.fill();
@@ -1701,7 +1702,7 @@
     const tgt = punchTarget();
     if (!tgt) {
       if (player.seat) { toast('주먹을 날릴 사람이 근처에 없어요'); return; }
-      swing(null); floaters.push({ x: player.x, y: player.y - 26, t0: now, text: '👊 슉! 허공에 펀치' }); return;
+      swing(null); floaters.push({ x: player.x, y: player.y - 30, t0: now, text: '👊', bare: true }); return;
     }
     const seat = player.seat, back = () => { if (seat && !seat.occ) goTo(player, seatApproach(seat), () => sit(player, seat)); };
     if (!seat && Math.hypot(tgt.x - player.x, tgt.y - player.y) < 14) { swing(tgt); return; }
