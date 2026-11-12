@@ -616,7 +616,11 @@
   const seatIdx = ent => ent.seat ? chairs.indexOf(ent.seat) : -1;
   function netSend(event, payload) { if (LIVE && net.ready && net.ch) net.ch.send({ type: 'broadcast', event, payload }); }
   function lobbySend(event, payload) { if (LIVE && net.lobby) net.lobby.send({ type: 'broadcast', event, payload }); }
-  function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd, hb: Date.now() }); }
+  // one account can be open in several windows or phones; each window is a "session", and only the newest one stays connected
+  const SID = Math.random().toString(36).slice(2, 10), T0 = Date.now();
+  function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd, hb: Date.now(), sid: SID, t0: T0 }); }
+  // of several entries under one person, use the newest window's; ignore a frozen older one
+  const pickMeta = metas => { let best = null; for (const m of metas || []) if (!best || (m.t0 || 0) > (best.t0 || 0) || ((m.t0 || 0) === (best.t0 || 0) && (m.hb || 0) > (best.hb || 0))) best = m; return best; };
 
   // ---- liveness ----
   // The server can keep a closed phone or a frozen tab "present" for a long time, so every client
@@ -645,7 +649,7 @@
     const st = myState(), kb = player.moving && !player.path.length;
     const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
     if (sig !== net.sig && now - net.lastSend > (kb ? 250 : 60)) { net.sig = sig; net.lastSend = now; net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.dirty = true; }
-    if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look, hb: Date.now() }, st)); }
+    if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look, hb: Date.now(), sid: SID, t0: T0 }, st)); }
   }
   function addRemote(id, meta) {
     const sp = Object.values(scene.spawns)[0];
@@ -706,7 +710,7 @@
     const state = net.ch.presenceState(), seen = new Set(), now = performance.now();
     for (const key in state) {
       if (key === net.uid) continue;
-      const metas = state[key], meta = metas && metas[metas.length - 1];
+      const meta = pickMeta(state[key]);
       if (!meta) continue;
       // only a new heartbeat counts as a sign of life; an old entry the server still holds does not
       if (meta.hb && meta.hb !== lastHb.get(key)) { lastHb.set(key, meta.hb); markHeard(key); }
@@ -727,9 +731,11 @@
     if (!net.lobby) return;
     const st = net.lobby.presenceState(), counts = {}, now = performance.now(); let total = 1;
     counts[sceneId] = 1;   // me
+    // the same account opened somewhere newer: this window steps aside
+    if ((st[net.uid] || []).some(m => m.sid && m.sid !== SID && (m.t0 || 0) > T0)) { superseded(); return; }
     for (const k in st) {
       if (k === net.uid) continue;
-      const m = st[k][st[k].length - 1]; if (!m) continue;
+      const m = pickMeta(st[k]); if (!m) continue;
       if (m.hb && m.hb !== lobbyHb.get(k)) { lobbyHb.set(k, m.hb); lobbyHeard.set(k, now); }
       else if (!m.hb || !lobbyHeard.has(k)) lobbyHeard.set(k, now);
       const alive = now - lobbyHeard.get(k) < ALIVE_MS || (m.scene === sceneId && net.remotes.has(k));
@@ -1826,16 +1832,19 @@
     const row = el('div', 'btns');
     const yes = el('button', 'btn btn-gold', '종료하기'), no = el('button', 'btn', '계속 있기');
     yes.type = no.type = 'button';
-    yes.addEventListener('click', doExit); no.addEventListener('click', closeModal);
+    yes.addEventListener('click', () => doExit()); no.addEventListener('click', closeModal);
     row.append(yes, no); body.appendChild(row);
     $('modal').hidden = false; yes.focus();
   }
-  function doExit() {
+  function doExit(why) {
     closeModal();
     if (sceneId === GM_ROOM) gmLeaveRoom();
     leaveRealtime(); exited = true;
+    const ps = $('bye').querySelectorAll('p');
+    if (why === 'dup') { ps[0].textContent = '다른 창에서 다시 접속했어요'; ps[1].textContent = '같은 계정으로 다른 창이나 기기에서 라운지에 들어와서, 이 창의 접속은 끝냈어요. 이 창에서 계속하려면 아래 버튼을 눌러 주세요.'; $('byeBack').textContent = '이 창에서 접속하기'; }
     $('bye').hidden = false;
   }
+  function superseded() { if (!exited) doExit('dup'); }
   $('exitBtn').addEventListener('click', askExit);
   $('byeBack').addEventListener('click', () => location.reload());
 
