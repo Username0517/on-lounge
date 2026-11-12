@@ -89,6 +89,40 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .controls { display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; gap: 6px; align-items: stretch; }
 .act { background: var(--teal); color: #fff; white-space: nowrap; }
+.gm-btn { background: #2b2733; color: #fff; white-space: nowrap; }
+.gm-btn.ping { background: var(--gold); color: var(--ink); animation: gmPing 1s ease-in-out infinite; }
+@keyframes gmPing { 50% { transform: translateY(-2px); } }
+.gm { position: fixed; inset: 0; z-index: 14; background: rgba(20,16,28,.6); display: flex; align-items: center; justify-content: center; padding: 12px; }
+.gm-card { background: var(--cream); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); padding: 0 0 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%; max-height: 100%; overflow: auto; }
+.gm-head { align-self: stretch; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; background: var(--gold); border-bottom: 3px solid var(--ink); }
+.gm-head h2 { margin: 0; font-size: 18px; font-weight: 800; }
+.gm-players { display: flex; gap: 6px; padding: 0 12px; flex-wrap: wrap; justify-content: center; }
+.gm-players span { font-size: 13px; font-weight: 700; border: 2px solid var(--ink); border-radius: 999px; padding: 1px 10px; background: #fff; opacity: .55; }
+.gm-players span.on { opacity: 1; background: var(--gold); box-shadow: 0 2px 0 var(--ink); }
+.gm-turn { margin: 0; font-size: 15px; font-weight: 800; color: var(--muted); }
+.gm-turn.mine { color: #2f8f80; }
+.gm-turn.done { color: var(--ink); }
+#gmBoard { display: block; margin: 0 12px; border: 3px solid var(--ink); border-radius: 6px; touch-action: none; cursor: pointer; }
+.gm-tip { margin: 0; font-size: 11px; color: var(--muted); padding: 0 12px; text-align: center; }
+@media (hover: hover) and (pointer: fine) { .gm-tip { display: none; } }
+.gm-actions { display: flex; gap: 6px; }
+.gm-actions .btn { padding: 4px 14px; }
+.gm-inv { position: fixed; z-index: 15; top: 12px; left: 50%; transform: translateX(-50%); width: min(320px, calc(100% - 24px)); background: var(--cream); border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 5px 0 var(--ink); padding: 12px; display: flex; flex-direction: column; gap: 8px; animation: gmDrop .25s ease-out; }
+.gm-inv p { margin: 0; font-weight: 700; }
+.gm-inv-btns { display: flex; gap: 6px; }
+.gm-inv-btns .btn { flex: 1; }
+#gmInvSec { font-size: 12px; color: var(--muted); }
+@keyframes gmDrop { from { transform: translate(-50%, -16px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .gm-btn.ping, .gm-inv { animation: none; } }
+.gm-list { display: flex; flex-direction: column; gap: 6px; }
+.gm-row { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 6px 8px 6px 12px; }
+.gm-name { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-busy { font-size: 11px; color: var(--muted); }
+.gm-row .btn { padding: 3px 12px; }
+.gm-empty { margin: 0; font-size: 13px; color: var(--muted); background: var(--cream-2); border-radius: 6px; padding: 10px; }
+.gm-practice { display: flex; gap: 6px; flex-wrap: wrap; border-top: 2px dashed var(--cream-2); padding-top: 10px; }
+.gm-practice .btn { padding: 4px 12px; font-size: 13px; }
+#log li.game { color: #8a5a00; font-weight: 700; }
 .chat { display: flex; gap: 6px; flex: 1; min-width: 0; }
 input[type="text"], input[type="password"], input[type="date"], textarea { font: inherit; color: var(--text); background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 7px 10px; width: 100%; min-width: 0; }
 textarea { resize: vertical; min-height: 70px; line-height: 1.6; }
@@ -249,6 +283,24 @@ details.paste textarea { margin-block: 6px; }
       <button type="button" class="btn" id="editReset">처음 배치로</button>
     </div>
     <div class="toast" id="toast" hidden></div>
+    <div class="gm" id="gm" hidden>
+      <div class="gm-card" role="dialog" aria-modal="true" aria-labelledby="gmTitle">
+        <div class="gm-head"><h2 id="gmTitle">오목 한 판</h2><button type="button" class="btn" id="gmHide">접기</button></div>
+        <div class="gm-players"><span id="gmP1"></span><span id="gmP2"></span></div>
+        <p class="gm-turn" id="gmTurn" aria-live="polite"></p>
+        <canvas id="gmBoard" aria-label="오목판. 빈 칸을 눌러 돌을 놓아요."></canvas>
+        <p class="gm-tip">휴대폰은 한 번 눌러 위치를 보고, 같은 곳을 한 번 더 누르면 놓여요.</p>
+        <div class="gm-actions">
+          <button type="button" class="btn" id="gmResign">기권</button>
+          <button type="button" class="btn btn-gold" id="gmAgain" hidden>한 판 더 신청</button>
+          <button type="button" class="btn" id="gmClose" hidden>닫기</button>
+        </div>
+      </div>
+    </div>
+    <div class="gm-inv" id="gmInv" hidden role="alertdialog" aria-labelledby="gmInvText">
+      <p id="gmInvText"></p>
+      <div class="gm-inv-btns"><button type="button" class="btn btn-gold" id="gmAccept">수락</button><button type="button" class="btn" id="gmDecline">거절 <span id="gmInvSec"></span></button></div>
+    </div>
     <div class="modal" id="modal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-head"><h2 id="modalTitle"></h2><button type="button" class="btn" id="modalClose">닫기</button></div>
@@ -260,6 +312,7 @@ details.paste textarea { margin-block: 6px; }
   <section class="controls">
     <div class="row">
       <button type="button" class="btn act" id="actBtn" hidden></button>
+      <button type="button" class="btn gm-btn" id="gmBtn" hidden>⚫ 오목</button>
       <form class="chat" id="chatForm" autocomplete="off">
         <input type="text" id="chatInput" maxlength="200" placeholder="할 말을 입력하세요">
         <button type="submit" class="btn btn-gold">보내기</button>

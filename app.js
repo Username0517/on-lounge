@@ -588,12 +588,12 @@
   function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd }); }
   function myState() {
     return { id: net.uid, x: Math.round(player.x * 10) / 10, y: Math.round(player.y * 10) / 10, dir: player.dir, mv: player.moving, seat: seatIdx(player),
-      act: player.action, play: player.playing, dnd: !!player.dnd, to: player.path.length ? player.goal : null };
+      act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, to: player.path.length ? player.goal : null };
   }
   function netTick(now) {
     if (!net.ready) return;
     const st = myState(), kb = player.moving && !player.path.length;
-    const sig = [st.seat, st.act, st.play, st.dnd, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
+    const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
     if (sig !== net.sig && now - net.lastSend > (kb ? 250 : 60)) { net.sig = sig; net.lastSend = now; net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.dirty = true; }
     if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look }, st)); }
   }
@@ -608,6 +608,7 @@
     const ent = net.remotes.get(id); if (!ent) return;
     if (ent.seat && ent.seat.occ === ent) ent.seat.occ = null;
     net.remotes.delete(id);
+    gmPeerGone(id);
     const i = entities.indexOf(ent); if (i >= 0) entities.splice(i, 1);
     refreshChars();
   }
@@ -631,7 +632,7 @@
     }
     const act = p.act || null;
     if (act !== ent.action) { ent.action = act; ent.actionT0 = now; ent.actionUntil = !act ? 0 : (act === 'pray' || act === 'play') ? Infinity : act === 'jump' ? now + 650 : now + 2400; }
-    ent.playing = p.play || null; ent.dnd = !!p.dnd;
+    ent.playing = p.play || null; ent.dnd = !!p.dnd; ent.og = !!p.og;
   }
   function updateRemotes(dt) {
     for (const ent of net.remotes.values()) {
@@ -658,7 +659,7 @@
       if (!ent) { ent = addRemote(key, meta); applyRemote(ent, meta, now, true); }
       if (meta.name) ent.name = meta.name;
       if (validLook(meta.look)) ent.look = meta.look;
-      ent.dnd = !!meta.dnd;
+      ent.dnd = !!meta.dnd; ent.og = !!meta.og;
     }
     for (const key of [...net.remotes.keys()]) if (!seen.has(key)) removeRemote(key);
     renderPeople();
@@ -696,6 +697,7 @@
         if (ent) ent.bubble = { text: p.text, until: performance.now() + 4500 };
         log(p.name, p.text, '');
       })
+      .on('broadcast', { event: 'gm' }, ({ payload: p }) => { if (net.ch === ch) onGm(p); })
       .on('broadcast', { event: 'emote' }, ({ payload: p }) => { const ent = p && net.remotes.get(p.id); if (ent) ent.emote = { sym: p.sym, until: performance.now() + 2400 }; })
       .subscribe(status => {
         if (net.ch !== ch) return;
@@ -860,8 +862,8 @@
   const isTyping = () => { const t = document.activeElement; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'); };
   const MOVE = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'w', 'a', 's', 'd'];
   window.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
-    if (isTyping() || !$('join').hidden || !$('creator').hidden) return;
+    if (e.key === 'Escape') { if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
+    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden) return;
     const k = e.key.toLowerCase();
     if (MOVE.includes(k)) { keys.add(k); e.preventDefault(); if (!$('modal').hidden) closeModal(); }
     else if ((k === 'e' || k === ' ') && near && $('modal').hidden) { near.run(); e.preventDefault(); }
@@ -1059,6 +1061,11 @@
       ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = '#1a1420'; ctx.strokeText(label, sx, ny + 0.5);
       ctx.fillStyle = c.isPlayer ? '#ffd65a' : '#8fe38a'; ctx.fillText(label, sx, ny + 0.5);
       let top = ny - nh / 2 - 4;
+      if (c.isPlayer ? gmActive() && !gm.practice : c.og) {
+        const r = Math.max(3, fs * 0.42), gy = top - r - 2;
+        for (const [dx, col] of [[-r - 1, '#16131a'], [r + 1, '#fbf8f2']]) { ctx.beginPath(); ctx.arc(sx + dx, gy, r, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#251c2c'; ctx.stroke(); }
+        top -= r * 2 + 4;
+      }
       if (c.emote && !c.dnd) {
         ctx.font = `700 ${fs * 1.5}px "Pixelify Sans", sans-serif`;
         const ey = top - fs * 0.8 + Math.sin(now / 160) * 2;
@@ -1437,7 +1444,9 @@
   let switching = false;
   function goScene(id, spawnKey) {
     if (switching || !SCENES[id] || id === sceneId) return;
+    if (gmActive() && !gm.practice) { toast('오목 중에는 방을 나갈 수 없어요. 게임을 끝내거나 기권해 주세요.'); gmOpen(); return; }
     switching = true;
+    if (sceneId === GM_ROOM) gmLeaveRoom();
     const fade = $('fade'); fade.classList.add('on');
     setTimeout(() => {
       standUp(player);
@@ -1449,7 +1458,7 @@
       const sp = scene.spawns[spawnKey] || Object.values(scene.spawns)[0];
       player.x = sp[0]; player.y = sp[1]; player.dir = sp[2];
       camInit = false; resize();
-      $('sceneTag').textContent = scene.name;
+      $('sceneTag').textContent = scene.name; gmLabel();
       logEl.innerHTML = '';
       log('', id === 'hall' ? '복도로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
@@ -1457,6 +1466,384 @@
       requestAnimationFrame(() => { fade.classList.remove('on'); switching = false; });
     }, 280);
   }
+
+  // ================= 오목 (탕비실 1:1 Gomoku) =================
+  // Each game has its own id, so many pairs can play in the same room at once.
+  // Messages ride on the room's broadcast channel (event 'gm'); nothing is stored in the database.
+  const GN = 15, GM_ROOM = 'room2';
+  let gm = null, gmIn = null, gmOut = null, gmGhost = -1, gmHover = -1, gmInvTimer = 0;
+  const gmActive = () => !!(gm && !gm.over);
+  const gmNewId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+  const gmClip = s => String(s || '상대').slice(0, 8);
+  const gmTurn = () => gm.ms.length % 2 === 0 ? 1 : 2;
+  const gmMyTurn = () => gmActive() && (gm.practice === 'hot' || gmTurn() === gm.me);
+  function gmSend(p) { netSend('gm', Object.assign({ from: net.uid }, p)); }
+  function gmLabel() {
+    const b = $('gmBtn');
+    b.hidden = sceneId !== GM_ROOM;
+    b.textContent = gmActive() ? ($('gm').hidden ? (gmMyTurn() ? '⚫ 내 차례!' : '⚫ 오목판') : '⚫ 오목 중') : '⚫ 오목';
+    b.classList.toggle('ping', gmActive() && $('gm').hidden && gmMyTurn());
+  }
+
+  // ---- rules ----
+  const GDIRS = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  function gmLine(b, idx) {
+    const c = b[idx]; if (!c) return null;
+    const r = Math.floor(idx / GN), q = idx % GN;
+    for (const [dr, dq] of GDIRS) {
+      const cells = [idx];
+      for (const s of [1, -1]) {
+        let rr = r + dr * s, qq = q + dq * s;
+        while (rr >= 0 && rr < GN && qq >= 0 && qq < GN && b[rr * GN + qq] === c) { cells.push(rr * GN + qq); rr += dr * s; qq += dq * s; }
+      }
+      if (cells.length >= 5) return cells;
+    }
+    return null;
+  }
+  function gmLoad(ms) {
+    gm.b.fill(0); gm.ms = ms.slice();
+    gm.ms.forEach((ix, i) => { gm.b[ix] = i % 2 ? 2 : 1; });
+  }
+
+  // ---- computer opponent for practice (attack + defence pattern scoring) ----
+  function gmScoreAt(b, idx, c) {
+    const r = Math.floor(idx / GN), q = idx % GN; let total = 0;
+    for (const [dr, dq] of GDIRS) {
+      let n = 1, open = 0;
+      for (const s of [1, -1]) {
+        let rr = r + dr * s, qq = q + dq * s;
+        while (rr >= 0 && rr < GN && qq >= 0 && qq < GN && b[rr * GN + qq] === c) { n++; rr += dr * s; qq += dq * s; }
+        if (rr >= 0 && rr < GN && qq >= 0 && qq < GN && !b[rr * GN + qq]) open++;
+      }
+      if (n >= 5) total += 1e6;
+      else if (n === 4) total += open === 2 ? 1e5 : open ? 1e4 : 0;
+      else if (n === 3) total += open === 2 ? 5e3 : open ? 400 : 0;
+      else if (n === 2) total += open === 2 ? 200 : open ? 30 : 0;
+      else total += open;
+    }
+    return total;
+  }
+  function gmAiMove() {
+    const b = gm.b, me = gmTurn(), you = 3 - me;
+    if (!gm.ms.length) return 7 * GN + 7;
+    let best = -1, bestS = -1;
+    for (let i = 0; i < GN * GN; i++) {
+      if (b[i]) continue;
+      const r = Math.floor(i / GN), q = i % GN; let nearStone = false;
+      for (let dr = -2; dr <= 2 && !nearStone; dr++) for (let dq = -2; dq <= 2; dq++) { const rr = r + dr, qq = q + dq; if (rr >= 0 && rr < GN && qq >= 0 && qq < GN && b[rr * GN + qq]) { nearStone = true; break; } }
+      if (!nearStone) continue;
+      const s = gmScoreAt(b, i, me) * 1.1 + gmScoreAt(b, i, you) + Math.random() * 5;
+      if (s > bestS) { bestS = s; best = i; }
+    }
+    return best;
+  }
+
+  // ---- starting / finishing ----
+  function gmStart(id, oppId, oppName, color, practice) {
+    gm = { id, oppId, oppName: gmClip(oppName), me: color, b: new Uint8Array(GN * GN), ms: [], over: false, win: null, how: '', winner: 0, practice: practice || null };
+    gmGhost = -1; gmHover = -1;
+    closeModal(); gmHideInvite();
+    net.dirty = true; net.lastTrack = 0;
+    gmOpen();
+    if (!practice) log('', `⚫ ${gm.oppName}님과 오목을 시작했어요. ${color === 1 ? '내가 흑이라 먼저 둬요.' : '상대가 흑이라 먼저 둬요.'}`, 'sys game');
+    if (practice === 'ai' && color === 2) setTimeout(gmAiTurn, 500);
+  }
+  function gmFinish(winner, how) {
+    if (!gmActive()) return;
+    gm.over = true; gm.winner = winner; gm.how = how; gmGhost = -1;
+    net.dirty = true; net.lastTrack = 0;
+    if (gm.practice) {
+      toast(winner === 0 ? '비겼어요' : gm.practice === 'hot' ? `${winner === 1 ? '흑' : '백'}이 이겼어요!` : winner === gm.me ? '이겼어요! 🎉' : '컴퓨터가 이겼어요');
+    } else {
+      const meName = gmClip(player.name), opp = gm.oppName;
+      const iWon = winner === gm.me;
+      const text = gmResultText(winner === 0 ? null : iWon ? meName : opp, winner === 0 ? null : iWon ? opp : meName, how, meName, opp);
+      log('', text, 'sys game');
+      // the winner (or, for a draw, whoever placed the last stone) tells the rest of the room
+      if (iWon || (winner === 0 && how === 'full' && gm.ms.length % 2 === (gm.me === 1 ? 1 : 0))) gmSend({ t: 'res', id: gm.id, w: iWon ? meName : null, l: iWon ? opp : null, a: meName, b: opp, how, loser: iWon ? gm.oppId : null });
+      if ($('gm').hidden && how !== 'left-me') toast(text);
+    }
+    gmRender();
+  }
+  function gmResultText(w, l, how, a, b) {
+    if (!w) return `🤝 ${a}님과 ${b}님의 오목은 무승부예요`;
+    if (how === 'resign') return `🏆 ${w}님이 이겼어요 (${l}님 기권)`;
+    if (how === 'left') return `🏆 ${w}님이 이겼어요 (${l}님이 자리를 떠났어요)`;
+    return `🏆 ${w}님이 ${l}님을 이겼어요!`;
+  }
+  function gmPlace(idx) {
+    if (!gmActive() || gm.b[idx]) return false;
+    gm.b[idx] = gmTurn(); gm.ms.push(idx);
+    const line = gmLine(gm.b, idx);
+    if (line) { gm.win = line; gmFinish(gm.b[idx], 'five'); }
+    else if (gm.ms.length >= GN * GN) gmFinish(0, 'full');
+    return true;
+  }
+  function gmPlay(idx) {
+    if (!gmMyTurn() || gm.b[idx]) return;
+    const ms = gm.ms.concat(idx);
+    if (!gm.practice) gmSend({ t: 'mv', id: gm.id, to: gm.oppId, ms });
+    gmPlace(idx); gmGhost = -1; gmRender();
+    if (gm.practice === 'ai' && gmActive()) setTimeout(gmAiTurn, 380 + Math.random() * 300);
+  }
+  function gmAiTurn() { if (!gm || gm.practice !== 'ai' || !gmActive() || gmTurn() === gm.me) return; gmPlace(gmAiMove()); gmRender(); }
+  function gmResign() {
+    if (!gmActive()) { gmCloseBoard(); return; }
+    if (!gm.practice) gmSend({ t: 'end', id: gm.id, to: gm.oppId, why: 'resign' });
+    gmFinish(gm.practice === 'hot' ? 3 - gmTurn() : 3 - gm.me, 'resign');
+  }
+  // leaving 탕비실 (or the page) during a game counts as a loss
+  function gmLeaveRoom() {
+    if (gmActive()) {
+      if (!gm.practice) { gmSend({ t: 'end', id: gm.id, to: gm.oppId, why: 'left' }); log('', '방을 나와서 오목은 기권 처리됐어요.', 'sys'); }
+      gmFinish(3 - gm.me, 'left-me');
+    }
+    if (gmOut) gmCancelOut(true);
+    if (gmIn) { gmSend({ t: 'no', id: gmIn.id, to: gmIn.from, why: 'left' }); gmHideInvite(); }
+    gm = null; $('gm').hidden = true;
+  }
+  window.addEventListener('pagehide', () => { if (gmActive() && !gm.practice) gmSend({ t: 'end', id: gm.id, to: gm.oppId, why: 'left' }); });
+
+  // ---- challenge list ----
+  function gmLobby() {
+    if (gmActive()) { gmOpen(); return; }
+    if (gm && gm.over) { gm = null; }
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '오목 한 판';
+    body.appendChild(el('p', 'small', '탕비실에 있는 사람에게 도전해 보세요. 신청한 사람이 흑으로 먼저 두고, 가로·세로·대각선으로 5개를 먼저 이으면 이겨요.'));
+    const list = el('div', 'gm-list');
+    const others = [...net.remotes.values()].filter(e => e.scene === sceneId || LIVE).sort((a, z) => (a.name || '').localeCompare(z.name || ''));
+    if (!others.length) list.appendChild(el('p', 'gm-empty', LIVE ? '지금 탕비실에 다른 사람이 없어요. 누가 들어오면 여기에 보여요.' : '체험판이라 다른 사람이 없어요. 실제 사이트에서는 탕비실에 있는 사람이 여기에 보여요.'));
+    for (const e of others) {
+      const row = el('div', 'gm-row');
+      row.appendChild(el('span', 'gm-name', e.name || '…'));
+      const busy = e.og ? '게임 중' : e.dnd ? 'OFF' : '';
+      if (busy) row.appendChild(el('span', 'gm-busy', busy));
+      const b = el('button', 'btn btn-gold', '도전'); b.type = 'button'; b.disabled = !!busy;
+      b.addEventListener('click', () => gmChallenge(e.id, e.name));
+      row.appendChild(b); list.appendChild(row);
+    }
+    body.appendChild(list);
+    const pr = el('div', 'gm-practice');
+    const ai = el('button', 'btn', '컴퓨터와 연습'); ai.type = 'button'; ai.addEventListener('click', () => gmStart('p', null, '컴퓨터', 1, 'ai'));
+    const hot = el('button', 'btn', '혼자 두 색 두기'); hot.type = 'button'; hot.addEventListener('click', () => gmStart('p', null, '백', 1, 'hot'));
+    pr.append(ai, hot); body.appendChild(pr);
+    $('modal').hidden = false; $('modalClose').focus();
+  }
+  function gmChallenge(to, name) {
+    if (gmActive()) return;
+    if (gmOut) gmCancelOut(true);
+    if (player.dnd) { toast('OFF 모드에서는 신청할 수 없어요. 제목의 OFF를 눌러 ON으로 바꿔 주세요.'); return; }
+    const id = gmNewId();
+    gmOut = { id, to, name: gmClip(name), timer: setTimeout(() => { if (gmOut && gmOut.id === id) { gmSend({ t: 'cx', id, to }); gmOut = null; closeModal(); toast(`${gmClip(name)}님이 응답하지 않았어요`); } }, 25000) };
+    gmSend({ t: 'inv', id, to, name: gmClip(player.name) });
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '오목 신청';
+    body.appendChild(el('p', '', `${gmOut.name}님에게 오목을 신청했어요.`));
+    body.appendChild(el('p', 'small gm-wait', '대답을 기다리는 중…'));
+    const c = el('button', 'btn', '신청 취소'); c.type = 'button'; c.addEventListener('click', () => { gmCancelOut(); closeModal(); });
+    body.appendChild(c);
+    $('modal').hidden = false;
+  }
+  function gmCancelOut(silent) {
+    if (!gmOut) return;
+    clearTimeout(gmOut.timer); gmSend({ t: 'cx', id: gmOut.id, to: gmOut.to }); gmOut = null;
+    if (!silent) toast('신청을 취소했어요');
+  }
+
+  // ---- incoming invite card ----
+  function gmShowInvite(p) {
+    gmIn = { id: p.id, from: p.from, name: gmClip(p.name), until: Date.now() + 20000 };
+    $('gmInvText').textContent = `${gmIn.name}님이 오목 한 판을 신청했어요!`;
+    $('gmInv').hidden = false;
+    const tick = () => {
+      if (!gmIn) return;
+      const left = Math.ceil((gmIn.until - Date.now()) / 1000);
+      if (left <= 0) { gmDecline('timeout'); return; }
+      $('gmInvSec').textContent = `${left}`;
+    };
+    clearInterval(gmInvTimer); tick(); gmInvTimer = setInterval(tick, 250);
+  }
+  function gmHideInvite() { clearInterval(gmInvTimer); gmIn = null; $('gmInv').hidden = true; }
+  function gmAccept() {
+    if (!gmIn) return;
+    const { id, from, name } = gmIn;
+    if (!net.remotes.has(from)) { gmHideInvite(); toast('상대가 방을 나갔어요'); return; }
+    if (gmOut) gmCancelOut(true);
+    gmSend({ t: 'ok', id, to: from, name: gmClip(player.name) });
+    gmStart(id, from, name, 2);
+  }
+  function gmDecline(why) {
+    if (!gmIn) return;
+    gmSend({ t: 'no', id: gmIn.id, to: gmIn.from, why: why || 'no' });
+    gmHideInvite();
+  }
+  $('gmAccept').addEventListener('click', gmAccept);
+  $('gmDecline').addEventListener('click', () => gmDecline('no'));
+
+  // ---- network ----
+  function onGm(p) {
+    if (!p || p.from === net.uid || sceneId !== GM_ROOM) return;
+    if (p.t === 'res') {   // announced to everyone in the room
+      if (gm && gm.id === p.id) return;   // the two players already logged it themselves
+      log('', gmResultText(p.w && gmClip(p.w), p.l && gmClip(p.l), p.how, gmClip(p.a), gmClip(p.b)), 'sys game');
+      return;
+    }
+    if (p.to !== net.uid) return;
+    const fromName = () => gmClip((net.remotes.get(p.from) || {}).name || p.name);
+    switch (p.t) {
+      case 'inv':
+        if (gmActive() || gmIn || player.dnd || (gmOut && gmOut.to !== p.from)) { gmSend({ t: 'no', id: p.id, to: p.from, why: player.dnd ? 'dnd' : 'busy' }); return; }
+        if (gmOut && gmOut.to === p.from) {   // both challenged each other at the same moment: just start
+          const mine = gmOut; clearTimeout(mine.timer); gmOut = null;
+          if (mine.id < p.id) { gmSend({ t: 'ok', id: p.id, to: p.from, name: gmClip(player.name) }); gmStart(p.id, p.from, fromName(), 2); }
+          else gmOut = mine;   // the other side will accept mine
+          return;
+        }
+        gmShowInvite(p); break;
+      case 'cx':
+        if (gmIn && gmIn.id === p.id) { gmHideInvite(); toast(`${fromName()}님이 신청을 취소했어요`); }
+        break;
+      case 'ok':
+        if (gmOut && gmOut.id === p.id && !gmActive()) { clearTimeout(gmOut.timer); const n = gmOut.name; gmOut = null; gmStart(p.id, p.from, n, 1); }
+        else gmSend({ t: 'end', id: p.id, to: p.from, why: 'cancel' });
+        break;
+      case 'no':
+        if (gmOut && gmOut.id === p.id) {
+          clearTimeout(gmOut.timer); const n = gmOut.name; gmOut = null; closeModal();
+          toast(p.why === 'busy' ? `${n}님은 지금 다른 게임 중이에요` : p.why === 'dnd' ? `${n}님은 OFF 모드예요` : p.why === 'timeout' ? `${n}님이 응답하지 않았어요` : p.why === 'left' ? `${n}님이 방을 나갔어요` : `${n}님이 다음에 하자고 했어요`);
+        }
+        break;
+      case 'mv':
+        if (!gm || gm.id !== p.id || p.from !== gm.oppId || gm.over || !Array.isArray(p.ms)) return;
+        if (p.ms.length <= gm.ms.length || p.ms.length > GN * GN) return;
+        if (!p.ms.every(ix => Number.isInteger(ix) && ix >= 0 && ix < GN * GN) || new Set(p.ms).size !== p.ms.length) return;
+        if (!gm.ms.every((ix, i) => p.ms[i] === ix)) return;
+        { const last = p.ms[p.ms.length - 1]; gmLoad(p.ms.slice(0, -1)); gmPlace(last); }
+        gmGhost = -1; gmRender();
+        break;
+      case 'end':
+        if (!gm || gm.id !== p.id || p.from !== gm.oppId) return;
+        if (p.why === 'cancel' && !gm.ms.length) { gm.over = true; gm = null; $('gm').hidden = true; gmLabel(); net.dirty = true; toast('상대가 신청을 취소했어요'); return; }
+        if (gmActive()) gmFinish(gm.me, p.why === 'resign' ? 'resign' : 'left');
+        break;
+    }
+  }
+  // called from removeRemote: the opponent closed the page or lost connection
+  function gmPeerGone(id) {
+    if (gmActive() && !gm.practice && gm.oppId === id) gmFinish(gm.me, 'left');
+    if (gmIn && gmIn.from === id) gmHideInvite();
+    if (gmOut && gmOut.to === id) { clearTimeout(gmOut.timer); gmOut = null; if (!$('modal').hidden) closeModal(); }
+  }
+
+  // ---- board UI ----
+  const gmCv = $('gmBoard');
+  function gmSize() {
+    const w = Math.min(window.innerWidth - 44, 460), h = window.innerHeight - 210;
+    const s = Math.max(210, Math.floor(Math.min(w, h)));
+    gmCv.style.width = gmCv.style.height = s + 'px';
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    if (gmCv.width !== Math.round(s * dpr)) { gmCv.width = gmCv.height = Math.round(s * dpr); }
+  }
+  function gmOpen() { $('gm').hidden = false; gmSize(); gmRender(); }
+  function gmCloseBoard() { $('gm').hidden = true; if (gm && gm.over) gm = null; gmLabel(); }
+  function gmGeom() { const s = gmCv.clientWidth, cell = s / (GN - 1 + 1.4); return { s, cell, m: cell * 0.7 }; }
+  function gmRender() {
+    gmLabel();
+    if (!gm || $('gm').hidden) return;
+    const meName = gmClip(player.name);
+    const names = gm.practice === 'hot' ? ['흑', '백'] : gm.me === 1 ? [meName + ' (나)', gm.oppName] : [gm.oppName, meName + ' (나)'];
+    $('gmP1').textContent = '⚫ ' + names[0]; $('gmP2').textContent = '⚪ ' + names[1];
+    const t = gmTurn();
+    $('gmP1').classList.toggle('on', !gm.over && t === 1); $('gmP2').classList.toggle('on', !gm.over && t === 2);
+    let msg;
+    if (gm.over) {
+      if (gm.winner === 0) msg = '무승부예요';
+      else if (gm.practice === 'hot') msg = `${gm.winner === 1 ? '흑' : '백'} 승리!`;
+      else if (gm.winner === gm.me) msg = gm.how === 'five' ? '🎉 오목 완성! 이겼어요' : gm.how === 'resign' ? '🎉 상대가 기권해서 이겼어요' : '🎉 상대가 떠나서 이겼어요';
+      else msg = gm.practice === 'ai' ? (gm.how === 'five' ? '컴퓨터가 이겼어요' : '기권했어요') : gm.how === 'five' ? `${gm.oppName}님이 이겼어요` : '기권했어요';
+    } else if (gm.practice === 'hot') msg = `${t === 1 ? '흑' : '백'} 차례예요`;
+    else msg = gmMyTurn() ? '내 차례예요' : gm.practice === 'ai' ? '컴퓨터가 생각 중…' : `${gm.oppName}님 차례예요`;
+    $('gmTurn').textContent = msg;
+    $('gmTurn').className = 'gm-turn' + (gmMyTurn() ? ' mine' : '') + (gm.over ? ' done' : '');
+    $('gmTitle').textContent = gm.practice ? '오목 연습' : '오목 한 판';
+    $('gmResign').hidden = gm.over; $('gmClose').hidden = !gm.over;
+    $('gmAgain').hidden = !(gm.over && (gm.practice || net.remotes.has(gm.oppId)));
+    $('gmAgain').textContent = gm.practice ? '다시 하기' : '한 판 더 신청';
+    gmDraw();
+  }
+  function gmDraw() {
+    const g = gmCv.getContext('2d'), dpr = gmCv.width / gmCv.clientWidth;
+    const { s, cell, m } = gmGeom();
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#e6b86a'; g.fillRect(0, 0, s, s);
+    g.fillStyle = 'rgba(160,100,40,.10)';
+    for (let i = 0; i < 9; i++) g.fillRect(0, (i * 53) % s, s, 2 + (i % 3));
+    g.strokeStyle = '#5b3a1e'; g.lineWidth = 1;
+    for (let i = 0; i < GN; i++) {
+      const p = Math.round(m + i * cell) + 0.5;
+      g.beginPath(); g.moveTo(m, p); g.lineTo(m + cell * (GN - 1), p); g.stroke();
+      g.beginPath(); g.moveTo(p, m); g.lineTo(p, m + cell * (GN - 1)); g.stroke();
+    }
+    g.fillStyle = '#5b3a1e';
+    for (const [r, q] of [[3, 3], [3, 11], [11, 3], [11, 11], [7, 7]]) { g.beginPath(); g.arc(m + q * cell, m + r * cell, Math.max(2, cell * 0.12), 0, Math.PI * 2); g.fill(); }
+    const stone = (idx, c, alpha) => {
+      const x = m + (idx % GN) * cell, y = m + Math.floor(idx / GN) * cell, r = cell * 0.45;
+      g.globalAlpha = alpha;
+      g.fillStyle = 'rgba(40,20,0,.28)'; g.beginPath(); g.arc(x + r * 0.12, y + r * 0.16, r, 0, Math.PI * 2); g.fill();
+      const gr = g.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+      if (c === 1) { gr.addColorStop(0, '#5d5966'); gr.addColorStop(1, '#141218'); } else { gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#d4cfc6'); }
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      if (c === 2) { g.strokeStyle = 'rgba(80,70,60,.55)'; g.lineWidth = 1; g.stroke(); }
+      g.globalAlpha = 1;
+    };
+    for (let i = 0; i < GN * GN; i++) if (gm.b[i]) stone(i, gm.b[i], 1);
+    const last = gm.ms[gm.ms.length - 1];
+    if (last != null) { g.fillStyle = '#ff5a4f'; g.beginPath(); g.arc(m + (last % GN) * cell, m + Math.floor(last / GN) * cell, Math.max(2.5, cell * 0.13), 0, Math.PI * 2); g.fill(); }
+    if (gm.win) {
+      g.strokeStyle = '#ff5a4f'; g.lineWidth = Math.max(2, cell * 0.1);
+      for (const ix of gm.win) { g.beginPath(); g.arc(m + (ix % GN) * cell, m + Math.floor(ix / GN) * cell, cell * 0.47, 0, Math.PI * 2); g.stroke(); }
+    }
+    const pre = gmGhost >= 0 ? gmGhost : gmHover;
+    if (pre >= 0 && gmMyTurn() && !gm.b[pre]) {
+      stone(pre, gmTurn(), gmGhost >= 0 ? 0.75 : 0.4);
+      if (gmGhost >= 0) { g.strokeStyle = '#2f8f80'; g.lineWidth = 2; g.beginPath(); g.arc(m + (pre % GN) * cell, m + Math.floor(pre / GN) * cell, cell * 0.5, 0, Math.PI * 2); g.stroke(); }
+    }
+  }
+  function gmCellAt(e) {
+    const rc = gmCv.getBoundingClientRect(), { cell, m } = gmGeom();
+    const q = Math.round((e.clientX - rc.left - m) / cell), r = Math.round((e.clientY - rc.top - m) / cell);
+    return q < 0 || r < 0 || q >= GN || r >= GN ? -1 : r * GN + q;
+  }
+  gmCv.addEventListener('pointerdown', e => {
+    if (!gmMyTurn()) return;
+    const idx = gmCellAt(e); if (idx < 0 || gm.b[idx]) return;
+    e.preventDefault();
+    if (e.pointerType === 'mouse') { gmPlay(idx); return; }
+    // touch: first tap previews, second tap on the same spot places the stone
+    if (gmGhost === idx) gmPlay(idx); else { gmGhost = idx; gmRender(); }
+  });
+  gmCv.addEventListener('pointermove', e => { if (e.pointerType !== 'mouse' || !gmMyTurn()) return; const idx = gmCellAt(e); if (idx !== gmHover) { gmHover = idx; gmDraw(); } });
+  gmCv.addEventListener('pointerleave', () => { if (gmHover >= 0) { gmHover = -1; if (gm) gmDraw(); } });
+  $('gmBtn').addEventListener('click', () => { if (gm && (gmActive() || gm.over)) gmOpen(); else gmLobby(); });
+  $('gmHide').addEventListener('click', () => { if (gm && gm.over) gmCloseBoard(); else { $('gm').hidden = true; gmLabel(); } });
+  $('gmResign').addEventListener('click', () => {
+    if (!gmActive()) return;
+    const b = $('gmResign');
+    if (b.dataset.sure) { delete b.dataset.sure; b.textContent = '기권'; gmResign(); return; }
+    b.dataset.sure = '1'; b.textContent = '정말 기권?';
+    setTimeout(() => { if (b.dataset.sure) { delete b.dataset.sure; b.textContent = '기권'; } }, 3000);
+  });
+  $('gmClose').addEventListener('click', gmCloseBoard);
+  $('gmAgain').addEventListener('click', () => {
+    if (!gm) return;
+    const { practice, oppId, oppName, me } = gm;
+    gm = null; $('gm').hidden = true;
+    if (practice) gmStart('p', null, oppName, practice === 'ai' ? 3 - me : 1, practice);
+    else gmChallenge(oppId, oppName);
+  });
+  $('gm').addEventListener('pointerdown', e => { if (e.target === $('gm')) { if (gm && gm.over) gmCloseBoard(); else { $('gm').hidden = true; gmLabel(); } } });
+  window.addEventListener('resize', () => { if (!$('gm').hidden) { gmSize(); gmRender(); } });
 
   // ================= anonymous prayer requests (box under the offering QR) =================
   const relTime = t => {
