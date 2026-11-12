@@ -812,14 +812,8 @@
         catch (e) { const r = document.createRange(); r.selectNodeContents(body.querySelector('.qt-ref')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toast('본문 범위를 선택해 두었어요. 복사해서 쓰세요.'); }
       });
       row.appendChild(copy);
-      if (qtView <= today) {
-        const a = el('a', 'btn btn-gold', '우리말성경으로 본문 읽기');
-        a.href = `https://www.duranno.com/qt/view/bible.asp?qtDate=${qtView}&d=w`;
-        a.target = '_blank'; a.rel = 'noopener'; row.appendChild(a);
-      }
       body.appendChild(row);
     } else body.appendChild(el('p', 'small', '관리자가 이번 달 본문표를 올리면 여기에 보여요.'));
-    if (ref && qtView > today) body.appendChild(el('p', 'small', '본문 읽기 버튼은 그날 0시에 열려요.'));
     const nav = el('div', 'qt-nav');
     const prev = el('button', 'btn', '◀ 전날'), next = el('button', 'btn', '다음날 ▶'), now = el('button', 'btn', '오늘');
     [prev, now, next].forEach(b2 => { b2.type = 'button'; nav.appendChild(b2); });
@@ -828,7 +822,7 @@
     now.addEventListener('click', () => { qtView = chinaYmd(); renderQt(); });
     now.hidden = qtView === today;
     body.appendChild(nav);
-    body.appendChild(el('p', 'small', '매일 0시(중국 시간, 한국 시간 1시)에 그날 본문으로 바뀌어요. 읽기 버튼은 두란노 생명의삶 페이지를 우리말성경으로 열어요.'));
+    body.appendChild(el('p', 'small', '매일 0시(중국 시간, 한국 시간 1시)에 그날 본문으로 바뀌어요. 본문은 우리말성경으로 읽어 주세요.'));
   }
 
   // ================= toast / modal / QR =================
