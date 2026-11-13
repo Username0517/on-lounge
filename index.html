@@ -102,6 +102,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .gm-turn { margin: 0; font-size: 15px; font-weight: 800; color: var(--muted); }
 .gm-turn.mine { color: #2f8f80; }
 .gm-turn.done { color: var(--ink); }
+.gm-turn.hurry { color: #d84b3a; }
+.gm-time { width: 70%; height: 6px; border: 2px solid var(--ink); border-radius: 999px; background: #fff; overflow: hidden; }
+.gm-time i { display: block; height: 100%; background: #3fb5a3; transition: width .25s linear; }
+.gm-opt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gm-opt-l { font-size: 12px; font-weight: 700; color: var(--muted); min-width: 74px; }
+.gm-chip { padding: 2px 10px; font-size: 13px; }
+.gm-chip[aria-pressed="true"] { background: var(--gold); }
+.gm-practice { flex-direction: column; align-items: stretch; }
+.gm-practice-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 #gmBoard { display: block; margin: 0 12px; border: 3px solid var(--ink); border-radius: 6px; touch-action: none; cursor: pointer; }
 .gm-tip { margin: 0; font-size: 11px; color: var(--muted); padding: 0 12px; text-align: center; }
 @media (hover: hover) and (pointer: fine) { .gm-tip { display: none; } }
@@ -123,6 +132,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .gm-practice { display: flex; gap: 6px; flex-wrap: wrap; border-top: 2px dashed var(--cream-2); padding-top: 10px; }
 .gm-practice .btn { padding: 4px 12px; font-size: 13px; }
 #log li.game { color: #8a5a00; font-weight: 700; }
+
+/* elevator, weather, soccer party */
+.ev-list { display: flex; flex-direction: column; gap: 8px; }
+.ev-btn { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; column-gap: 10px; text-align: left; padding: 8px 10px; }
+.ev-btn .ev-f { grid-row: span 2; align-self: center; justify-self: center; font-size: 20px; width: 30px; height: 30px; line-height: 26px; text-align: center; border: 2px solid var(--ink); border-radius: 50%; background: #fff; }
+.ev-btn .ev-n { font-weight: 800; }
+.ev-btn .ev-s { font-size: 12px; color: var(--muted); font-weight: 500; }
+.ev-btn.here { opacity: .55; }
+.wx-big { font-size: 20px; font-weight: 800; margin: 0; }
+.wx-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 14px; }
+.wx-k { color: var(--muted); }
+.wx-v { font-weight: 700; }
+.fb-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fb-col { display: flex; flex-direction: column; gap: 4px; border: 2px solid var(--ink); border-radius: 8px; padding: 8px; }
+.fb-col-w { background: #fffdf7; }
+.fb-col-b { background: #3a3446; color: #fff; }
+.fb-slot { font-size: 13px; font-weight: 700; }
+.fb-slot.empty { opacity: .45; font-weight: 500; }
+.fb-col .btn { margin-top: 4px; padding: 3px 8px; font-size: 13px; }
+.fb-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.fb-w { background: #fffdf7; }
+.fb-b { background: #3a3446; color: #fff; }
 .chat { display: flex; gap: 6px; flex: 1; min-width: 0; }
 input[type="text"], input[type="password"], input[type="date"], textarea { font: inherit; color: var(--text); background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 7px 10px; width: 100%; min-width: 0; }
 textarea { resize: vertical; min-height: 70px; line-height: 1.6; }
@@ -318,6 +349,7 @@ details.paste textarea { margin-block: 6px; }
         <div class="gm-head"><h2 id="gmTitle">오목 한 판</h2><button type="button" class="btn" id="gmHide">접기</button></div>
         <div class="gm-players"><span id="gmP1"></span><span id="gmP2"></span></div>
         <p class="gm-turn" id="gmTurn" aria-live="polite"></p>
+        <div class="gm-time" id="gmTime" hidden><i></i></div>
         <canvas id="gmBoard" aria-label="오목판. 빈 칸을 눌러 돌을 놓아요."></canvas>
         <p class="gm-tip">휴대폰은 한 번 눌러 위치를 보고, 같은 곳을 한 번 더 누르면 놓여요.</p>
         <div class="gm-actions">
@@ -343,6 +375,7 @@ details.paste textarea { margin-block: 6px; }
     <div class="motions" aria-label="동작">
       <button type="button" class="btn act" id="actBtn" hidden></button>
       <button type="button" class="btn gm-btn" id="gmBtn" hidden>⚫ 오목</button>
+      <button type="button" class="btn gm-btn" id="fbBtn" hidden>⚽ 축구</button>
       <button type="button" class="btn" data-motion="wave">손인사<kbd>1</kbd></button>
       <button type="button" class="btn" data-motion="clap">박수<kbd>2</kbd></button>
       <button type="button" class="btn" data-motion="pray">기도<kbd>3</kbd></button>
@@ -491,6 +524,7 @@ details.paste textarea { margin-block: 6px; }
 
 <script src="supabase.js"></script>
 <script src="config.js"></script>
+<script src="backport.js"></script>
 <script src="sprite.js"></script>
 <script src="parse.js"></script>
 <script src="app.js"></script>

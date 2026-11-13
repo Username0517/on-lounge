@@ -20,7 +20,9 @@
   // ================= mode: LIVE (Supabase) or DEMO (this device only) =================
   const CFG = window.ONLOUNGE_CONFIG || {};
   const LIVE = !!(window.supabase && CFG.supabaseUrl && CFG.supabaseKey && !/여기에/.test(CFG.supabaseUrl + CFG.supabaseKey));
-  const sb = LIVE ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey) : null;
+  const sbRaw = LIVE ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey) : null;
+  const BP = window.ONL_BACKPORT || { legacy: false };   // BACKPORT
+  const sb = LIVE && window.ONL_BACKPORT ? ONL_BACKPORT.wrap(sbRaw, { name: () => player.name }) : sbRaw;   // BACKPORT
 
   // ================= scenes: 본당 -> 복도 -> ROOM 1-4 =================
   const buf = document.createElement('canvas'), b = buf.getContext('2d');
@@ -186,7 +188,8 @@
   // ---- 복도 ----
   const ROOM_INFO = {
     room1: { n: 'ROOM 1', sub: '회의실' }, room2: { n: 'ROOM 2', sub: '탕비실' },
-    room3: { n: 'ROOM 3', sub: '세미나실' }, room4: { n: 'ROOM 4', sub: '라운지' }
+    room3: { n: 'ROOM 3', sub: '세미나실' }, room4: { n: 'ROOM 4', sub: '라운지' },
+    f1r1: { n: 'ROOM 1', sub: '락커룸' }, f1r2: { n: 'ROOM 2', sub: '준비 중' }, f1r3: { n: 'ROOM 3', sub: '준비 중' }, f1r4: { n: 'ROOM 4', sub: '준비 중' }
   };
   const HALL_DOORS = [['room1', 16, 100, false], ['room2', 16, 200, false], ['room3', 144, 100, true], ['room4', 144, 200, true]];
   function bgHall(g, w, h) {
@@ -198,6 +201,7 @@
     sideWalls(g, w, h, 16, '#ece7df');
     P(g, 0, h - 8, w, 8, '#ece7df'); P(g, 0, h - 9, w, 1, '#cbc2b4');
     for (const [, x, y, right] of HALL_DOORS) { sideDoor(g, right ? x + 6 : x - 6, y, right); P(g, right ? x - 6 : x + 1, y - 7, 5, 14, '#7a3b44'); }
+    elevatorBottom(g, w, h);
   }
   const hallItems = [
     { id: 'h-plant1', label: '화분', box: [20, 246, 16, 26], sortY: 270, obs: [[22, 262, 12, 8]], draw: g => plant(g, 28, 270) },
@@ -298,6 +302,162 @@
       for (let i = 0; i < 9; i++) P(g, 165 - Math.floor(i / 3), 41 + i, 8 + 2 * Math.floor(i / 3), 1, i === 0 ? '#26252b' : '#f7ecc4');
     } }
   ];
+  // ================= 엘리베이터 · 1층 · 3층 옥상 =================
+  // elevator in the bottom wall of a hallway (opposite the top door)
+  function elevatorBottom(g, w, h) {
+    const x = w / 2 - 16;
+    P(g, x - 2, h - 10, 36, 10, '#8d8f99'); P(g, x - 1, h - 9, 34, 9, '#b9bcc6');
+    P(g, x, h - 8, 15, 8, '#d9dce3'); P(g, x + 17, h - 8, 15, 8, '#d9dce3'); P(g, x + 15, h - 8, 2, 8, '#8d8f99');
+    P(g, x, h - 8, 15, 1, '#f4f5f8'); P(g, x + 17, h - 8, 15, 1, '#f4f5f8');
+    P(g, x + 36, h - 9, 3, 6, '#3b3a44'); P(g, x + 37, h - 8, 1, 1, '#ffcc4d'); P(g, x + 37, h - 6, 1, 1, '#7bd389');
+    P(g, x + 2, h - 22, 28, 12, 'rgba(60,40,20,.10)');
+  }
+  const ELEV_SPOT = (w, h) => ({ id: 'elevator', item: null, x: w / 2, y: h - 18, r: 14, ax: w / 2, ay: h - 34, hit: [w / 2 - 18, h - 12, 36, 12], label: '엘리베이터 타기' });
+
+  // 1층 복도: same as 2층, glass exit doors on the top wall
+  const HALL1_DOORS = [['f1r1', 16, 100, false], ['f1r2', 16, 200, false], ['f1r3', 144, 100, true], ['f1r4', 144, 200, true]];
+  function bgHall1(g, w, h) {
+    woodFloor(g, w, h, 40, ['#c4915f', '#bd8a5a', '#c99866'], '#d2a372', '#a87a4f');
+    backWall(g, w, '#f4f1ec', '#ebe6de');
+    // glass entrance doors
+    P(g, 58, 7, 44, 37, '#0e0d12'); P(g, 60, 9, 19, 35, '#9fc6d8'); P(g, 81, 9, 19, 35, '#9fc6d8');
+    for (const x0 of [60, 81]) { P(g, x0, 9, 19, 2, '#c9e4ef'); P(g, x0 + 3, 13, 2, 26, 'rgba(255,255,255,.55)'); P(g, x0 + 7, 13, 1, 18, 'rgba(255,255,255,.4)'); }
+    P(g, 79, 9, 2, 35, '#0e0d12'); P(g, 75, 24, 2, 7, '#c9c9d4'); P(g, 83, 24, 2, 7, '#c9c9d4');
+    P(g, 70, 1, 20, 5, '#2f8a55'); P(g, 71, 2, 18, 3, '#3fae6c');   // EXIT sign
+    P(g, 44, 46, 72, 12, '#7a3b44'); P(g, 45, 47, 70, 10, '#94505b'); for (let x = 48; x < 112; x += 4) P(g, x, 49, 2, 6, '#7a3b44');   // door mat
+    sideWalls(g, w, h, 16, '#ece7df');
+    P(g, 0, h - 8, w, 8, '#ece7df'); P(g, 0, h - 9, w, 1, '#cbc2b4');
+    elevatorBottom(g, w, h);
+    for (const [id, x, y, right] of HALL1_DOORS) {
+      sideDoor(g, right ? x + 6 : x - 6, y, right);
+      P(g, right ? x - 6 : x + 1, y - 7, 5, 14, id === 'f1r1' ? '#2f8a55' : '#8d8f99');
+      if (id !== 'f1r1') { P(g, right ? x - 10 : x + 4, y - 3, 6, 6, '#ffcc4d'); P(g, right ? x - 9 : x + 5, y - 2, 4, 4, '#251c2c'); P(g, right ? x - 8 : x + 6, y - 1, 2, 2, '#ffcc4d'); }
+    }
+  }
+  const hall1Items = [
+    { id: 'h1-plant1', label: '화분', box: [20, 246, 16, 26], sortY: 270, obs: [[22, 262, 12, 8]], draw: g => plant(g, 28, 270) },
+    { id: 'h1-plant2', label: '화분', box: [124, 246, 16, 26], sortY: 270, obs: [[126, 262, 12, 8]], draw: g => plant(g, 132, 270) },
+    { id: 'h1-sofa', label: '대기 소파', box: [122, 130, 18, 40], sortY: 168, obs: [[124, 134, 16, 34]], draw: g => {
+      P(g, 123, 132, 17, 37, '#2b2233'); P(g, 124, 133, 15, 35, '#5d6a8c'); P(g, 135, 133, 4, 35, '#4a5675'); for (let y = 144; y < 166; y += 11) P(g, 124, y, 11, 1, '#4a5675');
+    } },
+    { id: 'h1-info', label: '안내판', box: [20, 132, 14, 30], sortY: 160, obs: [[22, 150, 10, 10]], draw: g => {
+      P(g, 26, 146, 2, 14, '#3b3a44'); P(g, 21, 133, 12, 15, '#251c2c'); P(g, 22, 134, 10, 13, '#f4f1ea'); P(g, 23, 136, 8, 1, '#2f8a55'); P(g, 23, 139, 6, 1, '#8d8f99'); P(g, 23, 142, 7, 1, '#8d8f99');
+    } }
+  ];
+
+  // ---- ROOM 1 (1층) · 락커룸 ----
+  const SEAT_COL_EXTRA = { benchW: ['#2b2233', '#f4f1ea', '#ffffff', '#d9d4ca'], benchB: ['#0e0d12', '#2c2a31', '#4a4752', '#1d1b22'], wood: ['#3b2a22', '#a8734f', '#c99866', '#8a5a3b'] };
+  Object.assign(SEAT_COL, SEAT_COL_EXTRA);
+  const lockerSeats = [14, 27, 40, 53, 66].map(x => Object.assign(mkSeat(x, 64, 'down', 'benchW'), { team: 'w' }))
+    .concat([117, 130, 143, 156, 169].map(x => Object.assign(mkSeat(x, 64, 'down', 'benchB'), { team: 'b' })));
+  function locker(g, x, y, open, kit, num) {
+    P(g, x, y, 13, 30, '#2b2233'); P(g, x + 1, y + 1, 11, 28, open ? '#3a3d4c' : '#5d6a8c');
+    if (!open) { for (let k = 0; k < 3; k++) P(g, x + 3, y + 4 + k * 2, 7, 1, '#4a5675'); P(g, x + 9, y + 14, 2, 4, '#c9c9d4'); P(g, x + 4, y + 22, 5, 3, '#f4f1ea'); P(g, x + 5, y + 23, 3, 1, '#8d8f99'); }
+    else {
+      P(g, x + 1, y + 1, 11, 28, '#1d1b22'); P(g, x + 2, y + 3, 9, 1, '#8d8f99');
+      // jersey on a hanger
+      const c = kit === 'w' ? '#f4f1ea' : '#2c2a31', d = kit === 'w' ? '#d9d4ca' : '#121117';
+      P(g, x + 5, y + 4, 3, 1, '#c9c9d4'); P(g, x + 3, y + 5, 7, 9, c); P(g, x + 2, y + 5, 2, 4, c); P(g, x + 9, y + 5, 2, 4, c); P(g, x + 5, y + 5, 3, 1, d);
+      P(g, x + 5, y + 8, 3, 4, kit === 'w' ? '#2c2a31' : '#f4f1ea'); P(g, x + 6, y + 9, 1, 2, c);
+      P(g, x + 3, y + 23, 3, 2, '#d84b3a'); P(g, x + 7, y + 23, 3, 2, '#d84b3a'); P(g, x + 3, y + 25, 7, 1, '#f4f1ea');   // boots
+      P(g, x + 12, y + 1, 4, 28, '#4a5675'); P(g, x + 13, y + 14, 1, 3, '#c9c9d4');   // open door
+    }
+    if (num) { P(g, x + 4, y + 1, 5, 2, '#f4f1ea'); }
+  }
+  function soccerBall(g, x, y) {
+    pixCircle(g, x, y, 3, '#2b2233'); pixCircle(g, x, y, 2, '#f4f1ea'); P(g, x - 1, y - 1, 2, 2, '#2b2233'); P(g, x + 1, y + 1, 1, 1, '#8d8f99');
+  }
+  function bgLocker(g, w, h) {
+    floorTiles(g, w, h, 44, ['#cfd3d6', '#c6cacd'], 8, '#b9bdc1');
+    P(g, 0, 0, w, 44, '#e6e2d8'); P(g, 0, 39, w, 5, '#d4cfc3'); P(g, 0, 44, w, 2, 'rgba(60,40,20,.16)');
+    // lockers along the back wall, either side of the pitch door
+    const open = { 1: 'w', 4: 'b', 10: 'w' };
+    [4, 17, 30, 43, 56, 69].forEach((x, i) => locker(g, x, 8, !!open[i], open[i], true));
+    [110, 123, 136, 149, 162, 175].forEach((x, i) => locker(g, x, 8, !!open[i + 6], open[i + 6], true));
+    // pitch door (green) with a paper sign
+    P(g, 82, 6, 28, 38, '#0e0d12'); P(g, 84, 8, 11, 36, '#2f8a55'); P(g, 97, 8, 11, 36, '#2f8a55'); P(g, 84, 8, 24, 2, '#3fae6c'); P(g, 95, 8, 2, 36, '#0e0d12');
+    P(g, 92, 24, 1, 6, '#c9c9d4'); P(g, 99, 24, 1, 6, '#c9c9d4'); P(g, 86, 12, 7, 6, '#9fc6d8'); P(g, 99, 12, 7, 6, '#9fc6d8');
+    sideWalls(g, w, h, 6, '#e6e2d8');
+    frontWallWithDoor(g, w, h, '#e6e2d8');
+    // floor marking: a big centre line, like a pitch
+    P(g, 20, 112, w - 40, 1, 'rgba(255,255,255,.55)');
+    for (let a = 0; a < 64; a++) { const t = a / 64 * Math.PI * 2; P(g, Math.round(96 + Math.cos(t) * 18), Math.round(112 + Math.sin(t) * 12), 1, 1, 'rgba(255,255,255,.55)'); }
+  }
+  const lockerItems = [
+    { id: 'lk-sign', label: '축구장 안내', box: [111, 0, 0, 0], sortY: 0, fixed: true, obs: [], draw: g => {
+      // paper taped to the wall next to the door: "축구장 ↓"
+      P(g, 68, 22, 13, 15, '#fdfcf7'); P(g, 68, 22, 13, 1, '#e6e2d8'); P(g, 70, 21, 3, 2, 'rgba(255,204,77,.8)'); P(g, 76, 21, 3, 2, 'rgba(255,204,77,.8)');
+      P(g, 70, 25, 9, 1, '#251c2c'); P(g, 70, 27, 9, 1, '#251c2c'); P(g, 74, 29, 1, 5, '#d84b3a'); P(g, 72, 32, 5, 1, '#d84b3a'); P(g, 73, 33, 3, 1, '#d84b3a');
+    } },
+    { id: 'lk-basket', label: '공 바구니', box: [14, 120, 22, 20], sortY: 138, obs: [[14, 128, 22, 10]], draw: g => {
+      P(g, 14, 126, 22, 13, '#2b2233'); P(g, 15, 127, 20, 11, '#5a4a3a'); for (let x = 17; x < 35; x += 3) P(g, x, 127, 1, 11, '#3b2f25');
+      soccerBall(g, 19, 124); soccerBall(g, 25, 123); soccerBall(g, 31, 124); soccerBall(g, 22, 120);
+    } },
+    { id: 'lk-board', label: '작전판', box: [160, 112, 22, 30], sortY: 140, obs: [[162, 132, 18, 8]], draw: g => {
+      P(g, 170, 128, 2, 12, '#3b3a44'); P(g, 160, 112, 22, 18, '#2b2233'); P(g, 161, 113, 20, 16, '#f4f1ea'); P(g, 170, 113, 1, 16, '#9fc6d8');
+      P(g, 164, 117, 2, 2, '#d84b3a'); P(g, 175, 122, 2, 2, '#3f6fb8'); P(g, 166, 120, 6, 1, '#251c2c'); P(g, 171, 119, 1, 3, '#251c2c'); P(g, 165, 125, 2, 1, '#d84b3a');
+    } },
+    { id: 'lk-cones', label: '콘', box: [150, 148, 26, 10], sortY: 156, obs: [], draw: g => {
+      for (const x of [152, 160, 168]) { P(g, x, 152, 5, 4, '#2b2233'); P(g, x + 1, 151, 3, 4, '#f08a3a'); P(g, x + 2, 149, 1, 2, '#f08a3a'); P(g, x + 1, 153, 3, 1, '#f4f1ea'); }
+    } },
+    { id: 'lk-ball', label: '축구공', box: [92, 132, 8, 8], sortY: 138, obs: [], draw: g => soccerBall(g, 96, 136) },
+    { id: 'lk-towel', label: '수건', box: [44, 150, 20, 10], sortY: 158, obs: [], draw: g => { P(g, 44, 152, 14, 5, '#2b2233'); P(g, 45, 153, 12, 3, '#9fc6d8'); P(g, 45, 154, 12, 1, '#f4f1ea'); P(g, 58, 154, 5, 3, '#2b2233'); P(g, 59, 155, 3, 1, '#3fb5a3'); } }
+  ];
+
+  // ---- 축구장 ----
+  const FIELD = { w: 320, h: 208, x0: 16, y0: 22, x1: 304, y1: 194, gy0: 86, gy1: 130 };
+  function bgSoccer(g, w, h) {
+    for (let x = 0; x < w; x += 20) P(g, x, 0, 20, h, (x / 20) % 2 ? '#4f9a5a' : '#58a663');
+    P(g, 0, 0, w, 14, '#3b3a44'); for (let x = 2; x < w; x += 6) P(g, x, 3, 3, 4, ['#d84b3a', '#f0cc55', '#3f6fb8', '#f4f1ea'][(x / 6 | 0) % 4]);   // stands
+    const L = 'rgba(255,255,255,.85)', { x0, y0, x1, y1, gy0, gy1 } = FIELD, cx = w / 2, cy = (y0 + y1) / 2;
+    P(g, x0, y0, x1 - x0, 1, L); P(g, x0, y1, x1 - x0 + 1, 1, L); P(g, x0, y0, 1, y1 - y0, L); P(g, x1, y0, 1, y1 - y0, L);
+    P(g, cx, y0, 1, y1 - y0, L);
+    for (let a = 0; a < 90; a++) { const t = a / 90 * Math.PI * 2; P(g, Math.round(cx + Math.cos(t) * 20), Math.round(cy + Math.sin(t) * 20), 1, 1, L); }
+    P(g, cx - 1, cy - 1, 3, 3, L);
+    for (const [a, dir] of [[x0, 1], [x1, -1]]) {
+      const bx = dir > 0 ? a : a - 34; P(g, bx, gy0 - 20, 34, 1, L); P(g, bx, gy1 + 20, 35, 1, L); P(g, dir > 0 ? a + 34 : a - 34, gy0 - 20, 1, gy1 - gy0 + 40, L);
+      const sx = dir > 0 ? a : a - 14; P(g, sx, gy0 - 6, 14, 1, L); P(g, sx, gy1 + 6, 15, 1, L); P(g, dir > 0 ? a + 14 : a - 14, gy0 - 6, 1, gy1 - gy0 + 12, L);
+      P(g, dir > 0 ? a + 24 : a - 24, cy, 1, 1, L);
+    }
+    // goals (nets)
+    for (const [gx, gw] of [[2, 14], [304, 14]]) {
+      P(g, gx, FIELD.gy0 - 1, gw, FIELD.gy1 - FIELD.gy0 + 2, '#f4f1ea');
+      P(g, gx + (gx < 10 ? 0 : 1), FIELD.gy0, gw - 1, FIELD.gy1 - FIELD.gy0, '#cfd8d0');
+      for (let y = FIELD.gy0 + 2; y < FIELD.gy1; y += 3) P(g, gx + 1, y, gw - 2, 1, '#b4bfb6');
+      for (let x = gx + 2; x < gx + gw - 1; x += 3) P(g, x, FIELD.gy0, 1, FIELD.gy1 - FIELD.gy0, '#b4bfb6');
+    }
+    P(g, 0, h - 10, w, 10, '#3b3a44'); P(g, w / 2 - 14, h - 10, 28, 10, '#2f8a55'); P(g, w / 2 - 12, h - 9, 24, 9, '#3fae6c'); P(g, w / 2, h - 9, 1, 9, '#2f8a55');
+  }
+
+  // ---- 3층 옥상 ----
+  function bgRoof(g, w, h) {
+    // sky band (the weather layer paints over it while playing)
+    P(g, 0, 0, w, 44, '#9fd0f0');
+    // city skyline
+    const sky = [[0, 30, 14], [14, 22, 10], [24, 34, 16], [40, 18, 12], [52, 28, 18], [70, 12, 10], [80, 26, 14], [94, 20, 12], [106, 31, 16], [122, 16, 12], [134, 27, 14], [148, 22, 10], [158, 33, 16], [174, 19, 18]];
+    for (const [x, y, ww] of sky) { P(g, x, y, ww, 44 - y, '#7d8597'); for (let yy = y + 3; yy < 42; yy += 4) for (let xx = x + 2; xx < x + ww - 1; xx += 3) P(g, xx, yy, 1, 2, '#a5adbd'); }
+    // deck
+    for (let y = 50; y < h; y += 10) for (let x = 0; x < w; x += 10) { P(g, x, y, 10, 10, ((x + y) / 10) % 2 ? '#b8b2a7' : '#c2bcb1'); P(g, x, y, 10, 1, '#a9a397'); }
+    P(g, 0, 44, w, 6, '#8d8f99'); P(g, 0, 44, w, 1, '#c9c9d4'); for (let x = 2; x < w; x += 8) P(g, x, 36, 1, 8, '#5a5560'); P(g, 0, 36, w, 1, '#5a5560');   // parapet + railing
+    P(g, 0, 50, 6, h - 50, '#8d8f99'); P(g, w - 6, 50, 6, h - 50, '#8d8f99');
+    // wooden deck area in the middle
+    for (let y = 92; y < 160; y += 6) { P(g, 34, y, 124, 6, (y / 6) % 2 ? '#a8734f' : '#b07b56'); P(g, 34, y, 124, 1, '#8a5a3b'); }
+    P(g, 0, h - 10, w, 10, '#8d8f99'); P(g, 0, h - 11, w, 1, '#6f7280');
+    elevatorBottom(g, w, h);
+  }
+  const roofSeats = [62, 80, 98, 116].map(x => mkSeat(x, 112, 'up', 'wood')).concat([62, 80, 98, 116].map(x => mkSeat(x, 140, 'up', 'wood')));
+  const roofItems = [
+    { id: 'rf-plant1', label: '화분', box: [10, 60, 16, 26], sortY: 84, obs: [[12, 76, 12, 8]], draw: g => plant(g, 18, 84) },
+    { id: 'rf-plant2', label: '화분', box: [166, 60, 16, 26], sortY: 84, obs: [[168, 76, 12, 8]], draw: g => plant(g, 174, 84) },
+    { id: 'rf-plant3', label: '화분', box: [10, 160, 16, 26], sortY: 184, obs: [[12, 176, 12, 8]], draw: g => plant(g, 18, 184) },
+    { id: 'rf-sign', label: '날씨판', box: [150, 96, 26, 34], sortY: 128, obs: [[154, 120, 18, 8]], draw: g => {
+      P(g, 162, 114, 2, 14, '#3b3a44'); P(g, 150, 96, 26, 20, '#2b2233'); P(g, 151, 97, 24, 18, '#f4f1ea'); P(g, 151, 97, 24, 3, '#3f6fb8');
+    } },
+    { id: 'rf-lights', label: '전구 줄', box: [0, 52, 0, 0], sortY: 0, fixed: true, obs: [], draw: g => {
+      for (let x = 30; x < 166; x++) { const y = 60 + Math.round(Math.sin((x - 30) / 136 * Math.PI) * 6); P(g, x, y, 1, 1, '#3b3a44'); if (x % 9 === 0) P(g, x, y + 1, 2, 2, '#ffd65a'); }
+    } }
+  ];
+
   const exitSpot = { id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 144, hit: [82, 160, 28, 16], label: '복도로 나가기' };
   const SCENES = {
     sanctuary: { name: '본당', w: 192, h: 360, bounds: [10, 50, 182, 354], lights: true, drawBg: bgSanctuary, items: sanctItems, seats: sanctSeats,
@@ -316,9 +476,9 @@
         { id: 'toHall', item: null, x: 14, y: 217, r: 11, ax: 10, ay: 188, hit: [0, 200, 14, 34], label: '복도로 나가기' }
       ],
       labels: [{ x: 4, y: 193, t: '출구', align: 'left' }] },
-    hall: { name: '복도', w: 160, h: 280, bounds: [22, 52, 138, 266], drawBg: bgHall, items: hallItems, seats: [],
-      spawns: { sanctuary: [80, 58, 'down'], room1: [26, 100, 'right'], room2: [26, 200, 'right'], room3: [134, 100, 'left'], room4: [134, 200, 'left'] },
-      spots: [{ id: 'toSanctuary', item: null, x: 80, y: 56, r: 14, ax: 80, ay: 4, hit: [62, 9, 36, 40], label: '본당으로 들어가기' }]
+    hall: { name: '2층 복도', w: 160, h: 280, bounds: [22, 52, 138, 266], drawBg: bgHall, items: hallItems, seats: [],
+      spawns: { sanctuary: [80, 58, 'down'], room1: [26, 100, 'right'], room2: [26, 200, 'right'], room3: [134, 100, 'left'], room4: [134, 200, 'left'], elevator: [80, 256, 'up'] },
+      spots: [{ id: 'toSanctuary', item: null, x: 80, y: 56, r: 14, ax: 80, ay: 4, hit: [62, 9, 36, 40], label: '본당으로 들어가기' }, ELEV_SPOT(160, 280)]
         .concat(HALL_DOORS.map(([id, x, y, right]) => ({ id: 'to-' + id, item: null, x: right ? x - 10 : x + 10, y, r: 12, ax: right ? x - 10 : x + 10, ay: y - 22, hit: right ? [x - 10, y - 16, 16, 32] : [x - 6, y - 16, 16, 32], label: `${ROOM_INFO[id].n} ${ROOM_INFO[id].sub} 들어가기`, room: id }))),
       labels: [{ x: 80, y: 2, t: '본당', align: 'center', count: 'sanctuary' }]
         .concat(HALL_DOORS.map(([id, x, y, right]) => ({ x: right ? x - 9 : x + 9, y: y + 18, t: ROOM_INFO[id].n, sub: ROOM_INFO[id].sub, align: right ? 'right' : 'left', count: id }))) },
@@ -326,8 +486,22 @@
     room2: { name: 'ROOM 2 · 탕비실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom2, items: room2Items, seats: r2Seats, spawns: { door: [96, 156, 'up'] },
       spots: [exitSpot, { id: 'water', item: 'r2-water', x: 167, y: 70, r: 12, ax: 167, ay: 12, label: '물 한 잔 마시기' }, { id: 'coffee', item: 'r2-counter', x: 96, y: 68, r: 12, ax: 96, ay: 20, label: '커피 내리기' }] },
     room3: { name: 'ROOM 3 · 세미나실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom3, items: room3Items, seats: r3Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
-    room4: { name: 'ROOM 4 · 라운지', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom4, items: room4Items, seats: r4Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] }
+    room4: { name: 'ROOM 4 · 라운지', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom4, items: room4Items, seats: r4Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
+    hall1: { name: '1층 복도', w: 160, h: 280, bounds: [22, 52, 138, 266], drawBg: bgHall1, items: hall1Items, seats: [],
+      spawns: { elevator: [80, 256, 'up'], f1r1: [26, 100, 'right'], f1r2: [26, 200, 'right'], f1r3: [134, 100, 'left'], f1r4: [134, 200, 'left'] },
+      spots: [{ id: 'outside', item: null, x: 80, y: 58, r: 14, ax: 80, ay: 4, hit: [58, 7, 44, 40], label: '건물 밖으로 나가기' }, ELEV_SPOT(160, 280)]
+        .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ id: 'to-' + id, item: null, x: right ? x - 10 : x + 10, y, r: 12, ax: right ? x - 10 : x + 10, ay: y - 22, hit: right ? [x - 10, y - 16, 16, 32] : [x - 6, y - 16, 16, 32], label: id === 'f1r1' ? `${ROOM_INFO[id].n} ${ROOM_INFO[id].sub} 들어가기` : `${ROOM_INFO[id].n} 문 열어 보기`, room: id === 'f1r1' ? id : null, locked: id !== 'f1r1' }))),
+      labels: [{ x: 80, y: 2, t: '출입문', align: 'center' }]
+        .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ x: right ? x - 9 : x + 9, y: y + 18, t: ROOM_INFO[id].n, sub: ROOM_INFO[id].sub, align: right ? 'right' : 'left', count: id === 'f1r1' ? id : undefined }))) },
+    f1r1: { name: '1층 ROOM 1 · 락커룸', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgLocker, items: lockerItems, seats: lockerSeats, spawns: { door: [96, 156, 'up'], field: [96, 74, 'down'] },
+      spots: [exitSpot, { id: 'pitch', item: null, x: 96, y: 56, r: 14, ax: 96, ay: 2, hit: [82, 6, 28, 40], label: '축구장 가기' }] },
+    roof: { name: '3층 · 옥상', w: 192, h: 200, bounds: [8, 52, 184, 186], drawBg: bgRoof, items: roofItems, seats: roofSeats, weather: true, spawns: { elevator: [96, 178, 'up'] },
+      spots: [ELEV_SPOT(192, 200), { id: 'weather', item: 'rf-sign', x: 163, y: 134, r: 14, ax: 163, ay: 88, label: '오늘 베이징 날씨 보기' }] },
+    soccer: { name: '축구장', w: FIELD.w, h: FIELD.h, bounds: [8, 20, 312, 196], drawBg: bgSoccer, items: [], seats: [], soccer: true, spawns: { w: [110, 108, 'right'], b: [210, 108, 'left'] },
+      spots: [{ id: 'leaveField', item: null, x: 160, y: 194, r: 12, ax: 160, ay: 182, hit: [146, 198, 28, 10], label: '락커룸으로 돌아가기' }] }
   };
+  const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1' };
+  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'soccer') ? 1 : 2;
   const ALL_ITEMS = Object.values(SCENES).flatMap(sc => sc.items);
   const itemById = Object.fromEntries(ALL_ITEMS.map(it => [it.id, it]));
   let sceneId = 'sanctuary', scene = SCENES.sanctuary, W = scene.w, H = scene.h, ITEMS = scene.items, chairs = scene.seats, spots = [];
@@ -465,10 +639,13 @@
   let lightMode = 0;
   function spotRun(sp) {
     if (INSTRUMENTS[sp.id]) return () => startPlay(player, sp);
-    if (sp.id === 'toHall') return () => goScene('hall', sceneId);
+    if (sp.id === 'toHall') return () => goScene(HALL_OF[sceneId] || 'hall', sceneId);
     if (sp.id === 'toSanctuary') return () => goScene('sanctuary', 'door');
     if (sp.room) return () => goScene(sp.room, 'door');
+    if (sp.locked) return () => toast(pick(LOCKED_MSG));
     const RUN = {
+      elevator: () => openElevator(), outside: () => toast(pick(OUTSIDE_MSG)), weather: () => openWeather(),
+      pitch: () => openParty(), leaveField: () => leaveMatch(true),
       stand: () => openQt(), qr: () => openQr(), board: () => openModal('board'), prayer: () => openPrayers(),
       eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; const inst = EQ_INST[eqStep++ % EQ_INST.length]; eqFx(inst, 1); lobbySend('lights', { mode: lightMode, inst }); },
       water: () => useMachine('water'),
@@ -517,12 +694,15 @@
   let near = null;
   function computeNear() {
     if (editMode) return null;
+    if (scene.soccer && match) return { label: '⚽ 공 차기', run: kick };
+    if (player.seat && player.seat.team) return { label: '⚽ 축구 파티', run: () => openParty() };
     if (player.seat) return { label: '일어나기', run: () => { standUp(player); if (!player.dnd) player.action = null; } };
     if (player.playing) return { label: '연주 멈추기', run: () => { player.action = null; player.playing = null; } };
     let best = null, bd = Infinity;
     for (const s of spots) { const d = Math.hypot(s.x - player.x, s.y - player.y); if (d < s.r && d < bd) { bd = d; best = s; } }
     if (best) return best;
     const c = nearestFreeChair(player, 9);
+    if (c && c.team) return { label: '⚽ 축구 파티', run: () => openParty() };
     if (c) return { label: c.kind === 'sofa' ? '소파에 앉기' : '의자에 앉기', run: () => sit(player, c) };
     return null;
   }
@@ -586,12 +766,12 @@
       if (player.action && player.action !== 'jump') { player.action = null; player.playing = null; }
       if (!$('qrPop').hidden) closeQr();
       if (player.brew) player.brew = null;
-      step(player, vx, vy, dt);
+      step(player, vx, vy, dt, scene.soccer ? 1.3 : 1);
     } else follow(player, dt, 1);
     if (player.brew && player.path.length) player.brew = null;
     if (player.hold && now - player.hold.t0 > HOLD_MS) player.hold = null;
     if (player.playing && now > (player.riffAt || 0)) { player.riffAt = now + 3200; sfx(player.playing, 0.55); }
-    updateZz(now);
+    updateZz(now); soccerUpdate(dt, now);
     if (player.dnd && !player.moving && !player.path.length && !player.action) { player.action = 'pray'; player.actionUntil = Infinity; player.actionT0 = now; }
 
     if (LIVE) updateRemotes(dt);
@@ -612,7 +792,7 @@
   }
 
   // ================= realtime (Supabase) =================
-  const net = { ch: null, lobby: null, uid: null, ready: false, remotes: new Map(), sig: '', lastSend: 0, lastTrack: 0, dirty: true, counts: {}, total: 0 };
+  const net = { ch: null, lobby: null, chatDb: null, uid: null, ready: false, remotes: new Map(), sig: '', lastSend: 0, lastTrack: 0, dirty: true, counts: {}, total: 0 };
   const seatIdx = ent => ent.seat ? chairs.indexOf(ent.seat) : -1;
   function netSend(event, payload) { if (LIVE && net.ready && net.ch) net.ch.send({ type: 'broadcast', event, payload }); }
   function lobbySend(event, payload) { if (LIVE && net.lobby) net.lobby.send({ type: 'broadcast', event, payload }); }
@@ -642,12 +822,12 @@
   }, 5000);
   function myState() {
     return { id: net.uid, x: Math.round(player.x * 10) / 10, y: Math.round(player.y * 10) / 10, dir: player.dir, mv: player.moving, seat: seatIdx(player),
-      act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, zz: player.zz ? 1 : 0, hold: player.hold ? player.hold.k : null, brew: player.brew ? player.brew.k : null, to: player.path.length ? player.goal : null };
+      act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, zz: player.zz ? 1 : 0, tie: player.tie || 0, hold: player.hold ? player.hold.k : null, brew: player.brew ? player.brew.k : null, to: player.path.length ? player.goal : null };
   }
   function netTick(now) {
     if (!net.ready) return;
     const st = myState(), kb = player.moving && !player.path.length;
-    const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
+    const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.tie, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
     if (sig !== net.sig && now - net.lastSend > (kb ? 250 : 60)) { net.sig = sig; net.lastSend = now; net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.dirty = true; }
     if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look, hb: Date.now(), sid: SID, t0: T0 }, st)); }
   }
@@ -662,7 +842,7 @@
     const ent = net.remotes.get(id); if (!ent) return;
     if (ent.seat && ent.seat.occ === ent) ent.seat.occ = null;
     net.remotes.delete(id);
-    gmPeerGone(id);
+    gmPeerGone(id); partyPeerGone(id);
     const i = entities.indexOf(ent); if (i >= 0) entities.splice(i, 1);
     refreshChars();
   }
@@ -688,7 +868,7 @@
     if (act !== ent.action && !(act === 'punch' && ent.action === 'punch')) { ent.action = act; ent.actionT0 = now; ent.actionUntil = !act ? 0 : (act === 'pray' || act === 'play') ? Infinity : act === 'jump' ? now + 650 : act === 'punch' ? now + 450 : now + 2400; }
     const play = p.play || null;
     if (play && play !== ent.playing && !snap && ent.scene === sceneId && INSTRUMENTS[play]) sfx(play, 0.35);
-    ent.playing = play; ent.dnd = !!p.dnd; ent.og = !!p.og; ent.zz = !!p.zz;
+    ent.playing = play; ent.dnd = !!p.dnd; ent.og = !!p.og; ent.zz = !!p.zz; ent.tie = +p.tie || 0;
     if ((p.hold || null) !== (ent.hold && ent.hold.k)) ent.hold = p.hold ? { k: p.hold, t0: now } : null;
     if ((p.brew || null) !== (ent.brew && ent.brew.k)) { ent.brew = p.brew ? { k: p.brew, t0: now } : null; if (ent.brew && !snap && sceneId === 'room2') sfx(p.brew === 'coffee' ? 'brew' : 'pour', 0.3); }
   }
@@ -722,7 +902,7 @@
       if (!ent) { ent = addRemote(key, meta); applyRemote(ent, meta, now, true); }
       if (meta.name) ent.name = meta.name;
       if (validLook(meta.look)) ent.look = meta.look;
-      ent.dnd = !!meta.dnd; ent.og = !!meta.og; ent.zz = !!meta.zz;
+      ent.dnd = !!meta.dnd; ent.og = !!meta.og; ent.zz = !!meta.zz; ent.tie = +meta.tie || 0;
     }
     for (const key of [...net.remotes.keys()]) if (!seen.has(key)) removeRemote(key);
     if (net.lobby) onLobbySync(); else renderPeople();
@@ -757,11 +937,24 @@
       .subscribe(status => { if (status === 'SUBSCRIBED') lobbyTrack(); });
     joinSceneChannel();
   }
+  // Chat comes from the database: every INSERT on public.messages for this room. The server fills in the
+  // sender's id and name, so nothing a client sends over a channel can pose as another member.
+  function joinChatDb() {
+    if (net.chatDb) { const old = net.chatDb; net.chatDb = null; try { sb.removeChannel(old); } catch (e) {} }
+    if (BP.legacy) return;   // BACKPORT: the old database has no chat feed
+    const id = sceneId;
+    net.chatDb = sb.channel('db-chat:' + id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'scene=eq.' + id }, ({ new: m }) => {
+        if (id === sceneId && m) showChat(m.user_id, m.name, m.body, m.created_at);
+      })
+      .subscribe();
+  }
   function joinSceneChannel() {
+    joinChatDb();
     if (net.ch) { const old = net.ch; net.ch = null; try { sb.removeChannel(old); } catch (e) {} }
     for (const id of [...net.remotes.keys()]) removeRemote(id);
     net.ready = false;
-    const ch = sb.channel('lounge:' + sceneId, { config: { private: true, broadcast: { self: false }, presence: { key: net.uid } } });
+    const ch = sb.channel('lounge:' + (sceneId === 'soccer' && match ? 'soccer-' + match.id : sceneId), { config: { private: true, broadcast: { self: false }, presence: { key: net.uid } } });
     net.ch = ch;
     ch.on('presence', { event: 'sync' }, () => { if (net.ch === ch) onSync(); })
       .on('broadcast', { event: 'st' }, ({ payload: p }) => {
@@ -772,14 +965,11 @@
         if (fresh) onLobbySync();
         applyRemote(ent, p, performance.now(), false);
       })
-      .on('broadcast', { event: 'chat' }, ({ payload: p }) => {
-        if (net.ch !== ch || !p || p.id === net.uid) return;
-        const ent = net.remotes.get(p.id); markHeard(p.id);
-        if (ent) ent.bubble = { text: p.text, until: performance.now() + 4500 };
-        log(p.name, p.text, '');
-      })
+      .on('broadcast', { event: 'chat' }, ({ payload: p }) => { if (net.ch === ch && BP.legacy && p) showChat(p.id, p.name, p.text); })   // BACKPORT
       .on('broadcast', { event: 'hit' }, ({ payload: p }) => { if (net.ch === ch) onHit(p); })
       .on('broadcast', { event: 'gm' }, ({ payload: p }) => { if (net.ch === ch) onGm(p); })
+      .on('broadcast', { event: 'pty' }, ({ payload: p }) => { if (net.ch === ch) onPty(p); })
+      .on('broadcast', { event: 'fb' }, ({ payload: p }) => { if (net.ch === ch) onFb(p); })
       .on('broadcast', { event: 'emote' }, ({ payload: p }) => { const ent = p && net.remotes.get(p.id); if (ent) ent.emote = { sym: p.sym, until: performance.now() + 2400 }; })
       .subscribe(status => {
         if (net.ch !== ch) return;
@@ -851,6 +1041,13 @@
     if (atBottom || kind === 'me') pane.scrollTop = pane.scrollHeight;
   }
   function syncUnread() { const t = $('tab-chat'); t.dataset.unread = unread > 9 ? '9+' : unread || ''; }
+  // a chat line from someone else: a database row, or (via backport.js) a legacy broadcast
+  function showChat(uid, name, text, at) {
+    if (!uid || uid === net.uid) return;
+    const ent = net.remotes.get(uid); markHeard(uid);
+    if (ent) ent.bubble = { text, until: performance.now() + 4500 };
+    log(name, text, '', at);
+  }
   function say(ent, text) { ent.bubble = { text, until: performance.now() + 4500 }; if (ent.scene === sceneId) log(ent.name, text, ent.isPlayer ? 'me' : ''); }
   $('chatForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -858,13 +1055,17 @@
     if (!text || player.dnd) return;
     say(player, text); inp.value = '';
     if (LIVE) {
-      netSend('chat', { id: net.uid, name: player.name, text });
-      sb.from('messages').insert({ name: player.name, body: text, scene: sceneId }).then(({ error }) => { if (error) toast('대화 기록을 저장하지 못했어요'); });
+      // the server sets user_id and name; everyone else sees this line when the row is inserted
+      if (BP.legacy) netSend('chat', { id: net.uid, name: player.name, text });   // BACKPORT: old database, no row feed
+      sb.from('messages').insert({ body: text, scene: sceneId }).then(({ error }) => {
+        if (error) toast(/slow down/.test(error.message) ? '너무 빨리 보내고 있어요. 잠시 후 다시 해 주세요' : '대화 기록을 저장하지 못했어요');
+      });
       return;
     }
   });
   document.querySelectorAll('[data-motion]').forEach(btn => btn.addEventListener('click', () => { if (!player.dnd) doMotion(player, btn.dataset.motion); }));
-  $('punchBtn').addEventListener('click', () => doPunch());
+  $('punchBtn').addEventListener('click', () => { if (scene.soccer) kick(); else doPunch(); });
+  $('fbBtn').addEventListener('click', () => { if (isPartyHost() && canStart()) startMatch(); else openParty(); });
 
 
   // ================= QT plan: monthly schedule, today's passage switches at 00:00 China time =================
@@ -973,8 +1174,8 @@
     if ((k === 'enter' || k === ' ') && document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
     if (MOVE.includes(k)) { keys.add(k); e.preventDefault(); if (!$('modal').hidden) closeModal(); }
     else if (k === 'e' || k === 'enter') { if (near && $('modal').hidden && !e.repeat) near.run(); e.preventDefault(); }
-    else if (k === ' ') { if (!player.dnd && !e.repeat) doMotion(player, 'jump'); e.preventDefault(); }
-    else if (k === 'f') { if (!e.repeat) doPunch(); e.preventDefault(); }
+    else if (k === ' ') { if (scene.soccer) kick(); else if (!player.dnd && !e.repeat) doMotion(player, 'jump'); e.preventDefault(); }
+    else if (k === 'f') { if (scene.soccer) kick(); else if (!e.repeat) doPunch(); e.preventDefault(); }
     else if (KEY_MOTION[k] && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) { if (!player.dnd) doMotion(player, KEY_MOTION[k]); }
   });
   window.addEventListener('keyup', e => { keys.delete(keyName(e)); keys.delete(e.key.toLowerCase()); });
@@ -1027,6 +1228,7 @@
       return;
     }
     const c = chairs.find(c => { const [hx, hy, hw, hh] = seatHit(c); return g.x >= hx && g.x <= hx + hw && g.y >= hy && g.y <= hy + hh; });
+    if (c && c.team) { openParty(); return; }
     if (c) { if (c.occ === player) return; if (!c.occ) { goTo(player, seatApproach(c), () => sit(player, c)); return; } }
     const sp = spots.find(sp => g.x >= sp.hit[0] && g.x <= sp.hit[0] + sp.hit[2] && g.y >= sp.hit[1] && g.y <= sp.hit[1] + sp.hit[3]);
     if (sp) {
@@ -1076,15 +1278,21 @@
     const arms = c.action && c.action !== 'jump' ? c.action : 'none';
     let frame = legs === 'walk' ? walkFrame(c) : 0;
     if (arms === 'wave' || arms === 'clap' || arms === 'play') frame = Math.floor((now - c.actionT0) / 220) % 2 ? 1 : 2;
-    const spr = sprite(c.look, c.dir, legs, arms, frame);
+    const spr = sprite(kitLook(c), c.dir, legs, arms, frame);
     const x = Math.round(c.x), y = Math.round(c.y);
     const jump = c.action === 'jump' ? Math.round(Math.sin(clamp((now - c.actionT0) / 650, 0, 1) * Math.PI) * 8) : 0;
     if (!c.seat) { b.fillStyle = 'rgba(60,30,10,.28)'; b.fillRect(x - 5, y - 1, 10, 2); b.fillRect(x - 3, y + 1, 6, 1); }
     const shake = now - c.hitT0 < 320 ? (Math.floor(now / 40) % 2 ? 1 : -1) : 0;
-    b.drawImage(spr, x - 9 + shake, y - 22 + (c.seat ? 3 : 0) - jump);
+    if (c.tie === 1 && c.seat) {
+      // tying boots on the bench: head bowed forward
+      const dx = x - 9, dy = y - 22 + 3;
+      b.drawImage(spr, 0, 12, SW, SH - 12, dx, dy + 12, SW, SH - 12);
+      b.drawImage(spr, 0, 0, SW, 12, dx, dy + 3, SW, 12);
+    } else b.drawImage(spr, x - 9 + shake, y - 22 + (c.seat ? 3 : 0) - jump);
     drawHeld(c, x + shake, y - jump, now); drawFist(c, x, y - jump, now);
   }
   function drawWorld(now) {
+    if (scene.weather) drawSky(now);
     b.drawImage(bg, 0, 0);
     if (player.path.length && !player.seat) {
       const t = player.path[player.path.length - 1], p = Math.floor(now / 220) % 2, tx = Math.round(t.x), ty = Math.round(t.y);
@@ -1094,13 +1302,16 @@
     const list = ITEMS.map(it => ({ y: it.sortY + off(it.id).dy, it }))
       .concat(chairs.map(c => ({ y: seatBackY(c), chair: c })))
       .concat(chars.map(c => ({ y: c.y, c })));
+    if (scene.soccer && ball) list.push({ y: ball.y, ball: true });
     list.sort((a, z) => a.y - z.y);
     for (const e of list) {
       if (e.it) { const o = off(e.it.id); b.save(); b.translate(o.dx, o.dy); e.it.draw(b); b.restore(); }
       else if (e.chair) drawSeatBack(b, e.chair);
+      else if (e.ball) drawBall(now);
       else drawChar(e.c, now);
     }
     drawMachineFx(now); drawEqFx(now);
+    if (scene.weather) { drawWeatherFx(now); drawWeatherBoard(now); }
     if (!scene.lights) return;
     b.save(); b.globalCompositeOperation = 'lighter';
     const L = LIGHTS[lightMode].c;
@@ -1219,6 +1430,10 @@
           top -= fs * 0.9;
         }
       }
+      if (c.tie && c.seat && sceneId === 'f1r1') {
+        ctx.font = `${fs * 1.1}px sans-serif`;
+        ctx.fillText(c.tie === 1 ? '👟' : '✅', sx + fs * 1.3, top + (c.tie === 1 ? Math.sin(now / 150) * 2 : 0));
+      }
       if (c.zz && !c.dnd && !c.emote) {
         ctx.font = `700 ${fs * 1.2}px "Pixelify Sans", sans-serif`; ctx.lineWidth = 3; ctx.strokeStyle = '#251c2c'; ctx.fillStyle = '#c9d6ff';
         for (let i = 0; i < 3; i++) { const ph = ((now / 1400) + i / 3) % 1, x = sx + 4 + ph * fs * 0.9, y = top - fs * 0.4 - ph * fs * 1.6; ctx.globalAlpha = ph < 0.8 ? 1 : (1 - ph) * 5; ctx.font = `700 ${fs * (0.8 + ph * 0.6)}px "Pixelify Sans", sans-serif`; ctx.strokeText('z', x, y); ctx.fillText('z', x, y); }
@@ -1253,6 +1468,13 @@
         ctx.fillStyle = '#2b2230'; lines.forEach((l, i) => ctx.fillText(l, bx + bw / 2, by + 5 + lh * (i + 0.5)));
       }
     }
+    const fam2 = getComputedStyle(document.body).fontFamily;
+    if (scene.weather) {
+      // today's Beijing weather on the rooftop sign
+      ctx.font = `800 ${fs * 0.95}px ${fam2}`; ctx.fillStyle = '#251c2c';
+      if (WX.ok) ctx.fillText(`${Math.round(WX.temp)}°`, SX(169), SY(107.5));
+    }
+    if (scene.soccer) drawSoccerHud(ctx, fs, fam2);
   }
   let last = performance.now();
   function loop(now) {
@@ -1603,7 +1825,7 @@
   function ac() {
     if (!sfxOn) return null;
     try {
-      if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); actx.__out = actx.createGain(); actx.__out.gain.value = 0.5; actx.__out.connect(actx.destination); }
+      if (!actx) { actx = new (window.AudioContext || window.webkitAudioContext)(); const comp = actx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(actx.destination); actx.__out = actx.createGain(); actx.__out.gain.value = 0.85; actx.__out.connect(comp); }
       if (actx.state === 'suspended') actx.resume();
     } catch (e) { return null; }
     return actx;
@@ -1613,7 +1835,9 @@
     const o = a.createOscillator(), g = a.createGain(); let node = o;
     o.type = type; o.frequency.setValueAtTime(f, t);
     if (o2 && o2.slide) o.frequency.exponentialRampToValueAtTime(o2.slide, t + d);
-    if (o2 && o2.lp) { const fl = a.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o2.lp; o.connect(fl); node = fl; }
+    if (o2 && o2.detune) o.detune.value = o2.detune;
+    if (o2 && o2.dist) { const ws = a.createWaveShaper(), cv = new Float32Array(256); for (let i = 0; i < 256; i++) { const x = i / 128 - 1; cv[i] = Math.tanh(x * o2.dist); } ws.curve = cv; node.connect(ws); node = ws; }
+    if (o2 && o2.lp) { const fl = a.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o2.lp; if (o2.q) fl.Q.value = o2.q; node.connect(fl); node = fl; }
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
     node.connect(g); g.connect(a.__out); o.start(t); o.stop(t + d + 0.03);
   }
@@ -1630,19 +1854,38 @@
     const a = ac(); if (!a || vol <= 0) return;
     const t = a.currentTime + 0.02, v = x => Math.max(0.0002, x * vol), R = pick(RIFFS);
     switch (kind) {
-      case 'piano': R.forEach((m, i) => { tone(a, t + i * 0.13, mtof(m), 1.1, 'triangle', v(0.22)); tone(a, t + i * 0.13, mtof(m + 12), 0.5, 'sine', v(0.06)); }); break;
-      case 'synth': R.concat(R[0] + 12).forEach((m, i) => tone(a, t + i * 0.09, mtof(m + 12), 0.32, 'square', v(0.07), { lp: 2400 })); break;
-      case 'bass': [R[0] - 24, R[0] - 24, R[2] - 24, R[1] - 24].forEach((m, i) => tone(a, t + i * 0.17, mtof(m), 0.3, 'sawtooth', v(0.3), { lp: 420 })); break;
-      case 'elec': [[R[0] - 12, R[2] - 12, R[0]], [R[1] - 12, R[3] - 12, R[1]]].forEach((ch, k) => ch.forEach((m, i) => tone(a, t + k * 0.32 + i * 0.018, mtof(m), 0.5, 'sawtooth', v(0.09), { lp: 2600 }))); break;
-      case 'drum':
-        [0, 0.48].forEach(d => tone(a, t + d, 150, 0.32, 'sine', v(0.5), { slide: 45 }));
-        [0.24, 0.72].forEach(d => noise(a, t + d, 0.16, v(0.28), 'bandpass', 1800, 0.8));
-        [0, 0.12, 0.24, 0.36, 0.48, 0.6, 0.72].forEach(d => noise(a, t + d, 0.05, v(0.08), 'highpass', 7000));
+      // every instrument keeps some energy above ~200 Hz so it is heard on phone speakers too
+      case 'piano':
+        R.forEach((m, i) => { const tt = t + i * 0.14; tone(a, tt, mtof(m), 1.3, 'triangle', v(0.3)); tone(a, tt, mtof(m + 12), 0.6, 'sine', v(0.1)); tone(a, tt, mtof(m + 19), 0.25, 'sine', v(0.03)); });
+        tone(a, t + 0.56, mtof(R[0] - 12), 1.4, 'triangle', v(0.18)); tone(a, t + 0.56, mtof(R[2] - 12), 1.4, 'triangle', v(0.12));
         break;
+      case 'synth':
+        R.concat(R[2] + 12, R[0] + 12).forEach((m, i) => { const tt = t + i * 0.1; tone(a, tt, mtof(m + 12), 0.3, 'square', v(0.16), { lp: 3200 }); tone(a, tt, mtof(m + 12), 0.3, 'sawtooth', v(0.09), { detune: 9, lp: 3200 }); });
+        tone(a, t, mtof(R[0]), 0.9, 'sawtooth', v(0.11), { lp: 1400, detune: -7 });
+        break;
+      case 'bass':
+        [R[0] - 12, R[0] - 12, R[2] - 12, R[1] - 12, R[0] - 12].forEach((m, i) => { const tt = t + i * 0.16; tone(a, tt, mtof(m), 0.28, 'sawtooth', v(0.32), { lp: 900, q: 4 }); tone(a, tt, mtof(m - 12), 0.28, 'sine', v(0.3)); tone(a, tt, mtof(m + 12), 0.08, 'triangle', v(0.08)); });
+        break;
+      case 'elec':
+        [[R[0] - 12, R[0] - 5, R[0]], [R[1] - 12, R[1] - 5, R[1]], [R[3] - 12, R[3] - 5, R[3]]].forEach((ch, k) => ch.forEach((m, i) => tone(a, t + k * 0.24 + i * 0.012, mtof(m), k === 2 ? 0.9 : 0.24, 'sawtooth', v(0.11), { dist: 6, lp: 3000 })));
+        break;
+      case 'drum': {
+        const kick = d => { tone(a, t + d, 190, 0.28, 'sine', v(0.75), { slide: 50 }); tone(a, t + d, 1500, 0.03, 'triangle', v(0.25), { slide: 300 }); };
+        const snare = d => { noise(a, t + d, 0.18, v(0.5), 'highpass', 1200); tone(a, t + d, 230, 0.1, 'triangle', v(0.3), { slide: 160 }); };
+        const hat = (d, g) => noise(a, t + d, 0.045, v(g || 0.2), 'highpass', 7500);
+        kick(0); hat(0); hat(0.12); snare(0.24); hat(0.24, 0.12); hat(0.36); kick(0.48); kick(0.6); hat(0.6); snare(0.72); hat(0.84);
+        [0.9, 0.96, 1.02].forEach((d, i) => tone(a, t + d, [260, 200, 150][i], 0.18, 'sine', v(0.45), { slide: [180, 140, 100][i] }));
+        noise(a, t + 1.08, 0.6, v(0.22), 'highpass', 5000); kick(1.08);
+        break;
+      }
       case 'punch': noise(a, t, 0.12, v(0.45), 'lowpass', 1400); tone(a, t, 180, 0.22, 'sine', v(0.55), { slide: 50 }); break;
       case 'whoosh': noise(a, t, 0.22, v(0.12), 'bandpass', 900, 1.2); break;
       case 'pour': noise(a, t, 1.0, v(0.12), 'bandpass', 1500, 2); for (let i = 0; i < 4; i++) tone(a, t + 0.15 + i * 0.2, 900 + i * 120, 0.08, 'sine', v(0.05)); break;
       case 'brew': noise(a, t, 1.6, v(0.09), 'lowpass', 500); for (let i = 0; i < 7; i++) tone(a, t + 0.25 + i * 0.18 + Math.random() * 0.05, 300 + Math.random() * 400, 0.06, 'sine', v(0.06)); tone(a, t + 1.65, mtof(84), 0.25, 'sine', v(0.08)); tone(a, t + 1.8, mtof(88), 0.35, 'sine', v(0.08)); break;
+      case 'ding': tone(a, t, mtof(84), 0.9, 'sine', v(0.2)); tone(a, t + 0.28, mtof(79), 1.1, 'sine', v(0.18)); break;
+      case 'kick': tone(a, t, 140, 0.12, 'sine', v(0.7), { slide: 60 }); noise(a, t, 0.06, v(0.35), 'bandpass', 1200, 1); break;
+      case 'whistle': tone(a, t, 2600, 0.25, 'sine', v(0.12)); tone(a, t + 0.3, 2600, 0.5, 'sine', v(0.12)); tone(a, t + 0.3, 2660, 0.5, 'sine', v(0.06)); break;
+      case 'goal': noise(a, t, 1.6, v(0.18), 'bandpass', 900, 0.5); [72, 76, 79, 84].forEach((m, i) => tone(a, t + 0.1 + i * 0.12, mtof(m), 0.5, 'triangle', v(0.14))); break;
       case 'sip': tone(a, t, 520, 0.09, 'sine', v(0.06), { slide: 760 }); break;
       case 'pop': tone(a, t, mtof(76), 0.12, 'sine', v(0.08)); tone(a, t + 0.07, mtof(83), 0.16, 'sine', v(0.07)); break;
     }
@@ -1790,7 +2033,7 @@
   const touched = () => { lastInput = performance.now(); };
   ['keydown', 'pointerdown', 'wheel'].forEach(ev => window.addEventListener(ev, touched, { passive: true }));
   function updateZz(now) {
-    const idleRoom = sceneId === 'sanctuary' || sceneId === 'hall';
+    const idleRoom = ['sanctuary', 'hall', 'hall1', 'roof'].includes(sceneId);
     const zz = !player.dnd && (hiddenAway || (idleRoom && now - lastInput > IDLE_MS && !player.playing && !player.brew && !gmActive()));
     if (zz !== !!player.zz) { player.zz = zz; net.dirty = true; net.lastTrack = 0; }
   }
@@ -1801,8 +2044,8 @@
   }
   function leaveRealtime() {
     if (!LIVE) return;
-    for (const c of [net.ch, net.lobby]) if (c) { try { c.untrack(); } catch (e) {} try { sb.removeChannel(c); } catch (e) {} }
-    net.ch = null; net.lobby = null; net.ready = false;
+    for (const c of [net.ch, net.lobby, net.chatDb]) if (c) { try { c.untrack(); } catch (e) {} try { sb.removeChannel(c); } catch (e) {} }
+    net.ch = null; net.lobby = null; net.chatDb = null; net.ready = false;
     for (const id of [...net.remotes.keys()]) removeRemote(id);
     renderPeople();
   }
@@ -1848,6 +2091,436 @@
   $('exitBtn').addEventListener('click', askExit);
   $('byeBack').addEventListener('click', () => location.reload());
 
+  // ================= 엘리베이터 =================
+  const LOCKED_MSG = ['🚧 아직 공사 중인 방이에요. 개발자를 재촉해 주세요! 😆', '🔒 문이 잠겨 있어요… 개발자가 새 게임을 만드는 중이래요 🛠️', '🚧 곧 새로운 게임이 들어올 예정! 개발자 어깨를 주물러 주면 빨라질지도? 💆', '☕ 개발자에게 럭킨 生椰拿铁를 사 주면 될지도..?', '📱 지금 당장 개발자에게 톡을 보내 재촉하세요!', '🍲 개발자는 훠궈를 좋아한다던데 (쑥덕쑥덕)...'];
+  const OUTSIDE_MSG = ['🚪 바깥 세상은 아직 디자인 중이에요! 개발자에게 빨리 만들라고 재촉해 주세요 😆', '🌳 밖은 아직 공사 중… 개발자를 콕콕 찔러서 업데이트를 받아 내세요 👉', '🚧 문이 꿈쩍도 안 해요. 개발자가 바깥 풍경을 그리는 중이래요 (아마도…)', '☕ 개발자에게 럭킨 生椰拿铁를 사 주면 될지도..?', '📱 지금 당장 개발자에게 톡을 보내 재촉하세요!', '🍲 개발자는 훠궈를 좋아한다던데 (쑥덕쑥덕)...'];
+  const FLOORS = [{ f: 3, to: 'roof', name: '3F · 옥상', sub: '하늘과 실시간 베이징 날씨 ☁️' }, { f: 2, to: 'hall', name: '2F · 본당 · 회의실 층', sub: '본당, ROOM 1~4' }, { f: 1, to: 'hall1', name: '1F · 로비', sub: '락커룸 ⚽, 건물 출입문' }];
+  function openElevator() {
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '엘리베이터';
+    body.appendChild(el('p', '', '몇 층으로 갈까요?'));
+    const cur = FLOOR_OF(sceneId), list = el('div', 'ev-list');
+    for (const fl of FLOORS) {
+      const b2 = el('button', 'btn ev-btn' + (fl.f === cur ? ' here' : '')); b2.type = 'button'; b2.disabled = fl.f === cur;
+      b2.append(el('b', 'ev-f', String(fl.f)), el('span', 'ev-n', fl.name + (fl.f === cur ? ' (지금 층)' : '')), el('span', 'ev-s', fl.sub));
+      b2.addEventListener('click', () => { closeModal(); sfx('ding'); goScene(fl.to, 'elevator'); });
+      list.appendChild(b2);
+    }
+    body.appendChild(list);
+    $('modal').hidden = false;
+  }
+
+  // ================= 옥상: 오늘의 베이징 날씨 =================
+  // Open-Meteo (free, no key). The rooftop sky follows the real weather in Beijing.
+  const WX = { ok: false, tried: 0, kind: 'clear', temp: null, hi: null, lo: null, wind: null, isDay: 1, aqi: null, at: 0 };
+  const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=39.9042&longitude=116.4074&current=temperature_2m,weather_code,is_day,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FShanghai&forecast_days=1';
+  const AQ_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=39.9042&longitude=116.4074&current=us_aqi&timezone=Asia%2FShanghai';
+  async function getJSON(url) {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 9000);
+    try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error('http ' + r.status); return await r.json(); } finally { clearTimeout(t); }
+  }
+  // our own site asks the weather services (api/weather.js on Vercel), so it works wherever the lounge itself opens;
+  // if that is missing, the page tries Open-Meteo directly
+  const WMO_KIND = c => c >= 95 ? 'storm' : ((c >= 71 && c <= 77) || c === 85 || c === 86) ? 'snow' : ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) ? 'rain' : (c === 45 || c === 48) ? 'fog' : c === 3 ? 'cloudy' : (c === 1 || c === 2) ? 'partly' : 'clear';
+  async function loadWeather(force) {
+    const now = Date.now();
+    if (!force && now - WX.tried < (WX.ok ? 30 * 60e3 : 2 * 60e3)) return;
+    WX.tried = now;
+    let d = null;
+    try { const r = await getJSON('api/weather'); if (r && r.ok) d = r; } catch (e) {}
+    if (!d) try {
+      const o = await getJSON(WX_URL), c = o.current || {}, dl = o.daily || {};
+      d = { kind: WMO_KIND(+c.weather_code || 0), temp: c.temperature_2m, isDay: c.is_day === 0 ? 0 : 1, wind: c.wind_speed_10m, hi: dl.temperature_2m_max && dl.temperature_2m_max[0], lo: dl.temperature_2m_min && dl.temperature_2m_min[0], aqi: null };
+      try { const a = await getJSON(AQ_URL); d.aqi = a.current && a.current.us_aqi != null ? +a.current.us_aqi : null; } catch (e) {}
+    } catch (e) {}
+    if (!d || d.temp == null) return;
+    const before = WX.kind;
+    Object.assign(WX, { ok: true, kind: d.kind, temp: d.temp, hi: d.hi, lo: d.lo, isDay: d.isDay, wind: d.wind, aqi: d.aqi, at: now });
+    if (before !== WX.kind) wxSeed();
+  }
+  setInterval(() => { if (sceneId === 'roof') loadWeather(); }, 60e3);
+  const wxKind = () => (WX.ok && WX_NAME[WX.kind]) ? WX.kind : 'clear';
+  const WX_NAME = { clear: ['☀️', '맑음'], partly: ['🌤️', '구름 조금'], cloudy: ['☁️', '흐림'], fog: ['🌫️', '안개'], rain: ['🌧️', '비'], snow: ['❄️', '눈'], storm: ['⛈️', '천둥번개'] };
+  const aqiText = v => v == null ? '정보 없음' : v <= 50 ? `좋음 (${v})` : v <= 100 ? `보통 (${v})` : v <= 150 ? `민감군 나쁨 (${v})` : v <= 200 ? `나쁨 (${v})` : `매우 나쁨 (${v})`;
+  let wxDrops = [], wxClouds = [];
+  function wxSeed() {
+    const k = wxKind(), W2 = SCENES.roof.w, H2 = SCENES.roof.h;
+    const n = k === 'rain' || k === 'storm' ? 110 : k === 'snow' ? 80 : 0;
+    wxDrops = Array.from({ length: n }, () => ({ x: Math.random() * (W2 + 40) - 20, y: Math.random() * H2, v: 0.6 + Math.random() * 0.6, ph: Math.random() * 6 }));
+    const nc = k === 'clear' ? 1 : k === 'partly' ? 3 : 5;
+    wxClouds = Array.from({ length: nc }, (_, i) => ({ x: Math.random() * W2, y: 4 + Math.random() * 16, w: 16 + Math.random() * 18, v: 1.5 + Math.random() * 2 }));
+  }
+  wxSeed();
+  function drawSky(now) {
+    const k = wxKind(), night = WX.ok && !WX.isDay;
+    const top = night ? '#141a36' : { clear: '#5fb4ec', partly: '#79bde8', cloudy: '#9aa6b3', fog: '#b9bfc6', rain: '#7c8796', snow: '#c9d2dc', storm: '#56606f' }[k];
+    const bot = night ? '#2c3460' : { clear: '#bfe4fb', partly: '#c7e3f5', cloudy: '#c3cad2', fog: '#d6d9dd', rain: '#a3acb8', snow: '#e4e9ee', storm: '#7a8392' }[k];
+    const gr = b.createLinearGradient(0, 0, 0, 44); gr.addColorStop(0, top); gr.addColorStop(1, bot); b.fillStyle = gr; b.fillRect(0, 0, W, 44);
+    if (night) { b.fillStyle = '#f4f1ea'; for (let i = 0; i < 26; i++) { const x = (i * 53) % W, y = (i * 29) % 30 + 2; if ((Math.floor(now / 600) + i) % 7) b.fillRect(x, y, 1, 1); } pixCircle(b, 164, 9, 4, '#f4ecc4'); pixCircle(b, 166, 8, 3, top); }
+    else if (k === 'clear' || k === 'partly') { pixCircle(b, 164, 10, 6, '#fff3b0'); pixCircle(b, 164, 10, 4, '#ffd65a'); }
+    const cc = k === 'storm' ? '#5a6370' : k === 'rain' ? '#8e98a6' : night ? '#3a426a' : '#f4f6f8';
+    for (const c of wxClouds) {
+      const x = ((c.x + now / 1000 * c.v) % (W + 40)) - 20;
+      b.fillStyle = cc; b.fillRect(x, c.y + 3, c.w, 4); b.fillRect(x + 3, c.y + 1, c.w * 0.5, 3); b.fillRect(x + c.w * 0.45, c.y, c.w * 0.35, 4);
+    }
+  }
+  function drawWeatherFx(now) {
+    const k = wxKind(), night = WX.ok && !WX.isDay;
+    if (k === 'rain' || k === 'storm') {
+      b.fillStyle = 'rgba(190,215,240,.75)';
+      for (const d of wxDrops) { const y = (d.y + now / 1000 * 170 * d.v) % H, x = (d.x - (y * 0.25)) % (W + 20); b.fillRect(x, y, 1, 4); if (y > 52 && ((now / 90 + d.ph) | 0) % 9 === 0) b.fillRect(x - 1, y + 4, 3, 1); }
+      b.fillStyle = 'rgba(40,50,70,.18)'; b.fillRect(0, 0, W, H);
+      if (k === 'storm' && Math.floor(now / 100) % 61 === 0) { b.fillStyle = 'rgba(255,255,255,.45)'; b.fillRect(0, 0, W, H); }
+    } else if (k === 'snow') {
+      b.fillStyle = '#ffffff';
+      for (const d of wxDrops) { const y = (d.y + now / 1000 * 22 * d.v) % H, x = (d.x + Math.sin(now / 900 + d.ph) * 4 + W) % W; b.fillRect(x, y, d.v > 0.9 ? 2 : 1, d.v > 0.9 ? 2 : 1); }
+      b.fillStyle = 'rgba(220,230,245,.12)'; b.fillRect(0, 0, W, H);
+    } else if (k === 'fog' || (WX.aqi != null && WX.aqi > 150)) { b.fillStyle = k === 'fog' ? 'rgba(220,224,230,.35)' : 'rgba(200,190,150,.22)'; b.fillRect(0, 0, W, H); }
+    else if (k === 'cloudy') { b.fillStyle = 'rgba(80,90,110,.12)'; b.fillRect(0, 0, W, H); }
+    else if (!night) { const gl = b.createRadialGradient(164, 10, 4, 164, 10, 160); gl.addColorStop(0, 'rgba(255,230,150,.22)'); gl.addColorStop(1, 'rgba(255,230,150,0)'); b.fillStyle = gl; b.fillRect(0, 0, W, H); }
+    if (night) {
+      b.fillStyle = 'rgba(16,20,48,.38)'; b.fillRect(0, 0, W, H);
+      for (let x = 30; x < 166; x += 9) { const y = 60 + Math.round(Math.sin((x - 30) / 136 * Math.PI) * 6); const gl = b.createRadialGradient(x + 1, y + 2, 0, x + 1, y + 2, 9); gl.addColorStop(0, 'rgba(255,214,90,.55)'); gl.addColorStop(1, 'rgba(255,214,90,0)'); b.fillStyle = gl; b.fillRect(x - 9, y - 7, 20, 20); }
+    }
+  }
+  // the rooftop board just shows a picture: sun, cloud, raindrops, snowflake, lightning, fog, moon
+  function drawWeatherBoard(now) {
+    const o = off('rf-sign'), x0 = 151 + o.dx, y0 = 100 + o.dy, k = wxKind(), night = WX.ok && !WX.isDay, f = Math.floor(now / 300) % 2;
+    P(b, x0, y0, 24, 15, '#f4f1ea');
+    const cloud = (cx, cy, col) => { P(b, cx - 5, cy, 11, 3, col); P(b, cx - 3, cy - 2, 5, 2, col); P(b, cx + 1, cy - 3, 3, 3, col); P(b, cx - 6, cy + 1, 1, 1, col); };
+    const cx = x0 + 7, cy = y0 + 6;
+    if (!WX.ok) { cloud(cx, cy, '#c6c9cf'); P(b, cx - 1, cy + 4, 2, 2, '#8d8f99'); return; }
+    if (k === 'clear' || k === 'partly') {
+      if (night) { pixCircle(b, cx, cy, 3, '#f4ecc4'); pixCircle(b, cx + 2, cy - 1, 2, '#f4f1ea'); }
+      else { pixCircle(b, cx, cy, 3, '#ffd65a'); for (const [dx, dy] of [[0, -5], [0, 5], [-5, 0], [5, 0], [-4, -4], [4, 4], [-4, 4], [4, -4]]) P(b, cx + dx, cy + dy, 1, 1, f ? '#f0a83a' : '#ffd65a'); }
+      if (k === 'partly') cloud(cx + 3, cy + 3, '#ffffff'), P(b, cx - 2, cy + 6, 11, 1, '#c6c9cf');
+    } else if (k === 'cloudy') { cloud(cx - 1, cy - 1, '#c6c9cf'); cloud(cx + 2, cy + 2, '#8d8f99'); }
+    else if (k === 'fog') { for (let i = 0; i < 4; i++) P(b, cx - 6 + (i % 2) * 2, cy - 3 + i * 2, 11, 1, '#8d8f99'); }
+    else {
+      cloud(cx, cy - 2, k === 'storm' ? '#5a6370' : '#8d8f99');
+      if (k === 'rain') for (let i = 0; i < 3; i++) P(b, cx - 4 + i * 4, cy + 3 + ((f + i) % 2) * 2, 1, 2, '#3f8fd8');
+      if (k === 'snow') for (let i = 0; i < 3; i++) { const sx = cx - 4 + i * 4, sy = cy + 3 + ((f + i) % 2) * 2; P(b, sx, sy, 1, 1, '#9fc6ff'); P(b, sx - 1, sy, 3, 1, '#9fc6ff'); P(b, sx, sy - 1, 1, 3, '#9fc6ff'); }
+      if (k === 'storm') { P(b, cx, cy + 2, 2, 2, '#ffd65a'); P(b, cx - 1, cy + 4, 2, 2, '#ffd65a'); P(b, cx, cy + 6, 1, 1, '#ffd65a'); for (let i = 0; i < 2; i++) P(b, cx - 5 + i * 9, cy + 3 + f * 2, 1, 2, '#3f8fd8'); }
+    }
+  }
+  function openWeather() {
+    loadWeather();
+    if (!WX.ok) { toast('☁️ 날씨를 불러오는 중이에요. 잠시 후 다시 눌러 주세요'); return; }
+    const [ic, nm] = WX_NAME[wxKind()];
+    toast(`${ic} 오늘 베이징: ${nm} · 지금 ${Math.round(WX.temp)}°C${WX.hi != null ? ` (최고 ${Math.round(WX.hi)}° / 최저 ${Math.round(WX.lo)}°)` : ''}`);
+  }
+
+  // ================= 1층 락커룸: 축구 파티 =================
+  // The party lives on the host's page; the host shares it on the room channel ('pty') and everyone else asks the host.
+  let party = null, partyAt = 0;
+  const FB_MODES = [3, 4, 5];
+  const inParty = () => !!(party && net.uid && party.members[net.uid]);
+  const isPartyHost = () => !!(party && party.host === net.uid);
+  function ptySend(p) { netSend('pty', Object.assign({ from: net.uid }, p)); }
+  function teamCount(pt, team) { return Object.values(pt.members).filter(m => m.team === team).length; }
+  function freeSlot(pt, team) { const used = new Set(Object.values(pt.members).filter(m => m.team === team).map(m => m.slot)); for (let i = 0; i < pt.mode; i++) if (!used.has(i)) return i; return -1; }
+  function hostShare() { if (isPartyHost()) { party.v = (party.v || 0) + 1; ptySend({ t: 'state', party }); applyParty(); } }
+  function hostJoin(uid, name, team) {
+    if (!party || !['w', 'b'].includes(team)) return;
+    const cur = party.members[uid];
+    if (cur && cur.team === team) return;
+    const slot = freeSlot(party, team); if (slot < 0) return;
+    party.members[uid] = { name: String(name || '…').slice(0, 8), team, slot, ready: false };
+    hostShare();
+  }
+  function hostLeave(uid) { if (party && party.members[uid]) { delete party.members[uid]; hostShare(); } }
+  function createParty(mode, team) {
+    party = { id: gmNewId(), host: net.uid || 'me', hostName: gmClip(player.name), mode, members: {}, v: 0 };
+    hostJoin(net.uid || 'me', player.name, team);
+    log('', `⚽ ${gmClip(player.name)}님이 ${mode} 대 ${mode} 축구 파티를 만들었어요!`, 'sys game');
+    ptySend({ t: 'notice', text: `⚽ ${gmClip(player.name)}님이 ${mode} 대 ${mode} 축구 파티를 만들었어요!` });
+  }
+  function joinParty(team) { if (!party) return; if (isPartyHost()) hostJoin(net.uid, player.name, team); else ptySend({ t: 'join', pid: party.id, team, name: gmClip(player.name) }); }
+  function leaveParty(silent) {
+    if (!party) return;
+    if (isPartyHost()) { ptySend({ t: 'close', pid: party.id, why: 'host' }); party = null; }
+    else if (inParty()) { ptySend({ t: 'leave', pid: party.id }); delete party.members[net.uid]; }
+    player.tie = 0; if (player.seat && player.seat.team) standUp(player);
+    applyParty(); if (!silent) toast('파티에서 나왔어요');
+  }
+  function setReady(r) { if (!inParty()) return; if (isPartyHost()) { party.members[net.uid].ready = r; hostShare(); } else { ptySend({ t: 'ready', pid: party.id, ready: r }); party.members[net.uid].ready = r; applyParty(); } }
+  // the demo (one person) can try a practice match on its own
+  function canStart() { return !!(party && isPartyHost() && Object.values(party.members).every(m => m.ready) && (LIVE ? teamCount(party, 'w') >= 1 && teamCount(party, 'b') >= 1 : true)); }
+  function startMatch() {
+    if (!canStart()) return;
+    const teams = {}, names = {};
+    for (const [uid, m] of Object.entries(party.members)) { teams[uid] = m.team; names[uid] = m.name; }
+    const mt = { id: gmNewId(), host: net.uid, mode: party.mode, teams, names, dur: (window.__onl && window.__onl.fbDur) || 180 };
+    ptySend({ t: 'start', pid: party.id, match: mt });
+    party = null; enterMatch(mt);
+  }
+  // bring my character in line with the party: sit on my bench, head down (tying boots) until ready
+  function applyParty() {
+    if (sceneId !== 'f1r1') return;
+    const me = party && net.uid && party.members[net.uid];
+    if (me) {
+      const seat = lockerSeats.filter(c => c.team === me.team)[me.slot];
+      if (seat && player.seat !== seat && (!seat.occ || seat.occ === player)) { if (player.seat) standUp(player); sit(player, seat); }
+      player.tie = me.ready ? 2 : 1;
+    } else player.tie = 0;
+    net.dirty = true; net.lastTrack = 0;
+    fbLabel();
+    if (partyOpen()) openParty(true);
+  }
+  function onPty(p) {
+    if (!p || p.from === net.uid || sceneId !== 'f1r1') return;
+    if (p.t === 'notice') { log('', p.text, 'sys game'); return; }
+    if (p.t === 'hello') { if (isPartyHost()) hostShare(); return; }
+    if (p.t === 'state') {
+      if (party && isPartyHost() && p.party.id !== party.id) return;   // two hosts at once: keep mine
+      party = p.party; partyAt = performance.now(); applyParty(); return;
+    }
+    if (p.t === 'close') { if (party && party.id === p.pid) { const was = inParty(); party = null; applyParty(); if (was) toast('방장이 나가서 파티가 해산됐어요'); } return; }
+    if (p.t === 'start') {
+      if (party && party.id === p.pid) { const mine = p.match && p.match.teams && p.match.teams[net.uid]; party = null; if (mine) enterMatch(p.match); else applyParty(); }
+      return;
+    }
+    if (!isPartyHost() || !party || p.pid !== party.id) return;
+    if (p.t === 'join') hostJoin(p.from, p.name, p.team);
+    else if (p.t === 'leave') hostLeave(p.from);
+    else if (p.t === 'ready' && party.members[p.from]) { party.members[p.from].ready = !!p.ready; hostShare(); }
+  }
+  // a member who leaves the room or disconnects drops out; if the host goes, the party is over
+  function partyPeerGone(id) {
+    if (!party) return;
+    if (party.host === id) { const was = inParty(); party = null; applyParty(); if (was) toast('방장이 나가서 파티가 해산됐어요'); }
+    else if (isPartyHost()) hostLeave(id);
+  }
+  setInterval(() => {
+    if (sceneId !== 'f1r1') return;
+    if (isPartyHost()) ptySend({ t: 'state', party });
+    else if (party && performance.now() - partyAt > 9000) { const was = inParty(); party = null; applyParty(); if (was) toast('파티 연결이 끊겨서 나왔어요'); }
+  }, 3000);
+  function fbLabel() {
+    const btn = $('fbBtn'); btn.hidden = sceneId !== 'f1r1';
+    btn.textContent = inParty() ? (isPartyHost() && canStart() ? '⚽ 경기 시작!' : '⚽ 파티') : party ? '⚽ 파티 참가' : '⚽ 축구';
+    btn.classList.toggle('ping', !!(isPartyHost() && canStart()));
+  }
+  function openParty(refresh) {
+    if (sceneId !== 'f1r1') return;
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '⚽ 축구 파티';
+    if (!party) {
+      body.appendChild(el('p', '', '아직 파티가 없어요. 파티를 만들고 팀을 골라 벤치에 앉으면 다른 사람들이 참가할 수 있어요.'));
+      let mode = +(store.get('onl-fb-mode') || 3); if (!FB_MODES.includes(mode)) mode = 3;
+      const row = el('div', 'gm-opt'); row.appendChild(el('span', 'gm-opt-l', '인원'));
+      for (const m of FB_MODES) { const c = el('button', 'btn gm-chip', `${m} : ${m}`); c.type = 'button'; c.setAttribute('aria-pressed', String(m === mode)); c.addEventListener('click', () => { store.set('onl-fb-mode', String(m)); openParty(true); }); row.appendChild(c); }
+      body.appendChild(row);
+      const btns = el('div', 'fb-btns');
+      const w = el('button', 'btn fb-w', '⚪ 흰 팀으로 만들기'), bk = el('button', 'btn fb-b', '⚫ 검정 팀으로 만들기'); w.type = bk.type = 'button';
+      w.addEventListener('click', () => { createParty(mode, 'w'); openParty(true); }); bk.addEventListener('click', () => { createParty(mode, 'b'); openParty(true); });
+      btns.append(w, bk); body.appendChild(btns);
+      body.appendChild(el('p', 'small', '팀마다 최소 1명씩 있고 모두 레디하면 방장이 경기를 시작할 수 있어요. 경기는 3분이에요.'));
+    } else {
+      body.appendChild(el('p', 'small', `방장 ${party.hostName} · ${party.mode} 대 ${party.mode}`));
+      const cols = el('div', 'fb-cols');
+      for (const [team, title] of [['w', '⚪ 흰 팀'], ['b', '⚫ 검정 팀']]) {
+        const col = el('div', 'fb-col fb-col-' + team); col.appendChild(el('b', '', `${title} (${teamCount(party, team)}/${party.mode})`));
+        const ms = Object.entries(party.members).filter(([, m]) => m.team === team).sort((a, z) => a[1].slot - z[1].slot);
+        for (let i = 0; i < party.mode; i++) {
+          const m = ms[i];
+          col.appendChild(el('span', 'fb-slot' + (m ? '' : ' empty'), m ? `${m[1].ready ? '✅' : '👟'} ${m[1].name}${m[0] === party.host ? ' 👑' : ''}` : '빈 자리'));
+        }
+        const mine = inParty() && party.members[net.uid].team === team;
+        if (!mine) { const jb = el('button', 'btn', inParty() ? '이 팀으로 바꾸기' : '이 팀으로 참가'); jb.type = 'button'; jb.disabled = teamCount(party, team) >= party.mode || (inParty() && party.members[net.uid].ready); jb.addEventListener('click', () => joinParty(team)); col.appendChild(jb); }
+        cols.appendChild(col);
+      }
+      body.appendChild(cols);
+      const btns = el('div', 'fb-btns');
+      if (inParty()) {
+        const me = party.members[net.uid];
+        const rd = el('button', 'btn' + (me.ready ? '' : ' btn-gold'), me.ready ? '레디 취소' : '레디!'); rd.type = 'button'; rd.addEventListener('click', () => setReady(!me.ready)); btns.appendChild(rd);
+        if (isPartyHost()) { const st = el('button', 'btn btn-gold', '경기 시작'); st.type = 'button'; st.disabled = !canStart(); st.addEventListener('click', startMatch); btns.appendChild(st); }
+        const lv = el('button', 'btn', isPartyHost() ? '파티 해산' : '파티 나가기'); lv.type = 'button'; lv.addEventListener('click', () => { leaveParty(); openParty(true); }); btns.appendChild(lv);
+      }
+      body.appendChild(btns);
+      body.appendChild(el('p', 'small', inParty() ? (isPartyHost() ? (canStart() ? '모두 준비됐어요! 경기를 시작하세요.' : '팀마다 1명 이상, 모두 레디하면 시작할 수 있어요.') : '레디를 누르면 신발끈을 다 묶고 고개를 들어요. 방장이 시작하면 바로 축구장으로 가요.') : '팀을 고르면 그 팀 벤치에 앉아요.'));
+    }
+    $('modal').hidden = false;
+    if (!refresh) $('modalClose').focus();
+  }
+  const partyOpen = () => !$('modal').hidden && $('modalTitle').textContent === '⚽ 축구 파티';
+
+  // ================= 축구장: 경기 =================
+  // The match host (lowest id among players still on the pitch) moves the ball and keeps score/time;
+  // everyone else draws the ball from the host's updates ('fb' on the match channel) and asks the host to kick.
+  let match = null, ball = null, fbLastSend = 0, fbSyncAt = 0;
+  const KICK_R = 13, KICK_POW = 175, DRIB_R = 6;
+  const matchHost = () => {
+    if (!match) return null;
+    const here = Object.keys(match.teams).filter(id => id === net.uid || net.remotes.has(id)).sort();
+    return here[0] || null;
+  };
+  const amMatchHost = () => !!(match && net.uid && matchHost() === net.uid);
+  const teamOf = id => match && match.teams[id];
+  function formation(team, idx) {
+    // own half, first player near the centre circle
+    const side = team === 'w' ? -1 : 1, spots2 = [[30, 0], [58, -42], [58, 42], [92, 0], [40, -72]], [dx, dy] = spots2[idx % spots2.length];
+    return { x: FIELD.w / 2 + side * dx, y: (FIELD.y0 + FIELD.y1) / 2 + dy, dir: team === 'w' ? 'right' : 'left' };
+  }
+  function myIndex() { const ids = Object.keys(match.teams).filter(id => match.teams[id] === teamOf(net.uid)).sort(); return Math.max(0, ids.indexOf(net.uid)); }
+  function toKickoffSpot() {
+    if (!match) return;
+    const f = formation(teamOf(net.uid), myIndex());
+    player.x = clamp(f.x, 20, 300); player.y = f.y; player.dir = f.dir; player.path = []; player.goal = null;
+  }
+  function enterMatch(mt) {
+    match = Object.assign({}, mt, { score: { w: 0, b: 0 }, rem: mt.dur || 180, phase: 'kickoff', phaseAt: performance.now(), startedAt: performance.now(), final: null });
+    ball = { x: FIELD.w / 2, y: (FIELD.y0 + FIELD.y1) / 2, vx: 0, vy: 0, tx: null, ty: null };
+    player.tie = 0;
+    goScene('soccer', teamOf(net.uid) || 'w');
+  }
+  function onSoccerEnter() {
+    if (!match) { setTimeout(() => goScene('f1r1', 'field'), 50); return; }
+    toKickoffSpot();
+    log('', `⚽ 킥오프! ${match.mode} 대 ${match.mode}, 3분 경기예요. 공 가까이에서 Space(또는 ⚽ 버튼)로 차요.`, 'sys game');
+    match.phase = 'kickoff'; match.phaseAt = performance.now();
+    sfx('whistle');
+  }
+  function leaveMatch(ask) {
+    if (!match) { goScene('f1r1', 'field'); return; }
+    if (ask && !match.final) {
+      const body = $('modalBody'); body.innerHTML = '';
+      $('modalTitle').textContent = '경기에서 나가기';
+      body.appendChild(el('p', '', '경기 중이에요. 락커룸으로 돌아갈까요? 내 팀은 한 명 적게 뛰게 돼요.'));
+      const row = el('div', 'btns'), y = el('button', 'btn btn-gold', '나가기'), n = el('button', 'btn', '계속 뛰기'); y.type = n.type = 'button';
+      y.addEventListener('click', () => { closeModal(); match = null; ball = null; goScene('f1r1', 'field'); }); n.addEventListener('click', closeModal);
+      row.append(y, n); body.appendChild(row); $('modal').hidden = false; return;
+    }
+    match = null; ball = null; goScene('f1r1', 'field');
+  }
+  function fbSend(p) { netSend('fb', Object.assign({ from: net.uid }, p)); }
+  function kick() {
+    if (!match || !ball || match.final) return;
+    const dx0 = ball.x - player.x, dy0 = ball.y - (player.y - 2), d = Math.hypot(dx0, dy0);
+    let ux, uy;
+    if (keys.size && (player.moving)) { const kx = (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0), ky = (keys.has('arrowdown') || keys.has('s') ? 1 : 0) - (keys.has('arrowup') || keys.has('w') ? 1 : 0), kl = Math.hypot(kx, ky); if (kl) { ux = kx / kl; uy = ky / kl; } }
+    if (ux == null) { if (d > 1) { ux = dx0 / d; uy = dy0 / d; } else { const f = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[player.dir]; ux = f[0]; uy = f[1]; } }
+    player.action = 'jump'; player.actionT0 = performance.now(); player.actionUntil = player.actionT0 + 250;
+    if (d > KICK_R) { sfx('whoosh', 0.5); return; }
+    sfx('kick');
+    applyKick(ux, uy, KICK_POW);   // predict locally, the host has the final say
+    if (!amMatchHost()) fbSend({ t: 'kick', ux, uy, pw: KICK_POW, px: player.x, py: player.y });
+  }
+  function applyKick(ux, uy, pw) { if (!ball) return; ball.vx = ux * pw; ball.vy = uy * pw; ball.tx = null; }
+  // ---- host simulation ----
+  function hostStep(dt, now) {
+    const m = match, bl = ball;
+    if (m.final) return;
+    if (m.phase === 'goal') { if (now - m.phaseAt > 2600) { m.phase = 'kickoff'; m.phaseAt = now; bl.x = FIELD.w / 2; bl.y = (FIELD.y0 + FIELD.y1) / 2; bl.vx = bl.vy = 0; fbSend({ t: 'reset' }); toKickoffSpot(); } }
+    if (m.phase === 'kickoff' && now - m.phaseAt > 1200) m.phase = 'play';
+    if (m.phase === 'play') {
+      m.rem = Math.max(0, m.rem - dt);
+      // dribbling: anyone who runs into the ball pushes it
+      for (const c of chars) {
+        if (!teamOf(c.isPlayer ? net.uid : c.id)) continue;
+        const dx = bl.x - c.x, dy = bl.y - (c.y - 1), d = Math.hypot(dx, dy);
+        if (d < DRIB_R && d > 0.01) { const sp = Math.max(Math.hypot(bl.vx, bl.vy), 62); bl.vx = dx / d * sp; bl.vy = dy / d * sp; bl.x = c.x + dx / d * DRIB_R; bl.y = c.y - 1 + dy / d * DRIB_R; }
+      }
+      bl.x += bl.vx * dt; bl.y += bl.vy * dt;
+      const fr = Math.exp(-1.5 * dt); bl.vx *= fr; bl.vy *= fr; if (Math.hypot(bl.vx, bl.vy) < 3) bl.vx = bl.vy = 0;
+      const inMouth = bl.y > FIELD.gy0 + 2 && bl.y < FIELD.gy1 - 2;
+      if (bl.x < FIELD.x0 + 2) { if (inMouth) return goal('b'); bl.x = FIELD.x0 + 2; bl.vx = Math.abs(bl.vx) * 0.6; }
+      if (bl.x > FIELD.x1 - 2) { if (inMouth) return goal('w'); bl.x = FIELD.x1 - 2; bl.vx = -Math.abs(bl.vx) * 0.6; }
+      if (bl.y < FIELD.y0 + 2) { bl.y = FIELD.y0 + 2; bl.vy = Math.abs(bl.vy) * 0.6; }
+      if (bl.y > FIELD.y1 - 2) { bl.y = FIELD.y1 - 2; bl.vy = -Math.abs(bl.vy) * 0.6; }
+      if (m.rem <= 0) return endMatch('time');
+    }
+    if (now - fbLastSend > 90) { fbLastSend = now; fbSend({ t: 'ball', x: +bl.x.toFixed(1), y: +bl.y.toFixed(1), vx: +bl.vx.toFixed(1), vy: +bl.vy.toFixed(1), sw: m.score.w, sb: m.score.b, rem: Math.ceil(m.rem), ph: m.phase }); }
+  }
+  function goal(team) {
+    const m = match; m.score[team]++; m.phase = 'goal'; m.phaseAt = performance.now(); m.lastGoal = team;
+    ball.vx = ball.vy = 0;
+    fbSend({ t: 'goal', team, sw: m.score.w, sb: m.score.b });
+    sfx('goal');
+  }
+  function endMatch(why) {
+    const m = match; if (!m || m.final) return;
+    m.final = { sw: m.score.w, sb: m.score.b, why, at: performance.now() };
+    fbSend({ t: 'end', sw: m.score.w, sb: m.score.b, why });
+    finishMatchUI();
+  }
+  function finishMatchUI() {
+    const m = match; sfx('whistle');
+    const { sw, sb } = m.final, mine = teamOf(net.uid);
+    const res = sw === sb ? '무승부' : (sw > sb ? 'w' : 'b') === mine ? '승리! 🎉' : '패배 😢';
+    log('', `🏁 경기 끝! ⚪ 흰 팀 ${sw} : ${sb} 검정 팀 ⚫ · ${res}`, 'sys game');
+    setTimeout(() => { if (match === m) { match = null; ball = null; if (sceneId === 'soccer') goScene('f1r1', 'field'); } }, 6000);
+  }
+  function onFb(p) {
+    if (!p || !match || sceneId !== 'soccer' || p.from === net.uid) return;
+    const now = performance.now();
+    if (p.t === 'kick') {
+      if (!amMatchHost() || !teamOf(p.from) || match.phase === 'goal' || match.final) return;
+      const d = Math.hypot(ball.x - p.px, ball.y - (p.py - 2));
+      if (d <= KICK_R + 8) { const l = Math.hypot(p.ux, p.uy) || 1; applyKick(p.ux / l, p.uy / l, clamp(+p.pw || KICK_POW, 0, 220)); if (match.phase === 'kickoff') match.phase = 'play'; }
+      return;
+    }
+    if (amMatchHost()) return;   // only follow the host
+    if (p.t === 'ball') {
+      fbSyncAt = now; ball.tx = p.x; ball.ty = p.y; ball.vx = p.vx; ball.vy = p.vy;
+      match.score.w = p.sw; match.score.b = p.sb; match.rem = p.rem; if (p.ph && match.phase !== 'goal') match.phase = p.ph;
+    } else if (p.t === 'goal') { match.score.w = p.sw; match.score.b = p.sb; match.phase = 'goal'; match.phaseAt = now; match.lastGoal = p.team; sfx('goal'); }
+    else if (p.t === 'reset') { match.phase = 'kickoff'; match.phaseAt = now; ball.x = FIELD.w / 2; ball.y = (FIELD.y0 + FIELD.y1) / 2; ball.vx = ball.vy = 0; ball.tx = null; toKickoffSpot(); }
+    else if (p.t === 'end') { match.score.w = p.sw; match.score.b = p.sb; if (!match.final) { match.final = { sw: p.sw, sb: p.sb, why: p.why, at: now }; finishMatchUI(); } }
+  }
+  function soccerUpdate(dt, now) {
+    if (sceneId !== 'soccer' || !match || !ball) return;
+    if (amMatchHost()) hostStep(dt, now);
+    else {
+      // follow the host's ball smoothly, moving it on with its speed between updates
+      ball.x += ball.vx * dt; ball.y += ball.vy * dt; const fr = Math.exp(-1.5 * dt); ball.vx *= fr; ball.vy *= fr;
+      if (ball.tx != null) { ball.x += (ball.tx + ball.vx * 0.05 - ball.x) * Math.min(1, dt * 10); ball.y += (ball.ty + ball.vy * 0.05 - ball.y) * Math.min(1, dt * 10); ball.tx += ball.vx * dt; ball.ty += ball.vy * dt; }
+      if (match.phase === 'play' && !match.final) match.rem = Math.max(0, match.rem - dt);
+    }
+    // a team with nobody left: the host ends the game (after a short grace at the start)
+    if (LIVE && amMatchHost() && !match.final && now - match.startedAt > 8000) {
+      const here = Object.keys(match.teams).filter(id => id === net.uid || net.remotes.has(id));
+      const w = here.filter(id => match.teams[id] === 'w').length, bk = here.filter(id => match.teams[id] === 'b').length;
+      if (!w || !bk) endMatch('left');
+    }
+  }
+  function drawBall(now) {
+    if (!ball) return;
+    const x = Math.round(ball.x), y = Math.round(ball.y), sp = Math.hypot(ball.vx, ball.vy), spin = Math.floor(now / Math.max(40, 400 - sp * 2)) % 2;
+    b.fillStyle = 'rgba(20,40,20,.3)'; b.fillRect(x - 2, y + 1, 5, 2);
+    pixCircle(b, x, y - 1, 3, '#2b2233'); pixCircle(b, x, y - 1, 2, '#f4f1ea'); P(b, x - (spin ? 1 : 0), y - (spin ? 2 : 1), 1, 1, '#2b2233');
+  }
+  function drawSoccerHud(ctx, fs, fam) {
+    if (!match) return;
+    const m = match, t = Math.max(0, Math.ceil(m.rem)), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
+    const txt = `⚪ ${m.score.w}  :  ${m.score.b} ⚫   ${mm}:${ss}`;
+    ctx.font = `800 ${fs * 1.15}px ${fam}`;
+    const tw = ctx.measureText(txt).width + 20, th = fs * 2;
+    ctx.fillStyle = 'rgba(37,28,44,.85)'; rrect(ctx, cw / 2 - tw / 2, 8, tw, th, 8); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.fillText(txt, cw / 2, 8 + th / 2 + 1);
+    const now = performance.now();
+    if (m.phase === 'goal' && now - m.phaseAt < 2500) {
+      const k = (now - m.phaseAt) / 2500;
+      ctx.font = `900 ${fs * 3}px ${fam}`; ctx.lineWidth = 6; ctx.strokeStyle = '#251c2c'; ctx.fillStyle = '#ffd65a';
+      const y = ch * 0.42 - Math.sin(k * Math.PI) * 6;
+      ctx.strokeText('GOAL!', cw / 2, y); ctx.fillText('GOAL!', cw / 2, y);
+      ctx.font = `800 ${fs * 1.2}px ${fam}`; ctx.lineWidth = 4; const s2 = m.lastGoal === 'w' ? '⚪ 흰 팀 득점!' : '⚫ 검정 팀 득점!';
+      ctx.strokeText(s2, cw / 2, y + fs * 2.4); ctx.fillStyle = '#ffffff'; ctx.fillText(s2, cw / 2, y + fs * 2.4);
+    }
+    if (m.phase === 'kickoff' && !m.final && now - m.phaseAt < 1400) { ctx.font = `800 ${fs * 1.6}px ${fam}`; ctx.lineWidth = 5; ctx.strokeStyle = '#251c2c'; ctx.fillStyle = '#ffffff'; ctx.strokeText('킥오프!', cw / 2, ch * 0.3); ctx.fillText('킥오프!', cw / 2, ch * 0.3); }
+    if (m.final) {
+      const { sw, sb } = m.final, mine = teamOf(net.uid), res = sw === sb ? '무승부!' : (sw > sb ? 'w' : 'b') === mine ? '승리! 🎉' : '패배…';
+      ctx.fillStyle = 'rgba(20,16,28,.55)'; ctx.fillRect(0, 0, cw, ch);
+      ctx.font = `900 ${fs * 2.6}px ${fam}`; ctx.lineWidth = 6; ctx.strokeStyle = '#251c2c'; ctx.fillStyle = '#ffd65a'; ctx.strokeText(res, cw / 2, ch * 0.4); ctx.fillText(res, cw / 2, ch * 0.4);
+      ctx.font = `800 ${fs * 1.3}px ${fam}`; ctx.fillStyle = '#ffffff'; ctx.fillText(`⚪ ${sw} : ${sb} ⚫`, cw / 2, ch * 0.4 + fs * 2.6);
+      ctx.font = `600 ${fs}px ${fam}`; ctx.fillText('잠시 후 락커룸으로 돌아가요', cw / 2, ch * 0.4 + fs * 4.4);
+    }
+  }
+  // team kit on the pitch: white or black shirts and shorts
+  const KIT = { w: { top: 'tee', topColor: '#f3f0e9', bottom: 'shorts', bottomColor: '#f3f0e9' }, b: { top: 'tee', topColor: '#26242b', bottom: 'shorts', bottomColor: '#26242b' } };
+  function kitLook(c) { if (sceneId !== 'soccer' || !match) return c.look; const t = teamOf(c.isPlayer ? net.uid : c.id); return t ? Object.assign({}, c.look, KIT[t]) : c.look; }
+
   // ================= moving between scenes (본당 <-> 복도 <-> ROOM 1-4) =================
   let switching = false;
   function goScene(id, spawnKey) {
@@ -1855,6 +2528,8 @@
     if (gmActive() && !gm.practice) { toast('오목 중에는 방을 나갈 수 없어요. 게임을 끝내거나 기권해 주세요.'); gmOpen(); return; }
     switching = true;
     if (sceneId === GM_ROOM) gmLeaveRoom();
+    if (sceneId === 'f1r1' && party) leaveParty(true);
+    player.tie = 0;
     const fade = $('fade'); fade.classList.add('on');
     setTimeout(() => {
       standUp(player);
@@ -1866,10 +2541,13 @@
       const sp = scene.spawns[spawnKey] || Object.values(scene.spawns)[0];
       player.x = sp[0]; player.y = sp[1]; player.dir = sp[2];
       camInit = false; resize();
-      $('sceneTag').textContent = scene.name; gmLabel();
+      $('sceneTag').textContent = scene.name; gmLabel(); fbLabel();
       logEl.innerHTML = '';
-      log('', id === 'hall' ? '복도로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
+      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
+      if (id === 'roof') loadWeather();
+      if (id === 'soccer') onSoccerEnter();
+      if (id === 'f1r1') { party = null; setTimeout(() => { if (sceneId === 'f1r1') ptySend({ t: 'hello' }); }, 1500); }
       renderPeople();
       requestAnimationFrame(() => { fade.classList.remove('on'); switching = false; });
     }, 280);
@@ -1940,20 +2618,30 @@
       const r = Math.floor(i / GN), q = i % GN; let nearStone = false;
       for (let dr = -2; dr <= 2 && !nearStone; dr++) for (let dq = -2; dq <= 2; dq++) { const rr = r + dr, qq = q + dq; if (rr >= 0 && rr < GN && qq >= 0 && qq < GN && b[rr * GN + qq]) { nearStone = true; break; } }
       if (!nearStone) continue;
-      const s = gmScoreAt(b, i, me) * 1.1 + gmScoreAt(b, i, you) + Math.random() * 5;
+      const atk = gmScoreAt(b, i, me), def = gmScoreAt(b, i, you), lv = gm.level || 'mid';
+      let s;
+      // 상: plays for the win and blocks everything. 중: blocks real threats, misses some ideas. 하: often misses even open threes
+      if (lv === 'hard') s = atk * 1.1 + def + Math.random() * 5;
+      else if (lv === 'mid') s = atk + def * 0.8 + Math.random() * 450;
+      else s = (atk >= 1e6 && Math.random() < 0.5 ? 1e6 : atk * 0.6) + def * 0.4 + Math.random() * 3200;
       if (s > bestS) { bestS = s; best = i; }
     }
     return best;
   }
 
   // ---- starting / finishing ----
-  function gmStart(id, oppId, oppName, color, practice) {
-    gm = { id, oppId, oppName: gmClip(oppName), me: color, b: new Uint8Array(GN * GN), ms: [], over: false, win: null, how: '', winner: 0, practice: practice || null };
+  const GM_TIMES = [10, 20, 30, 0];   // seconds per move; 0 = no limit
+  const LV_NAME = { easy: '하', mid: '중', hard: '상' };
+  let gmPrefTl = +(store.get('onl-gm-tl') || 20); if (!GM_TIMES.includes(gmPrefTl)) gmPrefTl = 20;
+  let gmPrefLv = store.get('onl-gm-lv') || 'mid'; if (!LV_NAME[gmPrefLv]) gmPrefLv = 'mid';
+  function gmStart(id, oppId, oppName, color, practice, tl, level) {
+    tl = GM_TIMES.includes(+tl) ? +tl : 0;
+    gm = { id, oppId, oppName: gmClip(oppName), me: color, b: new Uint8Array(GN * GN), ms: [], over: false, win: null, how: '', winner: 0, practice: practice || null, tl, level: level || 'mid', turnT0: performance.now() };
     gmGhost = -1; gmHover = -1;
     closeModal(); gmHideInvite();
     net.dirty = true; net.lastTrack = 0;
     gmOpen();
-    if (!practice) log('', `⚫ ${gm.oppName}님과 오목을 시작했어요. ${color === 1 ? '내가 흑이라 먼저 둬요.' : '상대가 흑이라 먼저 둬요.'}`, 'sys game');
+    if (!practice) log('', `⚫ ${gm.oppName}님과 오목을 시작했어요. ${color === 1 ? '내가 흑이라 먼저 둬요.' : '상대가 흑이라 먼저 둬요.'}${tl ? ` 한 수 ${tl}초!` : ''}`, 'sys game');
     if (practice === 'ai' && color === 2) setTimeout(gmAiTurn, 500);
   }
   function gmFinish(winner, how) {
@@ -1961,7 +2649,7 @@
     gm.over = true; gm.winner = winner; gm.how = how; gmGhost = -1;
     net.dirty = true; net.lastTrack = 0;
     if (gm.practice) {
-      toast(winner === 0 ? '비겼어요' : gm.practice === 'hot' ? `${winner === 1 ? '흑' : '백'}이 이겼어요!` : winner === gm.me ? '이겼어요! 🎉' : '컴퓨터가 이겼어요');
+      toast(winner === 0 ? '비겼어요' : how === 'timeout' ? '⏰ 시간 초과!' : gm.practice === 'hot' ? `${winner === 1 ? '흑' : '백'}이 이겼어요!` : winner === gm.me ? '이겼어요! 🎉' : '컴퓨터가 이겼어요');
     } else {
       const meName = gmClip(player.name), opp = gm.oppName;
       const iWon = winner === gm.me;
@@ -1977,11 +2665,28 @@
     if (!w) return `🤝 ${a}님과 ${b}님의 오목은 무승부예요`;
     if (how === 'resign') return `🏆 ${w}님이 이겼어요 (${l}님 기권)`;
     if (how === 'left') return `🏆 ${w}님이 이겼어요 (${l}님이 자리를 떠났어요)`;
+    if (how === 'timeout') return `🏆 ${w}님이 이겼어요 (${l}님 시간 초과)`;
     return `🏆 ${w}님이 ${l}님을 이겼어요!`;
   }
+  let gmWarned = false;
+  const gmLeft = () => Math.max(0, Math.ceil((gm.tl * 1000 - (performance.now() - gm.turnT0)) / 1000));
+  // the clock: whoever runs out of time loses. My own client calls my timeout; if the opponent's page is frozen,
+  // I call theirs after a few seconds of grace.
+  setInterval(() => {
+    if (!gmActive() || !gm.tl) return;
+    const el2 = performance.now() - gm.turnT0, lim = gm.tl * 1000;
+    if (!$('gm').hidden) gmRender(); else gmLabel();
+    if (gm.practice === 'hot' || (gm.practice === 'ai' ? gmTurn() === gm.me : gmMyTurn())) {
+      if (!gmWarned && lim - el2 <= 5000 && lim - el2 > 0) { gmWarned = true; sfx('pop', 0.6); }
+      if (el2 >= lim) {
+        if (!gm.practice) gmSend({ t: 'end', id: gm.id, to: gm.oppId, why: 'timeout' });
+        gmFinish(gm.practice === 'hot' ? 3 - gmTurn() : 3 - gm.me, 'timeout');
+      }
+    } else if (!gm.practice && el2 >= lim + 5000) { gmSend({ t: 'end', id: gm.id, to: gm.oppId, why: 'timeout' }); gmFinish(gm.me, 'timeout'); }
+  }, 250);
   function gmPlace(idx) {
     if (!gmActive() || gm.b[idx]) return false;
-    gm.b[idx] = gmTurn(); gm.ms.push(idx);
+    gm.b[idx] = gmTurn(); gm.ms.push(idx); gm.turnT0 = performance.now(); gmWarned = false;
     const line = gmLine(gm.b, idx);
     if (line) { gm.win = line; gmFinish(gm.b[idx], 'five'); }
     else if (gm.ms.length >= GN * GN) gmFinish(0, 'full');
@@ -2032,10 +2737,19 @@
       row.appendChild(b); list.appendChild(row);
     }
     body.appendChild(list);
+    // time per move, chosen before the game (the challenger's choice is used for both players)
+    const chips = (label, opts, cur, onPick) => {
+      const row = el('div', 'gm-opt'); row.appendChild(el('span', 'gm-opt-l', label));
+      for (const [v, txt] of opts) { const c = el('button', 'btn gm-chip', txt); c.type = 'button'; c.setAttribute('aria-pressed', String(v === cur)); c.addEventListener('click', () => { onPick(v); gmLobby(); }); row.appendChild(c); }
+      return row;
+    };
+    body.insertBefore(chips('한 수 시간', GM_TIMES.map(t => [t, t ? `${t}초` : '제한 없음']), gmPrefTl, v => { gmPrefTl = v; store.set('onl-gm-tl', String(v)); }), list);
+    body.appendChild(el('p', 'small', '시간 안에 두지 못하면 그 판은 지게 돼요. 처음이면 20초를 추천해요.'));
     const pr = el('div', 'gm-practice');
-    const ai = el('button', 'btn', '컴퓨터와 연습'); ai.type = 'button'; ai.addEventListener('click', () => gmStart('p', null, '컴퓨터', 1, 'ai'));
-    const hot = el('button', 'btn', '혼자 두 색 두기'); hot.type = 'button'; hot.addEventListener('click', () => gmStart('p', null, '백', 1, 'hot'));
-    pr.append(ai, hot); body.appendChild(pr);
+    pr.appendChild(chips('컴퓨터 난이도', [['easy', '하'], ['mid', '중'], ['hard', '상']], gmPrefLv, v => { gmPrefLv = v; store.set('onl-gm-lv', v); }));
+    const ai = el('button', 'btn', `컴퓨터와 연습 (${LV_NAME[gmPrefLv]})`); ai.type = 'button'; ai.addEventListener('click', () => gmStart('p', null, `컴퓨터(${LV_NAME[gmPrefLv]})`, 1, 'ai', gmPrefTl, gmPrefLv));
+    const hot = el('button', 'btn', '혼자 두 색 두기'); hot.type = 'button'; hot.addEventListener('click', () => gmStart('p', null, '백', 1, 'hot', 0));
+    const prb = el('div', 'gm-practice-btns'); prb.append(ai, hot); pr.appendChild(prb); body.appendChild(pr);
     $('modal').hidden = false; $('modalClose').focus();
   }
   function gmChallenge(to, name) {
@@ -2043,11 +2757,12 @@
     if (gmOut) gmCancelOut(true);
     if (player.dnd) { toast('OFF 모드에서는 신청할 수 없어요. 제목의 OFF를 눌러 ON으로 바꿔 주세요.'); return; }
     const id = gmNewId();
-    gmOut = { id, to, name: gmClip(name), timer: setTimeout(() => { if (gmOut && gmOut.id === id) { gmSend({ t: 'cx', id, to }); gmOut = null; closeModal(); toast(`${gmClip(name)}님이 응답하지 않았어요`); } }, 25000) };
-    gmSend({ t: 'inv', id, to, name: gmClip(player.name) });
+    const tl = gmPrefTl;
+    gmOut = { id, to, tl, name: gmClip(name), timer: setTimeout(() => { if (gmOut && gmOut.id === id) { gmSend({ t: 'cx', id, to }); gmOut = null; closeModal(); toast(`${gmClip(name)}님이 응답하지 않았어요`); } }, 25000) };
+    gmSend({ t: 'inv', id, to, name: gmClip(player.name), tl });
     const body = $('modalBody'); body.innerHTML = '';
     $('modalTitle').textContent = '오목 신청';
-    body.appendChild(el('p', '', `${gmOut.name}님에게 오목을 신청했어요.`));
+    body.appendChild(el('p', '', `${gmOut.name}님에게 오목을 신청했어요. (한 수 ${tl ? tl + '초' : '시간 제한 없음'})`));
     body.appendChild(el('p', 'small gm-wait', '대답을 기다리는 중…'));
     const c = el('button', 'btn', '신청 취소'); c.type = 'button'; c.addEventListener('click', () => { gmCancelOut(); closeModal(); });
     body.appendChild(c);
@@ -2061,8 +2776,9 @@
 
   // ---- incoming invite card ----
   function gmShowInvite(p) {
-    gmIn = { id: p.id, from: p.from, name: gmClip(p.name), until: Date.now() + 20000 };
-    $('gmInvText').textContent = `${gmIn.name}님이 오목 한 판을 신청했어요!`;
+    const tl = GM_TIMES.includes(+p.tl) ? +p.tl : 0;
+    gmIn = { id: p.id, from: p.from, name: gmClip(p.name), until: Date.now() + 20000, tl };
+    $('gmInvText').textContent = `${gmIn.name}님이 오목 한 판을 신청했어요! (한 수 ${tl ? tl + '초' : '시간 제한 없음'})`;
     $('gmInv').hidden = false;
     const tick = () => {
       if (!gmIn) return;
@@ -2075,11 +2791,11 @@
   function gmHideInvite() { clearInterval(gmInvTimer); gmIn = null; $('gmInv').hidden = true; }
   function gmAccept() {
     if (!gmIn) return;
-    const { id, from, name } = gmIn;
+    const { id, from, name, tl } = gmIn;
     if (!net.remotes.has(from)) { gmHideInvite(); toast('상대가 방을 나갔어요'); return; }
     if (gmOut) gmCancelOut(true);
     gmSend({ t: 'ok', id, to: from, name: gmClip(player.name) });
-    gmStart(id, from, name, 2);
+    gmStart(id, from, name, 2, null, tl);
   }
   function gmDecline(why) {
     if (!gmIn) return;
@@ -2104,7 +2820,7 @@
         if (gmActive() || gmIn || player.dnd || (gmOut && gmOut.to !== p.from)) { gmSend({ t: 'no', id: p.id, to: p.from, why: player.dnd ? 'dnd' : 'busy' }); return; }
         if (gmOut && gmOut.to === p.from) {   // both challenged each other at the same moment: just start
           const mine = gmOut; clearTimeout(mine.timer); gmOut = null;
-          if (mine.id < p.id) { gmSend({ t: 'ok', id: p.id, to: p.from, name: gmClip(player.name) }); gmStart(p.id, p.from, fromName(), 2); }
+          if (mine.id < p.id) { gmSend({ t: 'ok', id: p.id, to: p.from, name: gmClip(player.name) }); gmStart(p.id, p.from, fromName(), 2, null, p.tl); }
           else gmOut = mine;   // the other side will accept mine
           return;
         }
@@ -2113,7 +2829,7 @@
         if (gmIn && gmIn.id === p.id) { gmHideInvite(); toast(`${fromName()}님이 신청을 취소했어요`); }
         break;
       case 'ok':
-        if (gmOut && gmOut.id === p.id && !gmActive()) { clearTimeout(gmOut.timer); const n = gmOut.name; gmOut = null; gmStart(p.id, p.from, n, 1); }
+        if (gmOut && gmOut.id === p.id && !gmActive()) { clearTimeout(gmOut.timer); const n = gmOut.name, tl = gmOut.tl; gmOut = null; gmStart(p.id, p.from, n, 1, null, tl); }
         else gmSend({ t: 'end', id: p.id, to: p.from, why: 'cancel' });
         break;
       case 'no':
@@ -2133,7 +2849,7 @@
       case 'end':
         if (!gm || gm.id !== p.id || p.from !== gm.oppId) return;
         if (p.why === 'cancel' && !gm.ms.length) { gm.over = true; gm = null; $('gm').hidden = true; gmLabel(); net.dirty = true; toast('상대가 신청을 취소했어요'); return; }
-        if (gmActive()) gmFinish(gm.me, p.why === 'resign' ? 'resign' : 'left');
+        if (gmActive()) gmFinish(gm.me, p.why === 'resign' ? 'resign' : p.why === 'timeout' ? 'timeout' : 'left');
         break;
     }
   }
@@ -2168,11 +2884,15 @@
     if (gm.over) {
       if (gm.winner === 0) msg = '무승부예요';
       else if (gm.practice === 'hot') msg = `${gm.winner === 1 ? '흑' : '백'} 승리!`;
-      else if (gm.winner === gm.me) msg = gm.how === 'five' ? '🎉 오목 완성! 이겼어요' : gm.how === 'resign' ? '🎉 상대가 기권해서 이겼어요' : '🎉 상대가 떠나서 이겼어요';
-      else msg = gm.practice === 'ai' ? (gm.how === 'five' ? '컴퓨터가 이겼어요' : '기권했어요') : gm.how === 'five' ? `${gm.oppName}님이 이겼어요` : '기권했어요';
+      else if (gm.winner === gm.me) msg = gm.how === 'five' ? '🎉 오목 완성! 이겼어요' : gm.how === 'resign' ? '🎉 상대가 기권해서 이겼어요' : gm.how === 'timeout' ? '🎉 상대가 시간을 넘겨서 이겼어요' : '🎉 상대가 떠나서 이겼어요';
+      else msg = gm.how === 'timeout' ? '⏰ 시간 초과로 졌어요' : gm.practice === 'ai' ? (gm.how === 'five' ? '컴퓨터가 이겼어요' : '기권했어요') : gm.how === 'five' ? `${gm.oppName}님이 이겼어요` : '기권했어요';
     } else if (gm.practice === 'hot') msg = `${t === 1 ? '흑' : '백'} 차례예요`;
     else msg = gmMyTurn() ? '내 차례예요' : gm.practice === 'ai' ? '컴퓨터가 생각 중…' : `${gm.oppName}님 차례예요`;
+    if (gm.tl && !gm.over) { const left = gmLeft(); msg += ` · ${left}초`; }
     $('gmTurn').textContent = msg;
+    $('gmTurn').classList.toggle('hurry', !!(gm.tl && !gm.over && gmLeft() <= 5));
+    const bar = $('gmTime'); bar.hidden = !gm.tl || gm.over;
+    if (gm.tl) bar.firstElementChild.style.width = `${Math.max(0, 100 * (gm.tl * 1000 - (performance.now() - gm.turnT0)) / (gm.tl * 1000))}%`;
     $('gmTurn').className = 'gm-turn' + (gmMyTurn() ? ' mine' : '') + (gm.over ? ' done' : '');
     $('gmTitle').textContent = gm.practice ? '오목 연습' : '오목 한 판';
     $('gmResign').hidden = gm.over; $('gmClose').hidden = !gm.over;
@@ -2245,9 +2965,9 @@
   $('gmClose').addEventListener('click', gmCloseBoard);
   $('gmAgain').addEventListener('click', () => {
     if (!gm) return;
-    const { practice, oppId, oppName, me } = gm;
+    const { practice, oppId, oppName, me, tl, level } = gm;
     gm = null; $('gm').hidden = true;
-    if (practice) gmStart('p', null, oppName, practice === 'ai' ? 3 - me : 1, practice);
+    if (practice) gmStart('p', null, oppName, practice === 'ai' ? 3 - me : 1, practice, tl, level);
     else gmChallenge(oppId, oppName);
   });
   $('gm').addEventListener('pointerdown', e => { if (e.target === $('gm')) { if (gm && gm.over) gmCloseBoard(); else { $('gm').hidden = true; gmLabel(); } } });
@@ -2264,8 +2984,16 @@
     { id: 1, body: '요즘 마음이 많이 지쳐 있어요. 다시 기쁨을 찾을 수 있도록요.', created_at: Date.now() - 3600e3 * 70, amens: 9, amened: true, mine: false }
   ];
   let prayers = [], prayerSample = false;
+  // Prayers have no author on the server. This device remembers the ids it posted (to mark "mine") and when it posted
+  // (to warn after 5 in a day). Both are only hints kept in localStorage: editing and deleting always need the password.
+  const myPrayerIds = () => { const a = loadJSON('onl-my-prayers', []); return Array.isArray(a) ? a : []; };
+  const prayerStamps = () => { const a = loadJSON('onl-pr-day', []), t = Date.now() - 864e5; return (Array.isArray(a) ? a : []).filter(x => x > t); };
   async function loadPrayers() {
-    if (LIVE) { const { data, error } = await sb.rpc('list_prayers'); prayers = error || !data ? [] : data; prayerSample = false; return !error; }
+    if (LIVE) {
+      const { data, error } = await sb.rpc('list_prayers'); prayers = error || !data ? [] : data; prayerSample = false;
+      const mine = myPrayerIds(); prayers.forEach(p => { p.mine = p.mine === true || mine.includes(p.id); });
+      return !error;
+    }
     const saved = loadJSON('onl-prayers', null);
     if (Array.isArray(saved)) { prayers = saved; prayerSample = false; } else { prayers = DEMO_PRAYERS.map(x => Object.assign({}, x)); prayerSample = true; }
     return true;
@@ -2277,8 +3005,10 @@
     const form = el('form', 'pr-form'); form.noValidate = true;
     const ta = el('textarea'); ta.id = 'prText'; ta.rows = 3; ta.maxLength = 300; ta.placeholder = '나누고 싶은 기도제목을 적어 주세요. 이름은 남지 않아요.'; ta.setAttribute('aria-label', '기도제목');
     const row = el('div', 'pr-row');
-    const note = el('span', 'small', '누가 썼는지 아무도 볼 수 없어요. 관리자도요.');
+    const note = el('span', 'small', '글에는 이름이 남지 않아요. 수정·삭제할 때 쓸 비밀번호를 정해 주세요.');
     const sub = el('button', 'btn btn-gold', '익명으로 올리기'); sub.type = 'submit';
+    const pwIn = el('input'); pwIn.type = 'password'; pwIn.id = 'prPw'; pwIn.autocomplete = 'new-password'; pwIn.placeholder = '이 글의 비밀번호'; pwIn.setAttribute('aria-label', '이 글의 비밀번호');
+    if (LIVE && !BP.legacy) row.append(pwIn);   // BACKPORT: the old database has no prayer passwords
     row.append(note, sub); form.append(ta, row);
     const list = el('div', 'pr-list'); list.appendChild(el('p', 'small', '불러오는 중…'));
     body.append(form, list);
@@ -2287,10 +3017,16 @@
       e.preventDefault();
       const text = ta.value.trim();
       if (text.length < 2) { toast('기도제목을 조금 더 적어 주세요'); return; }
+      if (LIVE && !BP.legacy && !pwIn.value) { toast('이 글의 비밀번호를 정해 주세요'); pwIn.focus(); return; }
+      // a nudge only: this count lives on the device, so it is not a limit
+      if (LIVE && prayerStamps().length >= 5 && !confirm('오늘 이 기기에서 이미 기도제목을 5개 올렸어요. 그래도 올릴까요?')) return;
       sub.disabled = true;
       if (LIVE) {
-        const { error } = await sb.rpc('add_prayer', { body: text });
+        const { data, error } = await sb.rpc('add_prayer', { body: text, pw: pwIn.value });
         if (error) { toast(/limit/i.test(error.message) ? '하루에 5개까지 올릴 수 있어요' : '올리지 못했어요. 잠시 후 다시 해 주세요'); sub.disabled = false; return; }
+        store.set('onl-pr-day', JSON.stringify([...prayerStamps(), Date.now()]));
+        if (typeof data === 'number') store.set('onl-my-prayers', JSON.stringify([...myPrayerIds(), data].slice(-200)));
+        pwIn.value = '';
         lobbySend('prayer', {});
       } else {
         if (prayerSample) prayers = [];
@@ -2317,13 +3053,46 @@
         renderPrayers(list);
       });
       meta.appendChild(amen);
+      const deleteIt = async pw => {
+        if (LIVE) {
+          const { data, error } = await sb.rpc('delete_prayer', { pid: pr.id, pw });
+          if (error || data === false) { toast(error ? '삭제하지 못했어요' : '비밀번호가 맞지 않아요'); return; }
+          await loadPrayers();
+        } else { prayers = prayers.filter(x => x !== pr); saveDemoPrayers(); }
+        renderPrayers(list);
+      };
+      if (LIVE && !BP.legacy) {   // BACKPORT: only the new database checks a password per prayer
+        // any device can manage a prayer with its password; "mine" only opens the panel at first sight
+        const panel = el('div', 'pr-row'); panel.hidden = !pr.mine;
+        const pw = el('input'); pw.type = 'password'; pw.autocomplete = 'off'; pw.placeholder = isAdmin ? '비밀번호 (관리자는 삭제에 불필요)' : '이 글의 비밀번호'; pw.setAttribute('aria-label', '이 글의 비밀번호');
+        const edit = el('button', 'btn', '수정'); edit.type = 'button';
+        const del = el('button', 'btn pr-del', '삭제'); del.type = 'button';
+        edit.addEventListener('click', async () => {
+          if (!pw.value) { toast('비밀번호를 입력해 주세요'); return; }
+          const nb = prompt('새 내용', pr.body);
+          if (nb === null || nb.trim().length < 2) return;
+          const { data, error } = await sb.rpc('update_prayer', { pid: pr.id, pw: pw.value, new_body: nb.trim().slice(0, 300) });
+          if (error || data === false) { toast(error ? '수정하지 못했어요' : '비밀번호가 맞지 않아요'); return; }
+          toast('수정했어요'); await loadPrayers(); renderPrayers(list);
+        });
+        del.addEventListener('click', async () => {
+          if (!pw.value && !isAdmin) { toast('비밀번호를 입력해 주세요'); return; }
+          if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = '정말 삭제'; return; }
+          await deleteIt(pw.value);
+        });
+        panel.append(pw, edit, del);
+        const manage = el('button', 'btn', '관리'); manage.type = 'button';
+        manage.addEventListener('click', () => { panel.hidden = !panel.hidden; if (!panel.hidden) pw.focus(); });
+        meta.appendChild(manage);
+        card.append(meta, panel);
+        list.appendChild(card);
+        return;
+      }
       if (pr.mine || isAdmin) {
         const del = el('button', 'btn pr-del', '삭제'); del.type = 'button';
         del.addEventListener('click', async () => {
           if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = '정말 삭제'; return; }
-          if (LIVE) { const { error } = await sb.rpc('delete_prayer', { pid: pr.id }); if (error) { toast('삭제하지 못했어요'); return; } await loadPrayers(); }
-          else { prayers = prayers.filter(x => x !== pr); saveDemoPrayers(); }
-          renderPrayers(list);
+          await deleteIt();
         });
         meta.appendChild(del);
       }
@@ -2382,7 +3151,8 @@
       if (authTab === 'signup') {
         const code = $('authCode').value.trim();
         const chk = await sb.rpc('check_invite', { code });
-        if (chk.error || chk.data !== true) throw new Error('초대 코드가 맞지 않아요.');
+        if (chk.error) throw new Error('확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        if (chk.data !== 'ok') throw new Error(inviteMsg(chk.data));
         const r = await sb.auth.signUp({ email, password: pw });
         if (r.error) throw new Error(/registered|exists/i.test(r.error.message) ? '이미 가입된 이메일이에요. 로그인해 주세요.' : '가입하지 못했어요. 잠시 후 다시 시도해 주세요.');
         if (!r.data.session) throw new Error('가입은 됐지만 바로 로그인되지 않았어요. 관리자에게 Supabase의 "Confirm email"을 꺼 달라고 해 주세요.');
@@ -2396,6 +3166,12 @@
     } catch (ex) { err.textContent = ex.message; }
     btn.disabled = false; btn.textContent = label;
   });
+  // status from check_invite / join_lounge: 'wrong' | 'closed' | 'banned:<seconds>'
+  function inviteMsg(st) {
+    const ban = /^banned:(\d+)/.exec(st || '');
+    if (ban) return `시도가 너무 많았어요. ${Math.ceil(ban[1] / 60)}분 뒤에 다시 해 주세요.`;
+    return st === 'closed' ? '지금은 새 가입을 받지 않아요. 관리자에게 문의해 주세요.' : '초대 코드가 맞지 않아요.';
+  }
   async function loadMe(user) {
     const { data, error } = await sb.from('profiles').select('name, look').eq('id', user.id).maybeSingle();
     net.uid = user.id;
@@ -2420,7 +3196,8 @@
     openCreator('new', async () => {
       const code = pendingCode || $('crCode').value.trim();
       const j = await sb.rpc('join_lounge', { code, display_name: player.name, look: player.look });
-      if (j.error) { $('crErr').textContent = /invite/i.test(j.error.message) ? '초대 코드가 맞지 않아요.' : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; return false; }
+      if (j.error) { $('crErr').textContent = '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'; return false; }
+      if (j.data !== 'ok') { $('crErr').textContent = inviteMsg(j.data); return false; }
       await enterLounge();
       return true;
     });
@@ -2443,7 +3220,7 @@
   }
   let demoStarted = false;
   function startDemo() {
-    if (demoStarted) return; demoStarted = true; inLounge = true;
+    if (demoStarted) return; demoStarted = true; inLounge = true; net.uid = net.uid || 'me';
     renderPeople();
     log('', '체험판이에요. 실제 사이트에서는 접속한 사람들이 여기 함께 보여요. 저장은 이 기기에만 돼요.', 'sys');
   }
@@ -2456,6 +3233,6 @@
   if (LIVE) bootLive();
   else if (store.get('onl-demo-auth')) afterLogin(null);
   else showAuth('');
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), doPunch, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk] };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx, vy }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk] };
   requestAnimationFrame(loop);
 })();
