@@ -1,5 +1,54 @@
 # Changelog
 
+## Realtime without presence, Catan and drawing rooms
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `index.html`, `setup.sql`, `README.md`. Files added: `games.js`, `catan-rules.js`, `LICENSE-catan.md`, `update-rooms.sql`.
+
+### Why people were thrown out of rooms
+
+- The Supabase Realtime server allows one client 5 presence changes per 30 seconds per channel. Over that limit it closes the channel for that client (`ClientPresenceRateLimitReached`, see `presence_handler.ex` and `realtime_channel.ex` in supabase/realtime).
+- The old client called `track()` on every state change. In the locker room each party update (every 3 seconds) made every member call `track()`. Members hit the limit seconds after joining a party. Their channel closed, so the host saw them vanish while their own screen stayed in the room.
+
+### What changed in `app.js`
+
+- No presence at all. `track()` and `presenceState()` are gone.
+- Room channel: `st` broadcast carries the state. Every client sends a full `st` (name and look included) every 8 seconds as a heartbeat. `hello` on join asks the others for a full `st`. `bye` on leave. A remote is removed on `bye` or after 32 seconds of silence.
+- Lobby channel (people counter, one session per account): `here` every 20 seconds and on room change, `who` on join, `gone` on leave. An entry expires after 70 seconds.
+- A channel that reports `CLOSED`, `CHANNEL_ERROR` or `TIMED_OUT` is joined again. Remotes stay on screen during the rejoin, so a gomoku game, a soccer party or a table game is not cancelled by a short drop. A watchdog recreates a channel that stays down.
+- `chSend` sends only on a joined channel. supabase-js would otherwise fall back to HTTP.
+- Soccer: ball packets every 120 ms (was 90), keyboard movement packets every 300 ms on the pitch.
+- New scenes `f1r2` (island) and `f1r3` (graffiti alley). `window.ONL` is the small API that `games.js` uses.
+
+### `games.js`
+
+- One table per room. Event name `tg` on the room channel. The table host is the referee. Players send intents; the host validates and broadcasts the state.
+- Host loss: the first member still in the room takes over with its copy of the state. If two clients both claim the host role, the one with the higher game sequence keeps it.
+- Catan: rules from `catan-rules.js` (`server/gameLogic.js` of Viral-Doshi/catan, MIT, unchanged except for the module wrapper). The full game object is broadcast so that any member can take over as host. Hidden cards are hidden by the UI only. The upstream rules do not check turn order for placement; `cDo2` in `games.js` does. A player who is not in the room is auto-played after 6 seconds. 5 or 6 players use the extended board without the special build phase.
+- Drawing quiz: the host holds the word. Strokes go from the drawer to everyone in batches every 110 ms. A new host that does not know the word ends the current turn.
+
+### Database
+
+- `messages_before_insert` accepts the scenes `f1r2` and `f1r3`. On a live project run `update-rooms.sql` once (or all of `setup.sql`).
+
+### How it was tested
+
+- Mock realtime in a browser (Playwright), with the presence limit modelled. Old `app.js`: party members' channels are closed. New `app.js`: zero presence calls.
+- Channel killed by the server, silent client, room change, duplicate session, soccer party and match, gomoku.
+- Catan: 3, 5 and 6 robot players to the end of a game, host leaving, a silent player for 50 seconds and its return.
+- Drawing quiz: 3 players, pick, draw, wrong and right guesses, scoring, drawer leaving.
+- `setup.sql` and `update-rooms.sql` each run twice on a scratch PostgreSQL 16.
+
+### Not tested
+
+- No run against a real Supabase project. Message rate limits of the plan were read from the server source, not measured.
+
+### Known limits
+
+- Broadcast senders are still not verified by the server (same as before). A modified client can read the other players' Catan cards from the state or fake a move.
+- Clients that still run the old `app.js` do not send heartbeats. A new client drops them after 32 seconds without movement. A page reload fixes it.
+
 ## Security hardening: invite gate, anonymous prayers, trusted chat sender
 
 Audience: the developer and the developer's AI agent. This entry lists what changed, why, how, how it was tested, and what to know before you touch this code again.

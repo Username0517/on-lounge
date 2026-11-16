@@ -189,7 +189,7 @@
   const ROOM_INFO = {
     room1: { n: 'ROOM 1', sub: '회의실' }, room2: { n: 'ROOM 2', sub: '탕비실' },
     room3: { n: 'ROOM 3', sub: '세미나실' }, room4: { n: 'ROOM 4', sub: '라운지' },
-    f1r1: { n: 'ROOM 1', sub: '락커룸' }, f1r2: { n: 'ROOM 2', sub: '준비 중' }, f1r3: { n: 'ROOM 3', sub: '준비 중' }, f1r4: { n: 'ROOM 4', sub: '준비 중' }
+    f1r1: { n: 'ROOM 1', sub: '락커룸' }, f1r2: { n: 'ROOM 2', sub: '카탄 섬' }, f1r3: { n: 'ROOM 3', sub: '낙서 골목' }, f1r4: { n: 'ROOM 4', sub: '준비 중' }
   };
   const HALL_DOORS = [['room1', 16, 100, false], ['room2', 16, 200, false], ['room3', 144, 100, true], ['room4', 144, 200, true]];
   function bgHall(g, w, h) {
@@ -315,6 +315,7 @@
   const ELEV_SPOT = (w, h) => ({ id: 'elevator', item: null, x: w / 2, y: h - 18, r: 14, ax: w / 2, ay: h - 34, hit: [w / 2 - 18, h - 12, 36, 12], label: '엘리베이터 타기' });
 
   // 1층 복도: same as 2층, glass exit doors on the top wall
+  const F1_OPEN = ['f1r1', 'f1r2', 'f1r3'];
   const HALL1_DOORS = [['f1r1', 16, 100, false], ['f1r2', 16, 200, false], ['f1r3', 144, 100, true], ['f1r4', 144, 200, true]];
   function bgHall1(g, w, h) {
     woodFloor(g, w, h, 40, ['#c4915f', '#bd8a5a', '#c99866'], '#d2a372', '#a87a4f');
@@ -330,8 +331,8 @@
     elevatorBottom(g, w, h);
     for (const [id, x, y, right] of HALL1_DOORS) {
       sideDoor(g, right ? x + 6 : x - 6, y, right);
-      P(g, right ? x - 6 : x + 1, y - 7, 5, 14, id === 'f1r1' ? '#2f8a55' : '#8d8f99');
-      if (id !== 'f1r1') { P(g, right ? x - 10 : x + 4, y - 3, 6, 6, '#ffcc4d'); P(g, right ? x - 9 : x + 5, y - 2, 4, 4, '#251c2c'); P(g, right ? x - 8 : x + 6, y - 1, 2, 2, '#ffcc4d'); }
+      P(g, right ? x - 6 : x + 1, y - 7, 5, 14, id === 'f1r1' ? '#2f8a55' : id === 'f1r2' ? '#4fa6dc' : id === 'f1r3' ? '#ff4f81' : '#8d8f99');
+      if (!F1_OPEN.includes(id)) { P(g, right ? x - 10 : x + 4, y - 3, 6, 6, '#ffcc4d'); P(g, right ? x - 9 : x + 5, y - 2, 4, 4, '#251c2c'); P(g, right ? x - 8 : x + 6, y - 1, 2, 2, '#ffcc4d'); }
     }
   }
   const hall1Items = [
@@ -458,6 +459,182 @@
     } }
   ];
 
+  // ---- ROOM 2 (1층) · 카탄 섬: not a room but a little island by the sea ----
+  const rnd32 = seed => () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const ISLE = [12, 48, 180, 162];   // sand
+  const inIsle = (x, y, grow) => {
+    const [x0, y0, x1, y1] = ISLE, r = 16, gx = grow || 0;
+    if (x < x0 - gx || x > x1 + gx || y < y0 - gx || y > y1 + gx) return false;
+    const cx = x < x0 + r ? x0 + r : x > x1 - r ? x1 - r : x, cy = y < y0 + r ? y0 + r : y > y1 - r ? y1 - r : y;
+    return Math.hypot(x - cx, y - cy) <= r + gx + Math.sin(x * 0.31) * 1.2 + Math.cos(y * 0.27) * 1.2;
+  };
+  function palm(g, x, y) {
+    for (let k = 0; k < 16; k++) P(g, x - 1 + Math.round(Math.sin(k / 5) * 2), y - k, 3, 1, k % 3 ? '#8a5a3b' : '#6f452c');
+    const L = [[-1, -1], [1, -1], [-1, 0.2], [1, 0.2], [0, -1.4]];
+    for (const [dx, dy] of L) for (let k = 0; k < 9; k++) { const px = x + Math.round(dx * k * 1.2), py = y - 17 + Math.round(dy * k * 0.7 + k * k * 0.07); P(g, px - 1, py - 1, 4, 3, '#1f5f3a'); }
+    for (const [dx, dy] of L) for (let k = 0; k < 9; k++) { const px = x + Math.round(dx * k * 1.2), py = y - 17 + Math.round(dy * k * 0.7 + k * k * 0.07); P(g, px, py, 2, 1, k % 2 ? '#4fae62' : '#3f9a55'); }
+    P(g, x - 1, y - 16, 2, 2, '#6f452c'); P(g, x + 1, y - 15, 2, 2, '#8a5a3b');
+  }
+  function hexTile(g, cx, cy, c) { for (let dy = -3; dy <= 3; dy++) { const hw = 3 - Math.max(0, Math.abs(dy) - 1); P(g, cx - hw, cy + dy, hw * 2 + 1, 1, c); } }
+  function bgIsland(g, w, h) {
+    const R = rnd32(77);
+    // sky and far sea
+    P(g, 0, 0, w, 12, '#bfe4f7'); P(g, 0, 10, w, 2, '#d8f0fb');
+    for (const [cx, cy, cw] of [[22, 4, 16], [96, 6, 22], [158, 3, 14]]) { P(g, cx, cy, cw, 3, '#ffffff'); P(g, cx + 3, cy - 2, cw - 8, 2, '#ffffff'); }
+    for (let y = 12; y < h; y++) P(g, 0, y, w, 1, y < 26 ? '#3d86c6' : y < 40 ? '#4496d2' : '#4fa6dc');
+    P(g, 0, 12, w, 1, '#7fc0e6');
+    P(g, 132, 8, 22, 4, '#5f8f6a'); P(g, 137, 6, 10, 2, '#5f8f6a');   // a far island
+    P(g, 40, 16, 1, 7, '#5a4a3a'); P(g, 41, 16, 5, 5, '#fdfcf7'); P(g, 35, 18, 5, 3, '#fdfcf7'); P(g, 34, 23, 14, 2, '#a8734f');   // sailboat
+    for (let i = 0; i < 150; i++) { const x = R() * w | 0, y = 14 + (R() * (h - 14) | 0); if (!inIsle(x, y, 9) && !inIsle(x + 5, y, 9)) P(g, x, y, 3 + (R() * 4 | 0), 1, 'rgba(255,255,255,.28)'); }
+    // shallow water, foam, wet sand, sand
+    for (let y = 30; y < h; y++) for (let x = 0; x < w; x++) {
+      if (inIsle(x, y, 0)) P(g, x, y, 1, 1, ((x * 7 + y * 13) % 11 === 0) ? '#e3c98d' : ((x * 5 + y * 3) % 17 === 0) ? '#f4dfa8' : '#ecd49a');
+      else if (inIsle(x, y, 2)) P(g, x, y, 1, 1, '#d2b77e');
+      else if (inIsle(x, y, 4)) P(g, x, y, 1, 1, '#f6fbfd');
+      else if (inIsle(x, y, 9)) P(g, x, y, 1, 1, '#7fcbe6');
+    }
+    // grass in the middle
+    for (let y = 70; y < 140; y++) for (let x = 40; x < 152; x++) {
+      const d = Math.hypot((x - 96) / 52, (y - 104) / 30) + Math.sin(x * 0.4) * 0.04 + Math.cos(y * 0.5) * 0.05;
+      if (d < 1) P(g, x, y, 1, 1, d > 0.93 ? '#8fbf6a' : ((x * 3 + y * 7) % 13 === 0) ? '#6fae5a' : '#7fba62');
+    }
+    for (let i = 0; i < 40; i++) { const x = 46 + (R() * 100 | 0), y = 76 + (R() * 56 | 0); if (Math.hypot((x - 96) / 52, (y - 104) / 30) < 0.85) { P(g, x, y, 1, 2, '#5f9e4e'); if (i % 5 === 0) P(g, x + 1, y - 1, 1, 1, i % 10 ? '#fdfcf7' : '#ffcc4d'); } }
+    // shells, starfish, footprints
+    for (const [x, y] of [[30, 58], [150, 56], [24, 110], [166, 104], [128, 150], [70, 56]]) { P(g, x, y, 3, 2, '#fdfcf7'); P(g, x + 1, y, 1, 2, '#e9b7b0'); }
+    for (const [x, y] of [[44, 150], [160, 140]]) { P(g, x, y, 5, 1, '#f08a5a'); P(g, x + 2, y - 2, 1, 5, '#f08a5a'); P(g, x + 1, y - 1, 3, 3, '#f08a5a'); P(g, x + 2, y, 1, 1, '#ffd0a8'); }
+    for (let k = 0; k < 6; k++) P(g, 92 + (k % 2) * 5, 140 - k * 5, 2, 3, 'rgba(160,120,70,.35)');
+    // wooden dock back to the building
+    P(g, 82, 158, 28, h - 158, '#6f452c'); for (let y = 159; y < h; y += 4) { P(g, 83, y, 26, 3, '#b07b56'); P(g, 83, y, 26, 1, '#c99866'); }
+    for (const x of [82, 108]) { P(g, x - 1, 156, 4, 6, '#3b2a22'); P(g, x, 157, 2, 4, '#8a5a3b'); P(g, x - 1, 170, 4, 6, '#3b2a22'); }
+    P(g, 91, 170, 10, 6, '#2b2233'); P(g, 92, 171, 8, 5, '#94505b'); P(g, 96, 171, 1, 5, '#2b2233');
+  }
+  const islandItems = [
+    { id: 'ct-palm1', label: '야자수', box: [10, 40, 26, 32], sortY: 70, obs: [[18, 62, 10, 8]], draw: g => palm(g, 22, 70) },
+    { id: 'ct-palm2', label: '야자수', box: [156, 40, 26, 32], sortY: 70, obs: [[164, 62, 10, 8]], draw: g => palm(g, 170, 70) },
+    { id: 'ct-table', label: '카탄 테이블', box: [72, 82, 48, 34], sortY: 112, obs: [[73, 92, 46, 20]], draw: g => {
+      P(g, 72, 86, 48, 24, '#2b2233'); P(g, 73, 87, 46, 19, '#b07b56'); P(g, 73, 87, 46, 1, '#d2a372'); P(g, 73, 106, 46, 3, '#8a5a3b');
+      P(g, 75, 110, 3, 6, '#3b2a22'); P(g, 114, 110, 3, 6, '#3b2a22');
+      P(g, 78, 88, 36, 17, '#3d86c6'); P(g, 79, 89, 34, 15, '#4fa6dc');
+      const T = ['#c45a2c', '#2d7a3a', '#90c26a', '#e0b84a', '#8d8f99', '#e8d5a3'];
+      [[89, 93, 0], [96, 93, 1], [103, 93, 3], [85, 97, 2], [92, 97, 4], [100, 97, 5], [107, 97, 1], [89, 101, 3], [96, 101, 0], [103, 101, 2]].forEach(([x, y, k]) => hexTile(g, x, y - 1, T[k]));
+      P(g, 95, 95, 2, 2, '#fdfcf7'); P(g, 88, 99, 2, 2, '#fdfcf7'); P(g, 99, 95, 2, 3, '#3b3a44');   // number chips, robber
+      P(g, 92, 92, 2, 2, '#e63946'); P(g, 104, 99, 2, 2, '#457b9d'); P(g, 86, 95, 2, 2, '#f4a261');   // houses
+      P(g, 116, 90, 2, 2, '#fdfcf7'); P(g, 115, 94, 3, 3, '#fdfcf7'); P(g, 116, 95, 1, 1, '#251c2c');   // dice
+    } },
+    { id: 'ct-logs', label: '나무 더미', box: [32, 64, 24, 14], sortY: 78, obs: [[33, 70, 22, 8]], draw: g => {
+      for (const [x, y] of [[33, 72], [41, 72], [49, 72], [37, 67], [45, 67]]) { P(g, x, y, 7, 6, '#3b2a22'); P(g, x + 1, y + 1, 5, 4, '#8a5a3b'); P(g, x + 2, y + 2, 3, 2, '#d2a372'); P(g, x + 3, y + 2, 1, 2, '#a8734f'); }
+    } },
+    { id: 'ct-bricks', label: '벽돌 더미', box: [140, 66, 24, 14], sortY: 80, obs: [[140, 72, 24, 8]], draw: g => {
+      for (let r = 0; r < 3; r++) for (let k = 0; k < 3 - (r > 1); k++) { const x = 141 + k * 8 + (r % 2) * 4, y = 76 - r * 4; P(g, x - 1, y - 1, 9, 5, '#3b2a22'); P(g, x, y, 7, 3, '#c45a2c'); P(g, x, y, 7, 1, '#e07a4a'); }
+    } },
+    { id: 'ct-ore', label: '철광석', box: [26, 122, 26, 16], sortY: 138, obs: [[27, 128, 24, 10]], draw: g => {
+      for (const [x, y, r] of [[33, 132, 5], [43, 133, 4], [38, 127, 4]]) { pixCircle(g, x, y, r, '#2b2233'); pixCircle(g, x, y, r - 1, '#6f7280'); P(g, x - 2, y - 2, 2, 2, '#a5adbd'); P(g, x + 1, y, 2, 1, '#c9d4e8'); P(g, x - 1, y + 1, 1, 1, '#4a4c58'); }
+    } },
+    { id: 'ct-wheat', label: '밀 단', box: [142, 118, 24, 18], sortY: 136, obs: [[143, 128, 22, 8]], draw: g => {
+      for (const x of [146, 154, 161]) { P(g, x - 3, 124, 7, 12, '#2b2233'); P(g, x - 2, 125, 5, 10, '#e0b84a'); P(g, x - 2, 130, 5, 2, '#a8734f'); for (let k = -2; k <= 2; k += 2) { P(g, x + k, 120, 1, 5, '#e0b84a'); P(g, x + k, 119, 1, 2, '#f4dfa8'); } }
+    } },
+    { id: 'ct-sheep', label: '양', box: [58, 136, 14, 12], sortY: 148, obs: [[59, 142, 12, 6]], draw: g => {
+      P(g, 59, 139, 12, 8, '#2b2233'); P(g, 60, 140, 10, 6, '#fdfcf7'); P(g, 61, 139, 3, 1, '#fdfcf7'); P(g, 66, 139, 3, 1, '#fdfcf7'); P(g, 69, 141, 4, 4, '#2b2233'); P(g, 70, 142, 2, 2, '#4a4752'); P(g, 61, 146, 1, 2, '#2b2233'); P(g, 67, 146, 1, 2, '#2b2233');
+    } },
+    { id: 'ct-crate', label: '카탄 상자', box: [160, 144, 16, 14], sortY: 158, obs: [[160, 148, 16, 10]], draw: g => {
+      P(g, 160, 146, 16, 12, '#2b2233'); P(g, 161, 147, 14, 10, '#a8734f'); P(g, 161, 147, 14, 1, '#c99866'); P(g, 161, 151, 14, 1, '#8a5a3b'); hexTile(g, 168, 153, '#e0b84a'); P(g, 163, 143, 3, 4, '#e63946'); P(g, 170, 144, 3, 3, '#457b9d');
+    } },
+    { id: 'ct-roads', label: '길 조각', box: [118, 140, 22, 10], sortY: 146, obs: [], draw: g => {
+      for (const [x, y, c] of [[119, 143, '#e63946'], [126, 146, '#457b9d'], [131, 142, '#f4a261']]) { P(g, x - 1, y - 1, 9, 4, '#2b2233'); P(g, x, y, 7, 2, c); }
+    } },
+    { id: 'ct-sign', label: '표지판', box: [112, 150, 14, 14], sortY: 162, obs: [[116, 158, 6, 4]], draw: g => {
+      P(g, 118, 154, 2, 9, '#3b2a22'); P(g, 112, 150, 14, 7, '#2b2233'); P(g, 113, 151, 12, 5, '#fdfcf7'); P(g, 115, 153, 6, 1, '#251c2c'); P(g, 120, 152, 1, 3, '#251c2c'); P(g, 121, 153, 1, 1, '#251c2c');
+    } }
+  ];
+
+  // ---- ROOM 3 (1층) · 낙서 골목: walls covered in street graffiti ----
+  // crisp pixel lettering: draw big text off-screen, keep only solid pixels, add an outline and a drop shadow
+  function tag(g, text, x, y, size, fill, line, rot, font) {
+    const c = document.createElement('canvas'); c.width = 140; c.height = 60;
+    const t = c.getContext('2d'); t.font = `${font || '700'} ${size}px "Pixelify Sans", "Silkscreen", monospace`; t.textBaseline = 'middle'; t.textAlign = 'center';
+    t.translate(70, 30); t.rotate((rot || 0) * Math.PI / 180); t.fillStyle = '#000'; t.fillText(text, 0, 0);
+    const d = t.getImageData(0, 0, 140, 60).data, on = (px, py) => px >= 0 && py >= 0 && px < 140 && py < 60 && d[(py * 140 + px) * 4 + 3] > 110;
+    const pass = (col, test, ox, oy) => { g.fillStyle = col; for (let py = 0; py < 60; py++) for (let px = 0; px < 140; px++) if (test(px, py)) g.fillRect(x - 70 + px + ox, y - 30 + py + oy, 1, 1); };
+    const edge = (px, py) => !on(px, py) && (on(px - 1, py) || on(px + 1, py) || on(px, py - 1) || on(px, py + 1) || on(px - 1, py - 1) || on(px + 1, py + 1) || on(px + 1, py - 1) || on(px - 1, py + 1));
+    pass('rgba(0,0,0,.45)', (px, py) => on(px, py) || edge(px, py), 2, 2);
+    pass(line, edge, 0, 0); pass(fill, on, 0, 0);
+    pass('rgba(255,255,255,.55)', (px, py) => on(px, py) && !on(px, py - 1) && on(px, py + 1), 0, 0);
+  }
+  function drip(g, x, y, len, c) { P(g, x, y, 1, len, c); P(g, x, y + len, 1, 1, c); P(g, x - 1, y + len - 1, 3, 2, c); }
+  function splat(g, x, y, r, c, R) { pixCircle(g, x, y, r, c); for (let k = 0; k < 7; k++) { const a = R() * 6.283, d = r + 1 + R() * r; P(g, Math.round(x + Math.cos(a) * d), Math.round(y + Math.sin(a) * d * 0.7), 1 + (R() * 2 | 0), 1, c); } }
+  function heartPx(g, x, y, c) { P(g, x + 1, y, 2, 1, c); P(g, x + 4, y, 2, 1, c); P(g, x, y + 1, 7, 2, c); P(g, x + 1, y + 3, 5, 1, c); P(g, x + 2, y + 4, 3, 1, c); P(g, x + 3, y + 5, 1, 1, c); }
+  function starPx(g, x, y, c) { P(g, x + 3, y, 1, 7, c); P(g, x, y + 3, 7, 1, c); P(g, x + 2, y + 2, 3, 3, c); P(g, x + 1, y + 1, 1, 1, c); P(g, x + 5, y + 1, 1, 1, c); P(g, x + 1, y + 5, 1, 1, c); P(g, x + 5, y + 5, 1, 1, c); }
+  function crownPx(g, x, y, c) { P(g, x, y + 2, 9, 4, c); P(g, x, y, 1, 2, c); P(g, x + 4, y - 1, 1, 3, c); P(g, x + 8, y, 1, 2, c); P(g, x + 2, y + 1, 1, 1, c); P(g, x + 6, y + 1, 1, 1, c); }
+  function brickWall(g, x0, y0, w, h, cols, mortar) {
+    P(g, x0, y0, w, h, mortar);
+    for (let y = y0, r = 0; y < y0 + h; y += 4, r++) for (let x = x0 - (r % 2) * 4; x < x0 + w; x += 8) {
+      const xx = Math.max(x, x0), ww = Math.min(x + 7, x0 + w) - xx; if (ww > 0) P(g, xx, y, ww, 3, cols[(x * 7 + r * 13 >>> 0) % cols.length]);
+    }
+  }
+  function bgGraffiti(g, w, h) {
+    const R = rnd32(2026);
+    // concrete floor with cracks, paint and a hopscotch
+    for (let y = 44; y < h; y += 16) for (let x = 0; x < w; x += 16) { P(g, x, y, 16, 16, ((x + y) / 16) % 2 ? '#6f7280' : '#757886'); P(g, x, y, 16, 1, '#5f6270'); P(g, x, y, 1, 16, '#5f6270'); }
+    for (let i = 0; i < 90; i++) P(g, R() * w | 0, 46 + (R() * (h - 56) | 0), 1, 1, R() < 0.5 ? '#868a98' : '#5a5d6a');
+    const SP = ['#ff4f81', '#ffcc4d', '#3fb5a3', '#5b8cff', '#b06cff', '#ff8a3a', '#7ddc5a', '#fdfcf7'];
+    for (let i = 0; i < 16; i++) splat(g, 14 + (R() * (w - 28) | 0), 56 + (R() * (h - 76) | 0), 1 + (R() * 3 | 0), SP[i % SP.length], R);
+    for (let k = 0; k < 5; k++) { const x = 20, y = 150 - k * 11; P(g, x, y, 12, 11, 'rgba(253,252,247,.0)'); P(g, x, y, 12, 1, '#fdfcf7'); P(g, x, y + 10, 12, 1, '#fdfcf7'); P(g, x, y, 1, 11, '#fdfcf7'); P(g, x + 11, y, 1, 11, '#fdfcf7'); }
+    for (let x = 60; x < 136; x += 8) P(g, x, 146, 5, 2, '#ffcc4d');   // tape line
+    // brick back wall
+    brickWall(g, 0, 0, w, 44, ['#9a5645', '#8d4c3d', '#a35e4b', '#86463a'], '#5e352c');
+    P(g, 0, 40, w, 4, '#4a4752'); P(g, 0, 40, w, 1, '#6f7280'); P(g, 0, 44, w, 2, 'rgba(0,0,0,.25)');
+    // roller-painted patches under the pieces
+    P(g, 4, 6, 50, 30, 'rgba(63,181,163,.55)'); P(g, 120, 4, 66, 22, 'rgba(91,140,255,.45)'); P(g, 70, 14, 44, 24, 'rgba(255,204,77,.28)');
+    tag(g, 'ON!', 29, 20, 26, '#ff4f81', '#251c2c', -8);
+    tag(g, 'LOUNGE', 152, 14, 15, '#ffcc4d', '#251c2c', 4);
+    tag(g, 'DRAW', 92, 25, 17, '#7ddc5a', '#251c2c', -3);
+    tag(g, 'JOY', 164, 31, 11, '#fdfcf7', '#b06cff', 7);
+    tag(g, 'grace', 128, 33, 9, '#ff8a3a', '#251c2c', -6);
+    tag(g, 'YO', 62, 9, 9, '#5b8cff', '#fdfcf7', 10);
+    crownPx(g, 24, 2, '#ffcc4d'); heartPx(g, 110, 6, '#ff4f81'); starPx(g, 181, 26, '#ffcc4d'); starPx(g, 3, 30, '#fdfcf7'); heartPx(g, 142, 27, '#fdfcf7');
+    for (const [x, y, l, c] of [[14, 30, 7, '#ff4f81'], [33, 31, 5, '#ff4f81'], [44, 29, 8, '#ff4f81'], [79, 33, 5, '#7ddc5a'], [103, 32, 6, '#7ddc5a'], [136, 21, 6, '#ffcc4d'], [171, 20, 9, '#ffcc4d']]) drip(g, x, y, l, c);
+    // arrow, smiley, squiggles
+    P(g, 58, 30, 9, 1, '#fdfcf7'); P(g, 65, 28, 1, 5, '#fdfcf7'); P(g, 66, 29, 1, 3, '#fdfcf7'); P(g, 67, 30, 1, 1, '#fdfcf7');
+    pixCircle(g, 118, 22, 4, '#ffcc4d'); P(g, 116, 20, 1, 2, '#251c2c'); P(g, 119, 20, 1, 2, '#251c2c'); P(g, 116, 24, 4, 1, '#251c2c'); P(g, 115, 23, 1, 1, '#251c2c'); P(g, 120, 23, 1, 1, '#251c2c');
+    for (let x = 4; x < 60; x++) P(g, x, 37 + Math.round(Math.sin(x * 0.7) * 1.4), 1, 1, '#b06cff');
+    // side walls: brick too, with small tags running down
+    brickWall(g, 0, 44, 6, h - 44, ['#8d4c3d', '#86463a', '#9a5645'], '#5e352c'); brickWall(g, w - 6, 44, 6, h - 44, ['#8d4c3d', '#86463a', '#9a5645'], '#5e352c');
+    P(g, 6, 44, 1, h - 44, '#3b2a22'); P(g, w - 7, 44, 1, h - 44, '#3b2a22');
+    for (let y = 52; y < h - 14; y += 9) { P(g, 1, y, 4, 5, SP[(y / 9 | 0) % SP.length]); P(g, w - 5, y + 4, 4, 5, SP[(y / 9 + 3 | 0) % SP.length]); }
+    // front wall with the door
+    brickWall(g, 0, h - 8, w, 8, ['#8d4c3d', '#86463a', '#9a5645'], '#5e352c'); P(g, 0, h - 9, w, 1, '#3b2a22');
+    const dx = w / 2 - 12; P(g, dx, h - 9, 24, 9, DOOR.frame); P(g, dx + 1, h - 8, 22, 8, '#3fb5a3'); P(g, dx + 1, h - 8, 22, 1, '#7fe0d0'); P(g, dx + 11, h - 8, 2, 8, DOOR.frame);
+    for (const [x, c] of [[20, '#ff4f81'], [44, '#ffcc4d'], [130, '#5b8cff'], [158, '#7ddc5a']]) { P(g, x, h - 7, 10, 2, c); P(g, x + 2, h - 4, 7, 2, c); }
+  }
+  function sprayCan(g, x, y, c) { P(g, x - 1, y - 8, 5, 9, '#2b2233'); P(g, x, y - 7, 3, 7, c); P(g, x, y - 7, 1, 7, 'rgba(255,255,255,.4)'); P(g, x, y - 9, 3, 2, '#c9c9d4'); P(g, x + 1, y - 10, 1, 1, '#2b2233'); }
+  const graffitiSeats = [58, 74, 109, 125].map(x => mkSeat(x, 118, 'up', 'wood'));
+  const graffitiItems = [
+    { id: 'dr-easel', label: '그림판', box: [70, 46, 52, 40], sortY: 84, obs: [[72, 74, 48, 10]], draw: g => {
+      P(g, 74, 78, 3, 8, '#3b2a22'); P(g, 115, 78, 3, 8, '#3b2a22'); P(g, 72, 84, 7, 2, '#3b2a22'); P(g, 113, 84, 7, 2, '#3b2a22');
+      P(g, 70, 46, 52, 34, '#2b2233'); P(g, 71, 47, 50, 32, '#a8734f'); P(g, 73, 49, 46, 26, '#fdfcf7'); P(g, 73, 76, 46, 2, '#8a5a3b');
+      // a half-finished doodle: sun, house, a question mark
+      pixCircle(g, 82, 56, 3, '#ffcc4d'); for (const [ax, ay] of [[82, 50], [76, 56], [88, 56], [82, 62]]) P(g, ax, ay, 1, 2, '#ffcc4d');
+      P(g, 93, 62, 12, 9, '#ff4f81'); P(g, 95, 60, 8, 2, '#5b8cff'); P(g, 97, 58, 4, 2, '#5b8cff'); P(g, 98, 66, 3, 5, '#251c2c');
+      P(g, 109, 54, 5, 1, '#251c2c'); P(g, 113, 55, 1, 3, '#251c2c'); P(g, 111, 58, 2, 1, '#251c2c'); P(g, 111, 59, 1, 2, '#251c2c'); P(g, 111, 63, 1, 1, '#251c2c');
+      for (let x = 76; x < 116; x += 3) P(g, x, 73, 2, 1, '#7ddc5a');
+      P(g, 78, 77, 6, 1, '#ff4f81'); P(g, 88, 77, 6, 1, '#5b8cff'); P(g, 98, 77, 6, 1, '#251c2c');
+    } },
+    { id: 'dr-cans', label: '스프레이', box: [14, 60, 26, 12], sortY: 72, obs: [[14, 66, 26, 6]], draw: g => { sprayCan(g, 17, 71, '#ff4f81'); sprayCan(g, 24, 72, '#ffcc4d'); sprayCan(g, 31, 71, '#5b8cff'); sprayCan(g, 37, 72, '#7ddc5a'); } },
+    { id: 'dr-buckets', label: '페인트 통', box: [152, 58, 26, 14], sortY: 72, obs: [[152, 64, 26, 8]], draw: g => {
+      for (const [x, c] of [[153, '#b06cff'], [165, '#ff8a3a']]) { P(g, x, 62, 11, 10, '#2b2233'); P(g, x + 1, 63, 9, 8, '#c9c9d4'); P(g, x + 1, 63, 9, 3, c); P(g, x + 1, 67, 9, 1, '#8d8f99'); P(g, x + 9, 66, 1, 4, c); }
+      P(g, 160, 56, 2, 8, '#a8734f'); P(g, 159, 54, 4, 3, '#fdfcf7');
+    } },
+    { id: 'dr-boombox', label: '붐박스', box: [150, 128, 26, 14], sortY: 142, obs: [[150, 132, 26, 10]], draw: g => {
+      P(g, 150, 130, 26, 12, '#2b2233'); P(g, 151, 131, 24, 10, '#4a4752'); pixCircle(g, 157, 136, 3, '#17151c'); pixCircle(g, 169, 136, 3, '#17151c'); P(g, 156, 135, 2, 2, '#8d8f99'); P(g, 168, 135, 2, 2, '#8d8f99');
+      P(g, 161, 132, 4, 3, '#3fb5a3'); P(g, 154, 127, 18, 1, '#2b2233'); P(g, 154, 127, 1, 3, '#2b2233'); P(g, 171, 127, 1, 3, '#2b2233');
+    } },
+    { id: 'dr-board', label: '스케이트보드', box: [14, 100, 9, 24], sortY: 122, obs: [[14, 116, 9, 6]], draw: g => {
+      P(g, 15, 100, 7, 22, '#2b2233'); P(g, 16, 101, 5, 20, '#ff8a3a'); P(g, 17, 104, 3, 3, '#fdfcf7'); P(g, 17, 112, 3, 1, '#251c2c'); P(g, 17, 115, 3, 1, '#251c2c'); P(g, 14, 103, 2, 3, '#c9c9d4'); P(g, 21, 103, 2, 3, '#c9c9d4'); P(g, 14, 117, 2, 3, '#c9c9d4'); P(g, 21, 117, 2, 3, '#c9c9d4');
+    } },
+    { id: 'dr-cone', label: '콘', box: [168, 96, 9, 12], sortY: 108, obs: [[168, 102, 9, 6]], draw: g => { P(g, 168, 105, 9, 3, '#2b2233'); P(g, 170, 98, 5, 8, '#2b2233'); P(g, 171, 99, 3, 6, '#f08a3a'); P(g, 171, 102, 3, 1, '#fdfcf7'); P(g, 169, 106, 7, 1, '#f08a3a'); } },
+    { id: 'dr-ladder', label: '사다리', box: [40, 44, 14, 28], sortY: 66, obs: [[40, 60, 14, 6]], draw: g => { P(g, 41, 44, 2, 26, '#c9c9d4'); P(g, 51, 44, 2, 26, '#c9c9d4'); for (let y = 48; y < 68; y += 5) P(g, 43, y, 8, 1, '#8d8f99'); P(g, 40, 69, 4, 2, '#2b2233'); P(g, 50, 69, 4, 2, '#2b2233'); } }
+  ];
+
   const exitSpot = { id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 144, hit: [82, 160, 28, 16], label: '복도로 나가기' };
   const SCENES = {
     sanctuary: { name: '본당', w: 192, h: 360, bounds: [10, 50, 182, 354], lights: true, drawBg: bgSanctuary, items: sanctItems, seats: sanctSeats,
@@ -490,18 +667,22 @@
     hall1: { name: '1층 복도', w: 160, h: 280, bounds: [22, 52, 138, 266], drawBg: bgHall1, items: hall1Items, seats: [],
       spawns: { elevator: [80, 256, 'up'], f1r1: [26, 100, 'right'], f1r2: [26, 200, 'right'], f1r3: [134, 100, 'left'], f1r4: [134, 200, 'left'] },
       spots: [{ id: 'outside', item: null, x: 80, y: 58, r: 14, ax: 80, ay: 4, hit: [58, 7, 44, 40], label: '건물 밖으로 나가기' }, ELEV_SPOT(160, 280)]
-        .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ id: 'to-' + id, item: null, x: right ? x - 10 : x + 10, y, r: 12, ax: right ? x - 10 : x + 10, ay: y - 22, hit: right ? [x - 10, y - 16, 16, 32] : [x - 6, y - 16, 16, 32], label: id === 'f1r1' ? `${ROOM_INFO[id].n} ${ROOM_INFO[id].sub} 들어가기` : `${ROOM_INFO[id].n} 문 열어 보기`, room: id === 'f1r1' ? id : null, locked: id !== 'f1r1' }))),
+        .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ id: 'to-' + id, item: null, x: right ? x - 10 : x + 10, y, r: 12, ax: right ? x - 10 : x + 10, ay: y - 22, hit: right ? [x - 10, y - 16, 16, 32] : [x - 6, y - 16, 16, 32], label: F1_OPEN.includes(id) ? `${ROOM_INFO[id].n} ${ROOM_INFO[id].sub} 들어가기` : `${ROOM_INFO[id].n} 문 열어 보기`, room: F1_OPEN.includes(id) ? id : null, locked: !F1_OPEN.includes(id) }))),
       labels: [{ x: 80, y: 2, t: '출입문', align: 'center' }]
-        .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ x: right ? x - 9 : x + 9, y: y + 18, t: ROOM_INFO[id].n, sub: ROOM_INFO[id].sub, align: right ? 'right' : 'left', count: id === 'f1r1' ? id : undefined }))) },
+        .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ x: right ? x - 9 : x + 9, y: y + 18, t: ROOM_INFO[id].n, sub: ROOM_INFO[id].sub, align: right ? 'right' : 'left', count: F1_OPEN.includes(id) ? id : undefined }))) },
     f1r1: { name: '1층 ROOM 1 · 락커룸', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgLocker, items: lockerItems, seats: lockerSeats, spawns: { door: [96, 156, 'up'], field: [96, 74, 'down'] },
       spots: [exitSpot, { id: 'pitch', item: null, x: 96, y: 56, r: 14, ax: 96, ay: 2, hit: [82, 6, 28, 40], label: '축구장 가기' }] },
+    f1r2: { name: '1층 ROOM 2 · 카탄 섬', w: 192, h: 176, bounds: [16, 52, 176, 160], drawBg: bgIsland, items: islandItems, seats: [], outdoor: true, spawns: { door: [96, 154, 'up'] },
+      spots: [{ id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 146, hit: [82, 160, 28, 16], label: '복도로 돌아가기' }, { id: 'catan', item: 'ct-table', x: 96, y: 120, r: 16, ax: 96, ay: 76, label: '카탄 하기' }] },
+    f1r3: { name: '1층 ROOM 3 · 낙서 골목', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgGraffiti, items: graffitiItems, seats: graffitiSeats, spawns: { door: [96, 156, 'up'] },
+      spots: [exitSpot, { id: 'drawgame', item: 'dr-easel', x: 96, y: 92, r: 16, ax: 96, ay: 40, label: '그림 퀴즈 하기' }] },
     roof: { name: '3층 · 옥상', w: 192, h: 200, bounds: [8, 52, 184, 186], drawBg: bgRoof, items: roofItems, seats: roofSeats, weather: true, spawns: { elevator: [96, 178, 'up'] },
       spots: [ELEV_SPOT(192, 200), { id: 'weather', item: 'rf-sign', x: 163, y: 134, r: 14, ax: 163, ay: 88, label: '오늘 베이징 날씨 보기' }] },
     soccer: { name: '축구장', w: FIELD.w, h: FIELD.h, bounds: [8, 20, 312, 196], drawBg: bgSoccer, items: [], seats: [], soccer: true, spawns: { w: [110, 108, 'right'], b: [210, 108, 'left'] },
       spots: [{ id: 'leaveField', item: null, x: 160, y: 194, r: 12, ax: 160, ay: 182, hit: [146, 198, 28, 10], label: '락커룸으로 돌아가기' }] }
   };
-  const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1' };
-  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'soccer') ? 1 : 2;
+  const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1', f1r2: 'hall1', f1r3: 'hall1' };
+  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'soccer') ? 1 : 2;
   const ALL_ITEMS = Object.values(SCENES).flatMap(sc => sc.items);
   const itemById = Object.fromEntries(ALL_ITEMS.map(it => [it.id, it]));
   let sceneId = 'sanctuary', scene = SCENES.sanctuary, W = scene.w, H = scene.h, ITEMS = scene.items, chairs = scene.seats, spots = [];
@@ -646,6 +827,7 @@
     const RUN = {
       elevator: () => openElevator(), outside: () => toast(pick(OUTSIDE_MSG)), weather: () => openWeather(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
+      catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'),
       stand: () => openQt(), qr: () => openQr(), board: () => openModal('board'), prayer: () => openPrayers(),
       eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; const inst = EQ_INST[eqStep++ % EQ_INST.length]; eqFx(inst, 1); lobbySend('lights', { mode: lightMode, inst }); },
       water: () => useMachine('water'),
@@ -792,44 +974,79 @@
   }
 
   // ================= realtime (Supabase) =================
-  const net = { ch: null, lobby: null, chatDb: null, uid: null, ready: false, remotes: new Map(), sig: '', lastSend: 0, lastTrack: 0, dirty: true, counts: {}, total: 0 };
+  // No presence anywhere. The realtime server lets one client change its presence only 5 times per 30 s and
+  // closes that client's channel when it goes over, which is what used to throw people out of busy rooms.
+  // Everything is plain broadcast now: 'st' (state, with a full copy every few seconds as a heartbeat),
+  // 'hello' (I just arrived, tell me who is here) and 'bye' (I am leaving). Silence for ALIVE_MS = gone.
+  const net = { ch: null, lobby: null, chatDb: null, uid: null, ready: false, lobbyReady: false, remotes: new Map(), sig: '', lastSend: 0, lastFull: 0, dirty: true, counts: {}, total: 0, downAt: 0, lobbyDownAt: 0, tries: 0, warned: false };
   const seatIdx = ent => ent.seat ? chairs.indexOf(ent.seat) : -1;
-  function netSend(event, payload) { if (LIVE && net.ready && net.ch) net.ch.send({ type: 'broadcast', event, payload }); }
-  function lobbySend(event, payload) { if (LIVE && net.lobby) net.lobby.send({ type: 'broadcast', event, payload }); }
+  const chOpen = ch => !!ch && (ch.state === undefined || ch.state === 'joined');
+  function chSend(ch, event, payload) {
+    if (!chOpen(ch)) return false;   // never fall back to the slow HTTP path
+    try { const r = ch.send({ type: 'broadcast', event, payload }); if (r && r.catch) r.catch(() => {}); } catch (e) { return false; }
+    return true;
+  }
+  function netSend(event, payload) { return LIVE && net.ready ? chSend(net.ch, event, payload) : false; }
+  function lobbySend(event, payload) { return LIVE && net.lobbyReady ? chSend(net.lobby, event, payload) : false; }
   // one account can be open in several windows or phones; each window is a "session", and only the newest one stays connected
   const SID = Math.random().toString(36).slice(2, 10), T0 = Date.now();
-  function lobbyTrack() { if (LIVE && net.lobby) net.lobby.track({ name: player.name, scene: sceneId, dnd: !!player.dnd, hb: Date.now(), sid: SID, t0: T0 }); }
-  // of several entries under one person, use the newest window's; ignore a frozen older one
-  const pickMeta = metas => { let best = null; for (const m of metas || []) if (!best || (m.t0 || 0) > (best.t0 || 0) || ((m.t0 || 0) === (best.t0 || 0) && (m.hb || 0) > (best.hb || 0))) best = m; return best; };
-
-  // ---- liveness ----
-  // The server can keep a closed phone or a frozen tab "present" for a long time, so every client
-  // re-announces itself every 20 s (hb) and anyone not heard from for 75 s is treated as gone.
-  const ALIVE_MS = 75000, HB_MS = 20000;
-  const heard = new Map(), lastHb = new Map(), lobbyHeard = new Map(), lobbyHb = new Map(), oldClient = new Set();
+  const ALIVE_MS = 32000, HB_MS = 8000, LOBBY_ALIVE = 70000, LOBBY_HB = 20000;
+  const heard = new Map(), lobbyPeers = new Map();
   const markHeard = id => heard.set(id, performance.now());
   const isAlive = id => performance.now() - (heard.get(id) || 0) < ALIVE_MS;
+  let lobbyAt = 0, lobbyTimer = 0;
+  function lobbyNow() { lobbyAt = performance.now(); lobbySend('here', { id: net.uid, name: player.name, scene: sceneId, dnd: !!player.dnd, sid: SID, t0: T0 }); }
+  // "where I am" for the people counter; at most one message per 1.5 s
+  function lobbyTrack() {
+    if (!LIVE || !net.lobby) return;
+    clearTimeout(lobbyTimer);
+    const wait = 1500 - (performance.now() - lobbyAt);
+    if (wait <= 0) lobbyNow(); else lobbyTimer = setTimeout(lobbyNow, wait);
+  }
+  function fullState() { return Object.assign(myState(), { name: player.name, look: player.look, full: 1 }); }
+  function sendFull() { if (!net.ready) return; net.dirty = false; net.lastFull = performance.now(); netSend('st', fullState()); }
+  let fullTimer = 0;
+  function sendFullSoon() { if (!fullTimer) fullTimer = setTimeout(() => { fullTimer = 0; sendFull(); }, 100 + Math.random() * 500); }
+  let helloAt = -1e9;
+  function sayHello() { const now = performance.now(); if (now - helloAt < 2500) return; helloAt = now; netSend('hello', { id: net.uid }); }
+  // heartbeat + clean-up; runs on a timer (not the draw loop) so it also works while the tab is in the background
+  let tickAt = performance.now();
   setInterval(() => {
     if (!LIVE || exited) return;
-    if (net.ready && net.ch) { net.dirty = true; net.lastTrack = 0; if (document.hidden) pushState(); }
-    lobbyTrack();
-  }, HB_MS);
-  setInterval(() => {
-    if (!LIVE) return;
+    const now = performance.now(), stalled = now - tickAt > 9000; tickAt = now;
+    if (stalled) { for (const id of net.remotes.keys()) heard.set(id, now); for (const v of lobbyPeers.values()) v.at = now; }   // this tab was asleep: give everyone a fresh chance
+    if (net.ready && (net.dirty || now - net.lastFull > HB_MS)) sendFull();
+    if (net.lobbyReady && now - lobbyAt > LOBBY_HB) lobbyNow();
     let changed = false;
-    for (const id of [...net.remotes.keys()]) if (!oldClient.has(id) && !isAlive(id)) { removeRemote(id); changed = true; }
-    if (net.lobby) onLobbySync(); else if (changed) renderPeople();
-  }, 5000);
+    if (net.ready) for (const id of [...net.remotes.keys()]) if (!isAlive(id)) { removeRemote(id); changed = true; }
+    if (net.lobbyReady) for (const [id, v] of [...lobbyPeers]) if (now - v.at > LOBBY_ALIVE) { lobbyPeers.delete(id); changed = true; }
+    if (changed || net.lobby) recount();
+    watchdog(now);
+  }, 2000);
+  // a channel that stays down is thrown away and joined again; the people in the room are kept meanwhile
+  function watchdog(now) {
+    if (!net.lobby && !net.ch) return;
+    const bad = c => c && c.state !== undefined && c.state !== 'joined';
+    if (net.ch) {
+      if (bad(net.ch) || !net.ready) { if (!net.downAt) net.downAt = now; } else { net.downAt = 0; net.tries = 0; net.warned = false; }
+      if (net.downAt && now - net.downAt > Math.min(6000 + net.tries * 3000, 20000)) { net.tries++; net.downAt = now; joinSceneChannel(true); }
+      if (net.downAt && now - net.downAt > 5000 && !net.warned && !document.hidden) { net.warned = true; toast('실시간 연결이 잠깐 끊겼어요. 자동으로 다시 연결하고 있어요.'); }
+    }
+    if (net.lobby) {
+      if (bad(net.lobby) || !net.lobbyReady) { if (!net.lobbyDownAt) net.lobbyDownAt = now; } else net.lobbyDownAt = 0;
+      if (net.lobbyDownAt && now - net.lobbyDownAt > 9000) { net.lobbyDownAt = now; joinLobby(); }
+    }
+    $('liveDot').classList.toggle('bad', !net.ready);
+  }
   function myState() {
     return { id: net.uid, x: Math.round(player.x * 10) / 10, y: Math.round(player.y * 10) / 10, dir: player.dir, mv: player.moving, seat: seatIdx(player),
-      act: player.action, play: player.playing, dnd: !!player.dnd, og: gm && !gm.over ? 1 : 0, zz: player.zz ? 1 : 0, tie: player.tie || 0, hold: player.hold ? player.hold.k : null, brew: player.brew ? player.brew.k : null, to: player.path.length ? player.goal : null };
+      act: player.action, play: player.playing, dnd: !!player.dnd, og: (gm && !gm.over) || busyGame() ? 1 : 0, zz: player.zz ? 1 : 0, tie: player.tie || 0, hold: player.hold ? player.hold.k : null, brew: player.brew ? player.brew.k : null, to: player.path.length ? player.goal : null };
   }
   function netTick(now) {
     if (!net.ready) return;
     const st = myState(), kb = player.moving && !player.path.length;
     const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.tie, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
-    if (sig !== net.sig && now - net.lastSend > (kb ? 250 : 60)) { net.sig = sig; net.lastSend = now; net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.dirty = true; }
-    if (net.dirty && !player.moving && now - net.lastTrack > 2000) { net.lastTrack = now; net.dirty = false; net.ch.track(Object.assign({ name: player.name, look: player.look, hb: Date.now(), sid: SID, t0: T0 }, st)); }
+    if (sig !== net.sig && now - net.lastSend > (kb ? (sceneId === 'soccer' ? 300 : 250) : 60)) { net.sig = sig; net.lastSend = now; netSend('st', st); }
   }
   function addRemote(id, meta) {
     const sp = Object.values(scene.spawns)[0];
@@ -842,7 +1059,7 @@
     const ent = net.remotes.get(id); if (!ent) return;
     if (ent.seat && ent.seat.occ === ent) ent.seat.occ = null;
     net.remotes.delete(id);
-    gmPeerGone(id); partyPeerGone(id);
+    gmPeerGone(id); partyPeerGone(id); if (TG.onGone) try { TG.onGone(id); } catch (e) { console.error(e); }
     const i = entities.indexOf(ent); if (i >= 0) entities.splice(i, 1);
     refreshChars();
   }
@@ -885,56 +1102,47 @@
       } else ent.moving = false;
     }
   }
-  function onSync() {
-    if (!net.ch) return;
-    const state = net.ch.presenceState(), seen = new Set(), now = performance.now();
-    for (const key in state) {
-      if (key === net.uid) continue;
-      const meta = pickMeta(state[key]);
-      if (!meta) continue;
-      // only a new heartbeat counts as a sign of life; an old entry the server still holds does not
-      if (meta.hb && meta.hb !== lastHb.get(key)) { lastHb.set(key, meta.hb); markHeard(key); }
-      else if (!meta.hb) { oldClient.add(key); markHeard(key); }   // someone still on an older version of the page
-      else if (!heard.has(key)) markHeard(key);
-      if (!isAlive(key)) continue;
-      seen.add(key);
-      let ent = net.remotes.get(key);
-      if (!ent) { ent = addRemote(key, meta); applyRemote(ent, meta, now, true); }
-      if (meta.name) ent.name = meta.name;
-      if (validLook(meta.look)) ent.look = meta.look;
-      ent.dnd = !!meta.dnd; ent.og = !!meta.og; ent.zz = !!meta.zz; ent.tie = +meta.tie || 0;
-    }
-    for (const key of [...net.remotes.keys()]) if (!seen.has(key)) removeRemote(key);
-    if (net.lobby) onLobbySync(); else renderPeople();
-  }
-  function onLobbySync() {
-    if (!net.lobby) return;
-    const st = net.lobby.presenceState(), counts = {}, now = performance.now(); let total = 1;
+  function recount() {
+    const counts = {}, now = performance.now(); let total = 1;
     counts[sceneId] = 1;   // me
-    // the same account opened somewhere newer: this window steps aside
-    if ((st[net.uid] || []).some(m => m.sid && m.sid !== SID && (m.t0 || 0) > T0)) { superseded(); return; }
-    for (const k in st) {
-      if (k === net.uid) continue;
-      const m = pickMeta(st[k]); if (!m) continue;
-      if (m.hb && m.hb !== lobbyHb.get(k)) { lobbyHb.set(k, m.hb); lobbyHeard.set(k, now); }
-      else if (!m.hb || !lobbyHeard.has(k)) lobbyHeard.set(k, now);
-      const alive = now - lobbyHeard.get(k) < ALIVE_MS || (m.scene === sceneId && net.remotes.has(k));
-      if (!alive || m.scene === sceneId) continue;   // my room is counted from the people actually here (below)
+    for (const [k, m] of lobbyPeers) {
+      if (k === net.uid || now - m.at > LOBBY_ALIVE || m.scene === sceneId) continue;   // my room is counted from the people actually here (below)
       total++; counts[m.scene] = (counts[m.scene] || 0) + 1;
     }
     // people in my room: exactly the characters I can see, so the number and the name tags always agree
-    const here = [...net.remotes.keys()].length;
+    const here = net.remotes.size;
     counts[sceneId] += here; total += here;
     net.counts = counts; net.total = total; renderPeople();
   }
+  const onLobbySync = recount, onSync = recount;
+  let whoTimer = 0;
+  function joinLobby() {
+    if (net.lobby) { const old = net.lobby; net.lobby = null; try { sb.removeChannel(old); } catch (e) {} }
+    net.lobbyReady = false;
+    const lob = sb.channel('lounge:lobby', { config: { private: true, broadcast: { self: false } } });
+    net.lobby = lob;
+    lob.on('broadcast', { event: 'lights' }, ({ payload: p }) => { if (p && LIGHTS[p.mode]) { lightMode = p.mode; if (sceneId === 'sanctuary' && EQ_INST.includes(p.inst)) eqFx(p.inst, 0.4); } })
+      .on('broadcast', { event: 'content' }, () => { loadContent(); })
+      .on('broadcast', { event: 'here' }, ({ payload: p }) => {
+        if (net.lobby !== lob || !p || !p.id) return;
+        if (p.id === net.uid) { if (p.sid && p.sid !== SID && ((p.t0 || 0) > T0 || ((p.t0 || 0) === T0 && p.sid > SID))) superseded(); return; }   // the same account opened somewhere newer: this window steps aside
+        lobbyPeers.set(p.id, { name: p.name, scene: p.scene, dnd: !!p.dnd, at: performance.now() }); recount();
+      })
+      .on('broadcast', { event: 'who' }, () => { if (net.lobby === lob && !whoTimer) whoTimer = setTimeout(() => { whoTimer = 0; lobbyNow(); }, 200 + Math.random() * 1500); })
+      .on('broadcast', { event: 'gone' }, ({ payload: p }) => {
+        if (net.lobby !== lob || !p || !p.id) return;
+        if (p.id === net.uid) { if (p.sid !== SID) lobbyTrack(); return; }   // my older window said goodbye; I am still here
+        lobbyPeers.delete(p.id); recount();
+      })
+      .subscribe(status => {
+        if (net.lobby !== lob) return;
+        if (status === 'SUBSCRIBED') { net.lobbyReady = true; net.lobbyDownAt = 0; lobbyNow(); lobbySend('who', {}); }
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') net.lobbyReady = false;
+      });
+  }
   async function connectRealtime() {
     try { await sb.realtime.setAuth(); } catch (e) { /* older clients set auth automatically */ }
-    const lob = sb.channel('lounge:lobby', { config: { private: true, broadcast: { self: false }, presence: { key: net.uid } } });
-    net.lobby = lob;
-    lob.on('presence', { event: 'sync' }, onLobbySync)
-      .on('broadcast', { event: 'lights' }, ({ payload: p }) => { if (p && LIGHTS[p.mode]) { lightMode = p.mode; if (sceneId === 'sanctuary' && EQ_INST.includes(p.inst)) eqFx(p.inst, 0.4); } })
-      .on('broadcast', { event: 'content' }, () => { loadContent(); })
-      .subscribe(status => { if (status === 'SUBSCRIBED') lobbyTrack(); });
+    joinLobby();
     joinSceneChannel();
   }
   // Chat comes from the database: every INSERT on public.messages for this room. The server fills in the
@@ -949,37 +1157,60 @@
       })
       .subscribe();
   }
-  function joinSceneChannel() {
-    joinChatDb();
-    if (net.ch) { const old = net.ch; net.ch = null; try { sb.removeChannel(old); } catch (e) {} }
-    for (const id of [...net.remotes.keys()]) removeRemote(id);
+  function sceneTopic() { return 'lounge:' + (sceneId === 'soccer' && match ? 'soccer-' + match.id : sceneId); }
+  // keep = true: same room, fresh connection (after a drop). People already here stay on screen and in their games.
+  function joinSceneChannel(keep) {
+    if (!keep) joinChatDb();
+    if (net.ch) { const old = net.ch; if (!keep) chSend(old, 'bye', { id: net.uid, sid: SID }); net.ch = null; try { sb.removeChannel(old); } catch (e) {} }
+    if (!keep) { for (const id of [...net.remotes.keys()]) removeRemote(id); net.downAt = 0; net.tries = 0; net.warned = false; }
     net.ready = false;
-    const ch = sb.channel('lounge:' + (sceneId === 'soccer' && match ? 'soccer-' + match.id : sceneId), { config: { private: true, broadcast: { self: false }, presence: { key: net.uid } } });
+    const ch = sb.channel(sceneTopic(), { config: { private: true, broadcast: { self: false } } });
     net.ch = ch;
-    ch.on('presence', { event: 'sync' }, () => { if (net.ch === ch) onSync(); })
-      .on('broadcast', { event: 'st' }, ({ payload: p }) => {
-        if (net.ch !== ch || !p || p.id === net.uid) return;
+    ch.on('broadcast', { event: 'st' }, ({ payload: p }) => {
+        if (net.ch !== ch || !p || !p.id || p.id === net.uid) return;
         markHeard(p.id);
-        const fresh = !net.remotes.has(p.id);
+        const now = performance.now(), fresh = !net.remotes.has(p.id);
         const ent = net.remotes.get(p.id) || addRemote(p.id, p);
-        if (fresh) onLobbySync();
-        applyRemote(ent, p, performance.now(), false);
+        if (p.name) ent.name = p.name;
+        if (validLook(p.look)) ent.look = p.look;
+        if (p.full) ent.known = true; else if (!ent.known) sayHello();
+        applyRemote(ent, p, now, fresh);
+        if (fresh) recount();
+      })
+      .on('broadcast', { event: 'hello' }, ({ payload: p }) => { if (net.ch === ch && p && p.id !== net.uid) { sendFullSoon(); onPeerHello(p.id); } })
+      .on('broadcast', { event: 'bye' }, ({ payload: p }) => {
+        if (net.ch !== ch || !p || !p.id) return;
+        if (p.id === net.uid) { if (p.sid !== SID) sendFullSoon(); return; }
+        heard.delete(p.id); removeRemote(p.id); recount();
       })
       .on('broadcast', { event: 'chat' }, ({ payload: p }) => { if (net.ch === ch && BP.legacy && p) showChat(p.id, p.name, p.text); })   // BACKPORT
       .on('broadcast', { event: 'hit' }, ({ payload: p }) => { if (net.ch === ch) onHit(p); })
       .on('broadcast', { event: 'gm' }, ({ payload: p }) => { if (net.ch === ch) onGm(p); })
       .on('broadcast', { event: 'pty' }, ({ payload: p }) => { if (net.ch === ch) onPty(p); })
       .on('broadcast', { event: 'fb' }, ({ payload: p }) => { if (net.ch === ch) onFb(p); })
+      .on('broadcast', { event: 'tg' }, ({ payload: p }) => { if (net.ch === ch && p) onTg(p); })
       .on('broadcast', { event: 'emote' }, ({ payload: p }) => { const ent = p && net.remotes.get(p.id); if (ent) ent.emote = { sym: p.sym, until: performance.now() + 2400 }; })
       .subscribe(status => {
         if (net.ch !== ch) return;
-        if (status === 'SUBSCRIBED') { net.ready = true; net.sig = ''; net.lastTrack = 0; net.dirty = true; $('liveDot').classList.remove('bad'); }
+        if (status === 'SUBSCRIBED') {
+          const now = performance.now();
+          net.ready = true; net.sig = ''; net.downAt = 0; helloAt = -1e9; $('liveDot').classList.remove('bad');
+          for (const id of net.remotes.keys()) heard.set(id, now);
+          sayHello(); sendFull(); onSceneReady();
+        }
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          net.ready = false; $('liveDot').classList.add('bad');
-          if (status !== 'CLOSED') toast('실시간 연결이 불안정해요. 자동으로 다시 연결하고 있어요.');
+          net.ready = false; if (!net.downAt) net.downAt = performance.now(); $('liveDot').classList.add('bad');
+          // the server closed this room on us: come straight back (the watchdog retries if this fails too)
+          if (status === 'CLOSED') setTimeout(() => { if (net.ch === ch && !exited) joinSceneChannel(true); }, 1200 + Math.random() * 800);
         }
       });
   }
+  // hooks for the table games (catan, drawing); filled in by games.js
+  const TG = { onMsg: null, onReady: null, onHello: null, onGone: null, busy: null };
+  function onTg(p) { if (TG.onMsg) try { TG.onMsg(p); } catch (e) { console.error(e); } }
+  function onSceneReady() { if (TG.onReady) try { TG.onReady(); } catch (e) { console.error(e); } }
+  function onPeerHello(id) { if (TG.onHello) try { TG.onHello(id); } catch (e) { console.error(e); } }
+  function busyGame() { return TG.busy ? !!TG.busy() : false; }
   async function loadContent() {
     const { data, error } = await sb.from('content').select('ads, qr_url, layout, sample, qt_link').eq('id', 1).maybeSingle();
     if (error || !data) return;
@@ -1012,7 +1243,7 @@
     if (!LIVE || !net.uid) return;
     clearTimeout(saveProfileTimer);
     saveProfileTimer = setTimeout(() => { sb.from('profiles').update({ name: player.name, look: player.look }).eq('id', net.uid).then(() => {}); }, 800);
-    net.dirty = true; net.lastTrack = 0; lobbyTrack();
+    net.dirty = true; lobbyTrack();
   }
 
   // ================= chat =================
@@ -1167,8 +1398,8 @@
     return (e.key || '').toLowerCase();
   }
   window.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
-    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden) return;
+    if (e.key === 'Escape') { if (!$('tg').hidden) { if (TG.hide) TG.hide(); return; } if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
+    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden || !$('tg').hidden) return;
     const k = keyName(e);
     // a button focused by an earlier click must not also fire on Enter/Space
     if ((k === 'enter' || k === ' ') && document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
@@ -2035,17 +2266,17 @@
   function updateZz(now) {
     const idleRoom = ['sanctuary', 'hall', 'hall1', 'roof'].includes(sceneId);
     const zz = !player.dnd && (hiddenAway || (idleRoom && now - lastInput > IDLE_MS && !player.playing && !player.brew && !gmActive()));
-    if (zz !== !!player.zz) { player.zz = zz; net.dirty = true; net.lastTrack = 0; }
+    if (zz !== !!player.zz) { player.zz = zz; }
   }
   function pushState() {
     if (!LIVE || !net.ready || !net.ch) return;
-    const st = myState(); net.sig = '';
-    try { net.ch.send({ type: 'broadcast', event: 'st', payload: st }); net.ch.track(Object.assign({ name: player.name, look: player.look }, st)); } catch (e) {}
+    net.sig = ''; sendFull();
   }
   function leaveRealtime() {
     if (!LIVE) return;
-    for (const c of [net.ch, net.lobby, net.chatDb]) if (c) { try { c.untrack(); } catch (e) {} try { sb.removeChannel(c); } catch (e) {} }
-    net.ch = null; net.lobby = null; net.chatDb = null; net.ready = false;
+    chSend(net.ch, 'bye', { id: net.uid, sid: SID }); chSend(net.lobby, 'gone', { id: net.uid, sid: SID });
+    for (const c of [net.ch, net.lobby, net.chatDb]) if (c) { try { sb.removeChannel(c); } catch (e) {} }
+    net.ch = null; net.lobby = null; net.chatDb = null; net.ready = false; net.lobbyReady = false; lobbyPeers.clear();
     for (const id of [...net.remotes.keys()]) removeRemote(id);
     renderPeople();
   }
@@ -2263,7 +2494,7 @@
       if (seat && player.seat !== seat && (!seat.occ || seat.occ === player)) { if (player.seat) standUp(player); sit(player, seat); }
       player.tie = me.ready ? 2 : 1;
     } else player.tie = 0;
-    net.dirty = true; net.lastTrack = 0;
+    
     fbLabel();
     if (partyOpen()) openParty(true);
   }
@@ -2431,7 +2662,7 @@
       if (bl.y > FIELD.y1 - 2) { bl.y = FIELD.y1 - 2; bl.vy = -Math.abs(bl.vy) * 0.6; }
       if (m.rem <= 0) return endMatch('time');
     }
-    if (now - fbLastSend > 90) { fbLastSend = now; fbSend({ t: 'ball', x: +bl.x.toFixed(1), y: +bl.y.toFixed(1), vx: +bl.vx.toFixed(1), vy: +bl.vy.toFixed(1), sw: m.score.w, sb: m.score.b, rem: Math.ceil(m.rem), ph: m.phase }); }
+    if (now - fbLastSend > 120) { fbLastSend = now; fbSend({ t: 'ball', x: +bl.x.toFixed(1), y: +bl.y.toFixed(1), vx: +bl.vx.toFixed(1), vy: +bl.vy.toFixed(1), sw: m.score.w, sb: m.score.b, rem: Math.ceil(m.rem), ph: m.phase }); }
   }
   function goal(team) {
     const m = match; m.score[team]++; m.phase = 'goal'; m.phaseAt = performance.now(); m.lastGoal = team;
@@ -2529,6 +2760,7 @@
     switching = true;
     if (sceneId === GM_ROOM) gmLeaveRoom();
     if (sceneId === 'f1r1' && party) leaveParty(true);
+    if (TG.onLeaveScene) try { TG.onLeaveScene(); } catch (e) { console.error(e); }
     player.tie = 0;
     const fade = $('fade'); fade.classList.add('on');
     setTimeout(() => {
@@ -2543,7 +2775,7 @@
       camInit = false; resize();
       $('sceneTag').textContent = scene.name; gmLabel(); fbLabel();
       logEl.innerHTML = '';
-      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
+      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
       if (id === 'roof') loadWeather();
       if (id === 'soccer') onSoccerEnter();
@@ -2639,7 +2871,7 @@
     gm = { id, oppId, oppName: gmClip(oppName), me: color, b: new Uint8Array(GN * GN), ms: [], over: false, win: null, how: '', winner: 0, practice: practice || null, tl, level: level || 'mid', turnT0: performance.now() };
     gmGhost = -1; gmHover = -1;
     closeModal(); gmHideInvite();
-    net.dirty = true; net.lastTrack = 0;
+    
     gmOpen();
     if (!practice) log('', `⚫ ${gm.oppName}님과 오목을 시작했어요. ${color === 1 ? '내가 흑이라 먼저 둬요.' : '상대가 흑이라 먼저 둬요.'}${tl ? ` 한 수 ${tl}초!` : ''}`, 'sys game');
     if (practice === 'ai' && color === 2) setTimeout(gmAiTurn, 500);
@@ -2647,7 +2879,7 @@
   function gmFinish(winner, how) {
     if (!gmActive()) return;
     gm.over = true; gm.winner = winner; gm.how = how; gmGhost = -1;
-    net.dirty = true; net.lastTrack = 0;
+    
     if (gm.practice) {
       toast(winner === 0 ? '비겼어요' : how === 'timeout' ? '⏰ 시간 초과!' : gm.practice === 'hot' ? `${winner === 1 ? '흑' : '백'}이 이겼어요!` : winner === gm.me ? '이겼어요! 🎉' : '컴퓨터가 이겼어요');
     } else {
@@ -2848,7 +3080,7 @@
         break;
       case 'end':
         if (!gm || gm.id !== p.id || p.from !== gm.oppId) return;
-        if (p.why === 'cancel' && !gm.ms.length) { gm.over = true; gm = null; $('gm').hidden = true; gmLabel(); net.dirty = true; toast('상대가 신청을 취소했어요'); return; }
+        if (p.why === 'cancel' && !gm.ms.length) { gm.over = true; gm = null; $('gm').hidden = true; gmLabel(); toast('상대가 신청을 취소했어요'); return; }
         if (gmActive()) gmFinish(gm.me, p.why === 'resign' ? 'resign' : p.why === 'timeout' ? 'timeout' : 'left');
         break;
     }
@@ -3233,6 +3465,21 @@
   if (LIVE) bootLive();
   else if (store.get('onl-demo-auth')) afterLogin(null);
   else showAuth('');
+  // ---- table games (games.js) talk to the lounge through this ----
+  // if an older index.html is still being served, add the two elements the games need so nothing breaks
+  if (!$('tg')) { const d = el('div', 'tg'); d.id = 'tg'; d.hidden = true; document.body.appendChild(d); }
+  if (!$('tgBtn')) { const b = el('button', 'btn gm-btn', '🎲 게임'); b.type = 'button'; b.id = 'tgBtn'; b.hidden = true; ($('fbBtn') && $('fbBtn').parentNode || document.body).appendChild(b); }
+  function tgOpen(kind) { if (TG.open) TG.open(kind); else toast('게임을 불러오지 못했어요. 페이지를 새로고침해 주세요.'); }
+  window.ONL = {
+    TG, $, el, toast, sfx, newId: gmNewId, P, pixCircle,
+    uid: () => net.uid, name: () => player.name, scene: () => sceneId, ready: () => net.ready, live: () => LIVE,
+    send: p => netSend('tg', p),
+    here: id => id === net.uid || net.remotes.has(id),
+    nameOf: id => id === net.uid ? player.name : (net.remotes.get(id) || {}).name || '',
+    say: text => log('', text, 'sys game'),
+    bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
+  };
+  if (document.fonts && document.fonts.load) document.fonts.load('700 20px "Pixelify Sans"').then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
   if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx, vy }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk] };
   requestAnimationFrame(loop);
 })();

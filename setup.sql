@@ -304,7 +304,7 @@ begin
     raise exception 'not a member';
   end if;
   new.name := nm;
-  if new.scene not in ('sanctuary', 'hall', 'room1', 'room2', 'room3', 'room4', 'hall1', 'f1r1', 'roof', 'soccer') then
+  if new.scene not in ('sanctuary', 'hall', 'room1', 'room2', 'room3', 'room4', 'hall1', 'f1r1', 'f1r2', 'f1r3', 'roof', 'soccer') then
     raise exception 'bad scene';
   end if;
   if (select count(*) from public.messages where user_id = new.user_id and created_at > now() - interval '10 seconds') >= 5 then
