@@ -151,9 +151,14 @@
     if (isHost()) { if (T.members.some(m => m.id === id)) { if (!T.started) hostLeave(id); else if (game().memberGone) game().memberGone(id); else hostLeave(id); } return; }
     if (id === T.host) takeOver();
   };
-  TG.onLeaveScene = () => { if (T) leaveTable(true); T = null; G = null; mountedKey = ''; root.hidden = true; root.innerHTML = ''; btn.hidden = true; };
+  TG.onLeaveScene = () => { if (T) leaveTable(true); T = null; G = null; mountedKey = ''; chatBack(); root.hidden = true; root.innerHTML = ''; btn.hidden = true; };
   TG.busy = () => inTable() && T.started;
-  TG.hide = () => { root.hidden = true; label(); };
+  TG.hide = () => {
+    chatBack();
+    const k = kindHere();
+    if (mountedKey.startsWith('game:') && k && GAMES[k].unmount) GAMES[k].unmount();
+    mountedKey = ''; root.hidden = true; root.innerHTML = ''; label();
+  };
   TG.open = kind => {
     if (!O.live()) { toast('혼자 보는 체험 모드에서는 함께 하는 게임을 할 수 없어요'); return; }
     if (!kindHere()) return;
@@ -188,6 +193,30 @@
     else if (T && T.started) { text += inTable() ? ' 진행 중' : ' 구경'; ping = root.hidden && inTable() && !!(game().myTurn && game().myTurn()); }
     btn.textContent = text; btn.classList.toggle('ping', ping);
   }
+  // ---- lounge chat inside the game ----
+  // The real chat pane is borrowed from the side panel and put back when the game closes, so chatting
+  // during a game uses exactly the same box (and the same history) as everywhere else.
+  let chatOpen = false, chatHome = null, chatUnread = 0;
+  const pane = () => document.querySelector('.chat-pane');
+  const wide = () => window.innerWidth >= 900;
+  function chatHold(box) {
+    const p = pane(); if (!p || !box) return;
+    if (!chatHome) chatHome = { parent: p.parentNode, next: p.nextSibling, hidden: p.hidden };
+    p.hidden = false; box.appendChild(p);
+  }
+  function chatBack() {
+    const p = pane(); if (!p || !chatHome) return;
+    p.hidden = chatHome.hidden; chatHome.parent.insertBefore(p, chatHome.next); chatHome = null;
+  }
+  function applyChat() {
+    const box = root.querySelector('.tg-chat'), btn = root.querySelector('.tg-chatbtn'); if (!box) return;
+    const on = chatOpen || wide();
+    box.classList.toggle('show', on);
+    if (on) { chatUnread = 0; const sc = box.querySelector('.chat-scroll'); if (sc) sc.scrollTop = sc.scrollHeight; }
+    if (btn) { btn.hidden = wide(); btn.setAttribute('aria-pressed', String(chatOpen)); btn.dataset.unread = chatUnread ? (chatUnread > 9 ? '9+' : chatUnread) : ''; }
+  }
+  TG.onChat = kind => { if (root.hidden || kind === 'me') return; if (!(chatOpen || wide())) { chatUnread++; applyChat(); } };
+  window.addEventListener('resize', () => { if (!root.hidden) applyChat(); });
   function confirmBar(card, text, yesText, cb) {
     const old = card.querySelector('.tg-ask'); if (old) old.remove();
     const bar = el('div', 'tg-ask'); bar.appendChild(el('p', '', text));
@@ -198,12 +227,12 @@
   function render() {
     label();
     if (root.hidden) return;
-    const kind = kindHere(); if (!kind) { root.hidden = true; return; }
+    const kind = kindHere(); if (!kind) { chatBack(); root.hidden = true; return; }
     const inf = INFO[kind];
     const key = !T ? 'none' : !T.started ? 'lobby' : (G ? 'game:' + T.id : 'wait');
     if (key.startsWith('game:') && key === mountedKey && root.firstChild) { GAMES[kind].update(); return; }
     if (mountedKey.startsWith('game:') && GAMES[kind].unmount) GAMES[kind].unmount();
-    mountedKey = key; root.innerHTML = '';
+    mountedKey = key; chatBack(); root.innerHTML = '';   // give the chat pane back before the card is thrown away
     const card = el('div', 'tg-card tg-' + kind + (key.startsWith('game:') ? ' tg-play' : ''));
     const head = el('div', 'tg-head'), h = el('h2', '', `${inf.icon} ${inf.title}`), hb = el('div', 'tg-row');
     const fold = el('button', 'btn', '접기'); fold.type = 'button'; fold.addEventListener('click', TG.hide);
@@ -212,8 +241,12 @@
       out.addEventListener('click', () => { if (T && T.started && !(G && G.over)) confirmBar(card, kind === 'catan' ? '게임에서 나갈까요? 내 차례는 자동으로 넘어가게 돼요.' : '게임에서 나갈까요?', '나가기', () => leaveTable()); else leaveTable(); });
       hb.appendChild(out);
     }
-    hb.appendChild(fold); head.append(h, hb); card.appendChild(head);
-    const body = el('div', 'tg-body'); card.appendChild(body); root.appendChild(card);
+    const cBtn = el('button', 'btn tg-chatbtn', '💬 대화'); cBtn.type = 'button';
+    cBtn.addEventListener('click', () => { chatOpen = !chatOpen; applyChat(); });
+    hb.appendChild(cBtn); hb.appendChild(fold); head.append(h, hb); card.appendChild(head);
+    const main = el('div', 'tg-main'), body = el('div', 'tg-body'), chatBox = el('div', 'tg-chat');
+    main.append(body, chatBox); card.append(main); root.appendChild(card);
+    chatHold(chatBox); applyChat();
     if (key === 'none') {
       body.appendChild(el('p', 'tg-blurb', inf.blurb));
       body.appendChild(el('p', 'tg-empty', '아직 열린 자리가 없어요. 먼저 자리를 열고 친구들을 기다려 보세요!'));
@@ -465,9 +498,14 @@
   };
   function cDraw() {
     const d = C.dom; if (!d || !G) return;
-    const cv = d.cv, geo = cGeo(), wCss = cv.clientWidth || 300, bw = geo.x1 - geo.x0, bh = geo.y1 - geo.y0;
-    const S = wCss / bw, hCss = Math.round(S * bh), dpr = Math.min(window.devicePixelRatio || 1, 2.5);
-    if (cv.width !== Math.round(wCss * dpr) || cv.height !== Math.round(hCss * dpr)) { cv.width = Math.round(wCss * dpr); cv.height = Math.round(hCss * dpr); cv.style.height = hCss + 'px'; }
+    const cv = d.cv, geo = cGeo(), bw = geo.x1 - geo.x0, bh = geo.y1 - geo.y0;
+    // as big as the space allows, in width and in height, so a wide screen gets a big board
+    // and a phone never has to scroll past it
+    const box = cv.parentNode, availW = (box && box.clientWidth) || cv.clientWidth || 300;
+    const availH = Math.max(200, window.innerHeight - (window.innerWidth >= 900 ? 170 : 330));
+    const S = Math.min(availW / bw, availH / bh), wCss = Math.round(S * bw), hCss = Math.round(S * bh);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    if (cv.width !== Math.round(wCss * dpr) || cv.height !== Math.round(hCss * dpr)) { cv.width = Math.round(wCss * dpr); cv.height = Math.round(hCss * dpr); cv.style.width = wCss + 'px'; cv.style.height = hCss + 'px'; }
     const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, wCss, hCss);
     const X = x => (x - geo.x0) * S, Y = y => (y - geo.y0) * S, INK = '#251c2c';
     C.S = S; C.X = X; C.Y = Y;
@@ -575,14 +613,18 @@
     const top = el('div', 'ct-top'); top.append(d.status, d.dice);
     d.cv = el('canvas', 'ct-board'); d.cv.addEventListener('pointerdown', cTap);
     d.panel = el('div', 'ct-panel'); d.hand = el('div', 'ct-hand'); d.acts = el('div', 'ct-acts'); d.log = el('div', 'ct-log');
-    const left = el('div', 'ct-left'), right = el('div', 'ct-right');
+    const left = d.left = el('div', 'ct-left'), right = el('div', 'ct-right');
     left.append(d.cv); right.append(d.panel, d.hand, d.acts, d.log);
     const cols = el('div', 'ct-cols'); cols.append(left, right);
     body.append(d.players, top, cols);
-    d.ro = new ResizeObserver(() => cDraw()); d.ro.observe(d.cv);
+    d.ro = new ResizeObserver(() => cDraw()); d.ro.observe(d.left);   // the box, not the canvas: its size is ours to set
+    d.onwin = () => cDraw(); window.addEventListener('resize', d.onwin);
     cUpdate();
   }
-  function cUnmount() { if (C.dom && C.dom.ro) C.dom.ro.disconnect(); cancelAnimationFrame(C.raf); C.dom = null; C.panel = null; C.mode = null; C.pend = null; C.lastSeq = -1; }
+  function cUnmount() {
+    if (C.dom) { if (C.dom.ro) C.dom.ro.disconnect(); if (C.dom.onwin) window.removeEventListener('resize', C.dom.onwin); }
+    cancelAnimationFrame(C.raf); C.dom = null; C.panel = null; C.mode = null; C.pend = null; C.lastSeq = -1;
+  }
   const mkBtn = (text, cls, fn, dis) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; if (dis) b.disabled = true; b.addEventListener('click', fn); return b; };
   function cUpdate() {
     const d = C.dom; if (!d || !G) return;
@@ -663,8 +705,11 @@
       const devs = meP.developmentCards.concat(meP.newDevCards);
       if (devs.length) {
         const dr = el('div', 'ct-devs'), canPlay = mine && playing && !g.devCardPlayedThisTurn && (g.turnPhase === 'main' || g.turnPhase === 'roll');
-        meP.developmentCards.forEach(cd => { const b = mkBtn(DEV_KO[cd], 'ct-dev', () => { if (cd === 'monopoly') { C.panel = { t: 'mono' }; cUpdate(); } else cAct('dev', [cd]); }, cd === 'victoryPoint' || !canPlay); b.title = DEV_TIP[cd]; dr.appendChild(b); });
-        meP.newDevCards.forEach(cd => { const b = mkBtn(DEV_KO[cd] + (cd === 'victoryPoint' ? '' : ' (다음 턴부터)'), 'ct-dev new', () => {}, true); b.title = DEV_TIP[cd]; dr.appendChild(b); });
+        // the card says what it does, so nobody has to hover (phones cannot)
+        const devCard = (cd, cls, note, fn, dis) => { const b = mkBtn('', 'ct-dev ' + cls, fn, dis); b.append(el('b', '', DEV_KO[cd]), el('i', '', DEV_TIP[cd])); if (note) b.appendChild(el('u', '', note)); b.title = DEV_TIP[cd]; dr.appendChild(b); };
+        meP.developmentCards.forEach(cd => devCard(cd, '', cd === 'victoryPoint' ? '쓰는 카드가 아니에요' : !canPlay ? (g.devCardPlayedThisTurn ? '이번 차례엔 이미 썼어요' : '내 차례에 쓸 수 있어요') : '눌러서 쓰기',
+          () => { if (cd === 'monopoly') { C.panel = { t: 'mono' }; cUpdate(); } else cAct('dev', [cd]); }, cd === 'victoryPoint' || !canPlay));
+        meP.newDevCards.forEach(cd => devCard(cd, 'new', cd === 'victoryPoint' ? '이미 점수에 들어가 있어요' : '다음 차례부터 쓸 수 있어요', () => {}, true));
         d.hand.appendChild(dr);
       }
     } else d.hand.appendChild(el('p', 'tg-empty', '구경하고 있어요'));
@@ -712,18 +757,41 @@
   // ================================================================================================
   //  그림 퀴즈
   // ================================================================================================
-  const WORDS = ('사과 바나나 수박 포도 딸기 복숭아 파인애플 당근 옥수수 감자 고구마 양파 버섯 호박 토마토 김밥 떡볶이 라면 피자 햄버거 치킨 짜장면 만두 비빔밥 삼겹살 아이스크림 케이크 초콜릿 도넛 붕어빵 솜사탕 팝콘 커피 우유 ' +
-    '강아지 고양이 토끼 코끼리 기린 사자 호랑이 곰 판다 원숭이 돼지 소 말 양 닭 오리 펭귄 부엉이 독수리 앵무새 상어 고래 돌고래 문어 오징어 거북이 악어 뱀 개구리 나비 벌 개미 거미 달팽이 공룡 낙타 캥거루 코알라 다람쥐 고슴도치 ' +
-    '자동차 버스 기차 지하철 비행기 헬리콥터 배 자전거 오토바이 택시 소방차 구급차 로켓 잠수함 트럭 킥보드 ' +
-    '집 학교 교회 병원 아파트 놀이터 도서관 편의점 공항 다리 등대 성 텐트 풍차 피라미드 만리장성 에펠탑 ' +
-    '의자 책상 침대 소파 냉장고 세탁기 텔레비전 컴퓨터 노트북 휴대폰 시계 안경 우산 가방 모자 신발 양말 장갑 목도리 열쇠 가위 연필 지우개 책 달력 거울 빗 칫솔 비누 수건 촛불 전구 선풍기 에어컨 청소기 카메라 마이크 이어폰 리모컨 ' +
-    '기타 피아노 드럼 바이올린 트럼펫 축구공 농구공 야구 배드민턴 탁구 볼링 스케이트 스키 수영 낚시 줄넘기 그네 미끄럼틀 시소 연 풍선 주사위 퍼즐 로봇 인형 ' +
-    '해 달 별 구름 비 눈 무지개 번개 바람 산 바다 강 섬 폭포 사막 화산 나무 꽃 장미 해바라기 선인장 잎 숲 눈사람 ' +
-    '의사 경찰 소방관 요리사 선생님 가수 화가 농부 우주인 해적 왕 공주 마법사 유령 천사 목사님 ' +
-    '눈물 웃음 하품 재채기 악수 박수 기도 찬양 십자가 성경 방주 무지개떡 크리스마스 선물 생일 결혼식 졸업 소풍 캠핑 불꽃놀이 ' +
-    '코 입 귀 손 발 머리카락 수염 심장 뼈 이빨 ' +
-    '젓가락 숟가락 포크 냄비 프라이팬 컵 접시 주전자 도마 칼 ' +
-    '지도 나침반 망원경 현미경 지구 태양 우주선 외계인 보물상자 왕관 반지 목걸이 다이아몬드 돈 지갑 저금통 편지 우체통 신호등 횡단보도 엘리베이터 계단 사다리 열기구 낙하산 썰매 눈싸움 훠궈 마라탕 탕후루 버블티').split(' ').filter((w, i, a) => w && a.indexOf(w) === i);
+  // three baskets. Every turn offers one word from each, so there is always an easy way out and
+  // something worth showing off with.
+  const uniq = s => s.split(' ').filter((w, i, a) => w && a.indexOf(w) === i);
+  const WORD_SETS = [
+    uniq('사과 바나나 수박 포도 딸기 당근 옥수수 감자 고구마 양파 버섯 호박 토마토 라면 피자 햄버거 치킨 만두 케이크 도넛 커피 우유 ' +
+      '강아지 고양이 토끼 코끼리 기린 사자 호랑이 곰 판다 원숭이 돼지 소 말 양 닭 오리 펭귄 상어 고래 문어 거북이 뱀 개구리 나비 벌 개미 거미 공룡 ' +
+      '자동차 버스 기차 비행기 배 자전거 택시 트럭 로켓 ' +
+      '집 학교 교회 병원 아파트 다리 성 텐트 ' +
+      '의자 책상 침대 소파 냉장고 텔레비전 컴퓨터 휴대폰 시계 안경 우산 가방 모자 신발 양말 장갑 열쇠 가위 연필 책 거울 칫솔 비누 수건 촛불 전구 카메라 ' +
+      '기타 피아노 드럼 축구공 농구공 그네 미끄럼틀 시소 풍선 주사위 로봇 인형 ' +
+      '해 달 별 구름 비 눈 무지개 번개 산 바다 강 섬 나무 꽃 장미 해바라기 선인장 잎 숲 눈사람 ' +
+      '의사 경찰 소방관 요리사 선생님 가수 왕 공주 유령 ' +
+      '눈물 웃음 악수 박수 기도 십자가 성경 선물 생일 ' +
+      '코 입 귀 손 발 수염 이빨 젓가락 숟가락 포크 냄비 컵 접시 칼 ' +
+      '지구 태양 왕관 반지 목걸이 돈 지갑 편지 신호등 계단 사다리 썰매'),
+    uniq('복숭아 파인애플 김밥 떡볶이 짜장면 비빔밥 삼겹살 아이스크림 초콜릿 붕어빵 솜사탕 팝콘 탕후루 버블티 마라탕 ' +
+      '돌고래 오징어 악어 달팽이 낙타 캥거루 코알라 다람쥐 고슴도치 부엉이 독수리 앵무새 ' +
+      '지하철 헬리콥터 오토바이 소방차 구급차 잠수함 킥보드 열기구 ' +
+      '놀이터 도서관 편의점 공항 등대 풍차 피라미드 ' +
+      '세탁기 노트북 목도리 지우개 달력 빗 선풍기 에어컨 청소기 마이크 이어폰 리모컨 프라이팬 주전자 도마 ' +
+      '바이올린 트럼펫 야구 배드민턴 탁구 볼링 스케이트 스키 수영 낚시 줄넘기 퍼즐 연 ' +
+      '바람 폭포 사막 화산 ' +
+      '화가 농부 우주인 해적 마법사 천사 목사님 ' +
+      '하품 재채기 찬양 방주 크리스마스 결혼식 졸업 소풍 캠핑 불꽃놀이 눈싸움 훠궈 ' +
+      '머리카락 심장 뼈 지도 나침반 망원경 현미경 우주선 외계인 보물상자 다이아몬드 저금통 우체통 횡단보도 엘리베이터 낙하산 만리장성 에펠탑'),
+    uniq('회전목마 롤러코스터 관람차 분수대 모래시계 돋보기 지팡이 목발 깁스 반창고 주사기 체온계 청진기 ' +
+      '다리미 믹서기 전자레인지 가습기 드라이기 계산기 저울 망치 못 드라이버 톱 사다리차 굴착기 경운기 ' +
+      '하프 아코디언 색소폰 트라이앵글 캐스터네츠 지휘자 발레 태권도 씨름 양궁 역도 마라톤 ' +
+      '오로라 빙산 종유석 선인장꽃 단풍 낙엽 새싹 뿌리 씨앗 벌집 거미줄 둥지 ' +
+      '소방훈련 예배 성찬 세례 부활절 추수감사절 성탄절 십일조 전도 선교 ' +
+      '시험 발표 면접 운전면허 여권 비자 환승 시차 유학 기숙사 ' +
+      '한복 갓 부채 연날리기 제기차기 윷놀이 투호 가야금 장구 탈춤 ' +
+      '만리장성 자금성 천단 이화원 용 봉황 판다인형 월병 춘절 홍등')
+  ];
+  const WORDS = WORD_SETS[0].concat(WORD_SETS[1], WORD_SETS[2]);
   const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
   const cho = ch => { const c = ch.charCodeAt(0) - 0xAC00; return c >= 0 && c < 11172 ? CHO[Math.floor(c / 588)] : ch; };
   const norm = s => String(s || '').replace(/\s+/g, '').toLowerCase();
@@ -752,7 +820,8 @@
     if (G.turn >= G.order.length) { G.turn = 0; G.round++; }
     if (G.round > G.rounds) { dFinish(); return; }
     G.drawer = G.order[G.turn]; G.got = {}; G.word = null; G.mask = []; H.word = null; H.hint1 = H.hint2 = false;
-    const pool = WORDS.filter(w => !D.used.includes(w)); H.choices = shuffle(pool.length >= 3 ? pool : WORDS).slice(0, 3);
+    // one easy, one middling, one hard — in a random order so the drawer cannot tell which is which
+    H.choices = shuffle(WORD_SETS.map(set => { const left = set.filter(w => !D.used.includes(w)); return (left.length ? left : set)[Math.random() * (left.length || set.length) | 0]; }));
     dSetPhase('pick', PICK_MS);
     D.strokes = []; send({ t: 'clr' });
     if (G.drawer === me()) { D.choices = H.choices; D.myWord = null; } else send({ t: 'pick', to: G.drawer, words: H.choices });
@@ -809,8 +878,9 @@
     if (!own && T && T.host !== me()) { /* keep a copy so a new host can carry on */ }
     const changed = D.prev ? (D.prev.phase !== g.phase || D.prev.drawer !== g.drawer || D.prev.round !== g.round) : true;
     if (changed) {
-      if (g.phase === 'pick') { D.strokes = []; D.cur = null; if (g.drawer !== me()) { D.choices = null; D.myWord = null; } dSay(`${g.round}/${g.rounds} 라운드 · ${dName(g.drawer)}님이 그릴 차례예요`); }
-      if (g.phase === 'draw') { if (g.drawer === me()) dSay('그리기 시작! 글자나 숫자는 쓰지 않기로 해요 🙂'); sfx('pop', 0.35); }
+      // a new turn always starts on a blank board, so nobody has to press 모두 지우기
+      if (g.phase === 'pick') { D.strokes = []; D.cur = null; D.need = false; dRedraw(); if (g.drawer !== me()) { D.choices = null; D.myWord = null; } dSay(`${g.round}/${g.rounds} 라운드 · ${dName(g.drawer)}님이 그릴 차례예요`); }
+      if (g.phase === 'draw') { dRedraw(); if (g.drawer === me()) dSay('그리기 시작! 글자나 숫자는 쓰지 않기로 해요 🙂'); sfx('pop', 0.35); }
       if (g.phase === 'reveal') { dSay(`정답은 「${g.word || '?'}」${g.why === 'left' ? ' (그리던 친구가 나갔어요)' : g.why === 'all' ? ' · 모두 맞혔어요!' : ''}`, 'ans'); D.choices = null; }
       if (g.phase === 'end') { dSay('게임 끝! 수고했어요 👏', 'ans'); sfx('goal', 0.45); }
     }

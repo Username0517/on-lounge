@@ -1046,7 +1046,7 @@
     if (!net.ready) return;
     const st = myState(), kb = player.moving && !player.path.length;
     const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.tie, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
-    if (sig !== net.sig && now - net.lastSend > (kb ? (sceneId === 'soccer' ? 300 : 250) : 60)) { net.sig = sig; net.lastSend = now; netSend('st', st); }
+    if (sig !== net.sig && now - net.lastSend > (kb ? (sceneId === 'soccer' ? 170 : 250) : 60)) { net.sig = sig; net.lastSend = now; netSend('st', st); }
   }
   function addRemote(id, meta) {
     const sp = Object.values(scene.spawns)[0];
@@ -1270,6 +1270,7 @@
     logEl.appendChild(li);
     while (logEl.children.length > 120) logEl.removeChild(logEl.firstChild);
     if (atBottom || kind === 'me') pane.scrollTop = pane.scrollHeight;
+    if (TG.onChat) try { TG.onChat(kind); } catch (e) {}
   }
   function syncUnread() { const t = $('tab-chat'); t.dataset.unread = unread > 9 ? '9+' : unread || ''; }
   // a chat line from someone else: a database row, or (via backport.js) a legacy broadcast
@@ -2527,7 +2528,15 @@
     if (isPartyHost()) ptySend({ t: 'state', party });
     else if (party && performance.now() - partyAt > 9000) { const was = inParty(); party = null; applyParty(); if (was) toast('파티 연결이 끊겨서 나왔어요'); }
   }, 3000);
+  function kickBtnLabel() {
+    const btn = $('punchBtn'); if (!btn) return;
+    const on = !!(scene && scene.soccer);
+    btn.innerHTML = ''; btn.classList.toggle('kick-btn', on);
+    btn.append(on ? '⚽ 슛' : '👊 펀치', el('kbd', '', on ? 'Space' : 'F'));
+    btn.setAttribute('aria-label', on ? '공 차기' : '펀치');
+  }
   function fbLabel() {
+    kickBtnLabel();
     const btn = $('fbBtn'); btn.hidden = sceneId !== 'f1r1';
     btn.textContent = inParty() ? (isPartyHost() && canStart() ? '⚽ 경기 시작!' : '⚽ 파티') : party ? '⚽ 파티 참가' : '⚽ 축구';
     btn.classList.toggle('ping', !!(isPartyHost() && canStart()));
@@ -2580,8 +2589,19 @@
   // ================= 축구장: 경기 =================
   // The match host (lowest id among players still on the pitch) moves the ball and keeps score/time;
   // everyone else draws the ball from the host's updates ('fb' on the match channel) and asks the host to kick.
-  let match = null, ball = null, fbLastSend = 0, fbSyncAt = 0;
-  const KICK_R = 13, KICK_POW = 175, DRIB_R = 6;
+  // ================= 축구 =================
+  // The ball belongs to one player at a time ("own"). While you own it, it rides at your feet on every
+  // screen, so dribbling has no lag. A kick is decided by the kicker, not by the host: the kicker sends the
+  // ball's new position and speed with a counter (ks), and everyone applies it at once. A host packet with an
+  // older counter is ignored, so the ball never snaps back to where it was before your kick.
+  let match = null, ball = null, fbLastSend = 0, myKickAt = 0, kickHint = 0;
+  const KICK_R = 15,      // how close you must be to kick a loose ball
+    KICK_POW = 195,       // how hard the ball goes
+    TAKE_R = 8,           // close enough for the ball to stick to your feet
+    KEEP_R = 17,          // you keep it until it is knocked this far away
+    HOLD_AT = 7,          // how far in front of you it sits
+    KICK_CD = 420;        // nobody can pick it up right after a kick
+  const FACE = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
   const matchHost = () => {
     if (!match) return null;
     const here = Object.keys(match.teams).filter(id => id === net.uid || net.remotes.has(id)).sort();
@@ -2589,6 +2609,10 @@
   };
   const amMatchHost = () => !!(match && net.uid && matchHost() === net.uid);
   const teamOf = id => match && match.teams[id];
+  const entById = id => id === net.uid ? player : net.remotes.get(id);
+  function fbChars() { const out = []; for (const c of chars) { const id = c.isPlayer ? net.uid : c.id; if (teamOf(id)) out.push([id, c]); } return out; }
+  const ballHome = c => { const f = FACE[c.dir] || FACE.right; return [c.x + f[0] * HOLD_AT, c.y - 1 + f[1] * HOLD_AT]; };
+  const ballDist = c => Math.hypot(ball.x - c.x, ball.y - (c.y - 1));
   function formation(team, idx) {
     // own half, first player near the centre circle
     const side = team === 'w' ? -1 : 1, spots2 = [[30, 0], [58, -42], [58, 42], [92, 0], [40, -72]], [dx, dy] = spots2[idx % spots2.length];
@@ -2600,16 +2624,17 @@
     const f = formation(teamOf(net.uid), myIndex());
     player.x = clamp(f.x, 20, 300); player.y = f.y; player.dir = f.dir; player.path = []; player.goal = null;
   }
+  const centreBall = () => { ball.x = FIELD.w / 2; ball.y = (FIELD.y0 + FIELD.y1) / 2; ball.vx = ball.vy = 0; ball.own = null; ball.tx = null; ball.kickAt = performance.now(); };
   function enterMatch(mt) {
     match = Object.assign({}, mt, { score: { w: 0, b: 0 }, rem: mt.dur || 180, phase: 'kickoff', phaseAt: performance.now(), startedAt: performance.now(), final: null });
-    ball = { x: FIELD.w / 2, y: (FIELD.y0 + FIELD.y1) / 2, vx: 0, vy: 0, tx: null, ty: null };
+    ball = { x: FIELD.w / 2, y: (FIELD.y0 + FIELD.y1) / 2, vx: 0, vy: 0, tx: null, ty: null, own: null, ks: 0, by: '', kickAt: 0, grabAt: 0 };
     player.tie = 0;
     goScene('soccer', teamOf(net.uid) || 'w');
   }
   function onSoccerEnter() {
     if (!match) { setTimeout(() => goScene('f1r1', 'field'), 50); return; }
     toKickoffSpot();
-    log('', `⚽ 킥오프! ${match.mode} 대 ${match.mode}, 3분 경기예요. 공 가까이에서 Space(또는 ⚽ 버튼)로 차요.`, 'sys game');
+    log('', `⚽ 킥오프! ${match.mode} 대 ${match.mode}, 3분 경기예요. 공으로 달려가면 공이 발에 붙고, ⚽ 슛 버튼(또는 Space)으로 차요.`, 'sys game');
     match.phase = 'kickoff'; match.phaseAt = performance.now();
     sfx('whistle');
   }
@@ -2626,47 +2651,72 @@
     match = null; ball = null; goScene('f1r1', 'field');
   }
   function fbSend(p) { netSend('fb', Object.assign({ from: net.uid }, p)); }
-  function kick() {
-    if (!match || !ball || match.final) return;
-    const dx0 = ball.x - player.x, dy0 = ball.y - (player.y - 2), d = Math.hypot(dx0, dy0);
+  // which way the kick goes: the way I am running, else the way I am facing — and if that is roughly
+  // toward the other team's goal, it is straightened onto the goal so shots actually go in on a phone too
+  function aimDir() {
     let ux, uy;
-    if (keys.size && (player.moving)) { const kx = (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0), ky = (keys.has('arrowdown') || keys.has('s') ? 1 : 0) - (keys.has('arrowup') || keys.has('w') ? 1 : 0), kl = Math.hypot(kx, ky); if (kl) { ux = kx / kl; uy = ky / kl; } }
-    if (ux == null) { if (d > 1) { ux = dx0 / d; uy = dy0 / d; } else { const f = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[player.dir]; ux = f[0]; uy = f[1]; } }
-    player.action = 'jump'; player.actionT0 = performance.now(); player.actionUntil = player.actionT0 + 250;
-    if (d > KICK_R) { sfx('whoosh', 0.5); return; }
-    sfx('kick');
-    applyKick(ux, uy, KICK_POW);   // predict locally, the host has the final say
-    if (!amMatchHost()) fbSend({ t: 'kick', ux, uy, pw: KICK_POW, px: player.x, py: player.y });
+    const kx = (keys.has('arrowright') || keys.has('d') ? 1 : 0) - (keys.has('arrowleft') || keys.has('a') ? 1 : 0);
+    const ky = (keys.has('arrowdown') || keys.has('s') ? 1 : 0) - (keys.has('arrowup') || keys.has('w') ? 1 : 0);
+    if (kx || ky) { const l = Math.hypot(kx, ky); ux = kx / l; uy = ky / l; }
+    else if (player.path.length) { const t = player.path[0], ax = t.x - player.x, ay = t.y - player.y, l = Math.hypot(ax, ay); if (l > 0.5) { ux = ax / l; uy = ay / l; } }
+    if (ux == null) { const f = FACE[player.dir] || FACE.right; ux = f[0]; uy = f[1]; }
+    const gx = teamOf(net.uid) === 'w' ? FIELD.x1 : FIELD.x0, gy = (FIELD.gy0 + FIELD.gy1) / 2;
+    const tx = gx - ball.x, ty = gy - ball.y, tl = Math.hypot(tx, ty) || 1;
+    if ((ux * tx + uy * ty) / tl > 0.6) { ux = tx / tl; uy = ty / tl; }
+    return [ux, uy];
   }
-  function applyKick(ux, uy, pw) { if (!ball) return; ball.vx = ux * pw; ball.vy = uy * pw; ball.tx = null; }
-  // ---- host simulation ----
-  function hostStep(dt, now) {
-    const m = match, bl = ball;
-    if (m.final) return;
-    if (m.phase === 'goal') { if (now - m.phaseAt > 2600) { m.phase = 'kickoff'; m.phaseAt = now; bl.x = FIELD.w / 2; bl.y = (FIELD.y0 + FIELD.y1) / 2; bl.vx = bl.vy = 0; fbSend({ t: 'reset' }); toKickoffSpot(); } }
-    if (m.phase === 'kickoff' && now - m.phaseAt > 1200) m.phase = 'play';
-    if (m.phase === 'play') {
-      m.rem = Math.max(0, m.rem - dt);
-      // dribbling: anyone who runs into the ball pushes it
-      for (const c of chars) {
-        if (!teamOf(c.isPlayer ? net.uid : c.id)) continue;
-        const dx = bl.x - c.x, dy = bl.y - (c.y - 1), d = Math.hypot(dx, dy);
-        if (d < DRIB_R && d > 0.01) { const sp = Math.max(Math.hypot(bl.vx, bl.vy), 62); bl.vx = dx / d * sp; bl.vy = dy / d * sp; bl.x = c.x + dx / d * DRIB_R; bl.y = c.y - 1 + dy / d * DRIB_R; }
-      }
-      bl.x += bl.vx * dt; bl.y += bl.vy * dt;
-      const fr = Math.exp(-1.5 * dt); bl.vx *= fr; bl.vy *= fr; if (Math.hypot(bl.vx, bl.vy) < 3) bl.vx = bl.vy = 0;
-      const inMouth = bl.y > FIELD.gy0 + 2 && bl.y < FIELD.gy1 - 2;
-      if (bl.x < FIELD.x0 + 2) { if (inMouth) return goal('b'); bl.x = FIELD.x0 + 2; bl.vx = Math.abs(bl.vx) * 0.6; }
-      if (bl.x > FIELD.x1 - 2) { if (inMouth) return goal('w'); bl.x = FIELD.x1 - 2; bl.vx = -Math.abs(bl.vx) * 0.6; }
-      if (bl.y < FIELD.y0 + 2) { bl.y = FIELD.y0 + 2; bl.vy = Math.abs(bl.vy) * 0.6; }
-      if (bl.y > FIELD.y1 - 2) { bl.y = FIELD.y1 - 2; bl.vy = -Math.abs(bl.vy) * 0.6; }
-      if (m.rem <= 0) return endMatch('time');
+  function kick() {
+    if (!match || !ball || match.final || sceneId !== 'soccer') return;
+    const now = performance.now();
+    if (now - myKickAt < 200) return;
+    const d = ballDist(player), mine = ball.own === net.uid;
+    player.action = 'jump'; player.actionT0 = now; player.actionUntil = now + 250;
+    if (!mine && d > KICK_R) {
+      sfx('whoosh', 0.5);
+      if (now - kickHint > 6000) { kickHint = now; toast('공에 더 가까이 가야 찰 수 있어요. 공으로 달려가면 발에 붙어요!'); }
+      return;
     }
-    if (now - fbLastSend > 120) { fbLastSend = now; fbSend({ t: 'ball', x: +bl.x.toFixed(1), y: +bl.y.toFixed(1), vx: +bl.vx.toFixed(1), vy: +bl.vy.toFixed(1), sw: m.score.w, sb: m.score.b, rem: Math.ceil(m.rem), ph: m.phase }); }
+    myKickAt = now;
+    const [ux, uy] = aimDir();
+    ball.own = null; ball.kickAt = now; ball.ks = (ball.ks || 0) + 1; ball.by = net.uid; ball.tx = null;
+    if (d < 10) { ball.x = player.x + ux * 5; ball.y = (player.y - 1) + uy * 5; }   // never leave it stuck behind me
+    ball.vx = ux * KICK_POW; ball.vy = uy * KICK_POW;
+    if (match.phase === 'kickoff') match.phase = 'play';
+    sfx('kick');
+    fbSend({ t: 'kick', ks: ball.ks, x: +ball.x.toFixed(1), y: +ball.y.toFixed(1), vx: Math.round(ball.vx), vy: Math.round(ball.vy) });
+  }
+  // one step of the ball; returns 'w'/'b' when it crossed a goal line.
+  // Only the host may take the ball off someone: on other screens a player's view of where everyone is
+  // runs a little behind, and letting it decide would make the ball flicker between owners.
+  function stepBall(dt, now, host) {
+    const bl = ball;
+    const ow = bl.own ? entById(bl.own) : null;
+    if (bl.own && (!ow || !teamOf(bl.own))) bl.own = null;
+    if (ow) {
+      const [hx, hy] = ballHome(ow);
+      if (host && Math.hypot(hx - bl.x, hy - bl.y) > KEEP_R) bl.own = null;
+      else { const k = Math.min(1, dt * 16); bl.x += (hx - bl.x) * k; bl.y += (hy - bl.y) * k; bl.vx = bl.vy = 0; }
+    }
+    if (!bl.own) {
+      bl.x += bl.vx * dt; bl.y += bl.vy * dt;
+      const fr = Math.exp(-1.6 * dt); bl.vx *= fr; bl.vy *= fr;
+      if (Math.hypot(bl.vx, bl.vy) < 3) bl.vx = bl.vy = 0;
+    }
+    const inMouth = bl.y > FIELD.gy0 + 2 && bl.y < FIELD.gy1 - 2;
+    let scored = null;
+    if (bl.x < FIELD.x0 + 2) { if (inMouth) scored = 'b'; bl.x = FIELD.x0 + 2; bl.vx = Math.abs(bl.vx) * 0.6; }
+    if (bl.x > FIELD.x1 - 2) { if (inMouth) scored = 'w'; bl.x = FIELD.x1 - 2; bl.vx = -Math.abs(bl.vx) * 0.6; }
+    if (bl.y < FIELD.y0 + 2) { bl.y = FIELD.y0 + 2; bl.vy = Math.abs(bl.vy) * 0.6; }
+    if (bl.y > FIELD.y1 - 2) { bl.y = FIELD.y1 - 2; bl.vy = -Math.abs(bl.vy) * 0.6; }
+    return scored;
+  }
+  function sendBall() {
+    const bl = ball, m = match;
+    fbSend({ t: 'ball', x: +bl.x.toFixed(1), y: +bl.y.toFixed(1), vx: Math.round(bl.vx), vy: Math.round(bl.vy), own: bl.own || '', ks: bl.ks || 0, sw: m.score.w, sb: m.score.b, rem: Math.ceil(m.rem), ph: m.phase });
   }
   function goal(team) {
     const m = match; m.score[team]++; m.phase = 'goal'; m.phaseAt = performance.now(); m.lastGoal = team;
-    ball.vx = ball.vy = 0;
+    ball.vx = ball.vy = 0; ball.own = null;
     fbSend({ t: 'goal', team, sw: m.score.w, sb: m.score.b });
     sfx('goal');
   }
@@ -2684,41 +2734,89 @@
     setTimeout(() => { if (match === m) { match = null; ball = null; if (sceneId === 'soccer') goScene('f1r1', 'field'); } }, 6000);
   }
   function onFb(p) {
-    if (!p || !match || sceneId !== 'soccer' || p.from === net.uid) return;
+    if (!p || !match || !ball || sceneId !== 'soccer' || p.from === net.uid) return;
     const now = performance.now();
     if (p.t === 'kick') {
-      if (!amMatchHost() || !teamOf(p.from) || match.phase === 'goal' || match.final) return;
-      const d = Math.hypot(ball.x - p.px, ball.y - (p.py - 2));
-      if (d <= KICK_R + 8) { const l = Math.hypot(p.ux, p.uy) || 1; applyKick(p.ux / l, p.uy / l, clamp(+p.pw || KICK_POW, 0, 220)); if (match.phase === 'kickoff') match.phase = 'play'; }
+      // everyone trusts the kicker, so a kick is never swallowed by the host being out of date
+      if (!teamOf(p.from) || match.final) return;
+      const ks = +p.ks || 0, mine = ball.ks || 0;
+      if (ks < mine || (ks === mine && String(ball.by || '') >= p.from)) return;
+      ball.ks = ks; ball.by = p.from; ball.own = null; ball.kickAt = now; ball.tx = null;
+      ball.x = clamp(+p.x || 0, FIELD.x0, FIELD.x1); ball.y = clamp(+p.y || 0, FIELD.y0, FIELD.y1);
+      ball.vx = clamp(+p.vx || 0, -280, 280); ball.vy = clamp(+p.vy || 0, -280, 280);
+      if (match.phase === 'kickoff') match.phase = 'play';
+      sfx('kick', 0.45);
+      return;
+    }
+    if (p.t === 'grab') {   // a player says the ball reached their feet
+      if (!amMatchHost() || !teamOf(p.from) || match.final || now - (ball.kickAt || 0) < KICK_CD) return;
+      const c = net.remotes.get(p.from); if (!c || ball.own) return;
+      if (Math.hypot(ball.x - c.x, ball.y - (c.y - 1)) < TAKE_R + 7) ball.own = p.from;
       return;
     }
     if (amMatchHost()) return;   // only follow the host
     if (p.t === 'ball') {
-      fbSyncAt = now; ball.tx = p.x; ball.ty = p.y; ball.vx = p.vx; ball.vy = p.vy;
       match.score.w = p.sw; match.score.b = p.sb; match.rem = p.rem; if (p.ph && match.phase !== 'goal') match.phase = p.ph;
-    } else if (p.t === 'goal') { match.score.w = p.sw; match.score.b = p.sb; match.phase = 'goal'; match.phaseAt = now; match.lastGoal = p.team; sfx('goal'); }
-    else if (p.t === 'reset') { match.phase = 'kickoff'; match.phaseAt = now; ball.x = FIELD.w / 2; ball.y = (FIELD.y0 + FIELD.y1) / 2; ball.vx = ball.vy = 0; ball.tx = null; toKickoffSpot(); }
+      if ((+p.ks || 0) < (ball.ks || 0)) return;   // the host has not seen my kick yet: keep my own ball
+      ball.ks = +p.ks || 0;
+      const own = p.own || null;
+      // do not drop the ball I just picked up before the host has heard about it
+      if (!(own !== net.uid && ball.own === net.uid && now - (ball.grabAt || 0) < 900)) ball.own = own;
+      // while someone has the ball it rides on their feet on my screen too, so no need to snap it about
+      if (ball.own) { ball.tx = null; ball.vx = ball.vy = 0; }
+      else { ball.tx = p.x; ball.ty = p.y; ball.vx = p.vx; ball.vy = p.vy; }
+    } else if (p.t === 'goal') { match.score.w = p.sw; match.score.b = p.sb; match.phase = 'goal'; match.phaseAt = now; match.lastGoal = p.team; ball.own = null; ball.vx = ball.vy = 0; sfx('goal'); }
+    else if (p.t === 'reset') { match.phase = 'kickoff'; match.phaseAt = now; centreBall(); ball.ks = +p.ks || ball.ks; toKickoffSpot(); }
     else if (p.t === 'end') { match.score.w = p.sw; match.score.b = p.sb; if (!match.final) { match.final = { sw: p.sw, sb: p.sb, why: p.why, at: now }; finishMatchUI(); } }
   }
   function soccerUpdate(dt, now) {
     if (sceneId !== 'soccer' || !match || !ball) return;
-    if (amMatchHost()) hostStep(dt, now);
-    else {
-      // follow the host's ball smoothly, moving it on with its speed between updates
-      ball.x += ball.vx * dt; ball.y += ball.vy * dt; const fr = Math.exp(-1.5 * dt); ball.vx *= fr; ball.vy *= fr;
-      if (ball.tx != null) { ball.x += (ball.tx + ball.vx * 0.05 - ball.x) * Math.min(1, dt * 10); ball.y += (ball.ty + ball.vy * 0.05 - ball.y) * Math.min(1, dt * 10); ball.tx += ball.vx * dt; ball.ty += ball.vy * dt; }
-      if (match.phase === 'play' && !match.final) match.rem = Math.max(0, match.rem - dt);
+    const m = match, bl = ball, host = amMatchHost();
+    if (!m.final) {
+      if (m.phase === 'goal') {
+        if (host && now - m.phaseAt > 2600) { m.phase = 'kickoff'; m.phaseAt = now; bl.ks = (bl.ks || 0) + 1; centreBall(); fbSend({ t: 'reset', ks: bl.ks }); toKickoffSpot(); }
+      } else {
+        if (m.phase === 'kickoff' && now - m.phaseAt > 1200) m.phase = 'play';
+        if (m.phase === 'play') m.rem = Math.max(0, m.rem - dt);
+        const scored = stepBall(dt, now, host);
+        // who has the ball: the host decides for everyone, but I grab it the moment it touches my own feet
+        if (now - (bl.kickAt || 0) > KICK_CD) {
+          if (host) {
+            let best = null, bd = 1e9;
+            for (const [id, c] of fbChars()) { const d = ballDist(c); if (d < bd) { bd = d; best = id; } }
+            if (best && bd < TAKE_R) {
+              if (!bl.own) bl.own = best;
+              else if (bl.own !== best) { const ow = entById(bl.own), od = ow ? ballDist(ow) : 1e9; if (bd < od - 2) bl.own = best; }
+            }
+          } else if (!bl.own && ballDist(player) < TAKE_R) { bl.own = net.uid; bl.grabAt = now; fbSend({ t: 'grab', ks: bl.ks || 0 }); }
+        }
+        if (host && scored) return goal(scored);
+        if (host && m.rem <= 0) return endMatch('time');
+      }
+      if (host) { if (now - fbLastSend > 100) { fbLastSend = now; sendBall(); } }
+      else if (!bl.own && bl.tx != null) {   // ease onto the host's ball, but jump if we drifted badly apart
+        const ex = bl.tx - bl.x, ey = bl.ty - bl.y, k = Math.hypot(ex, ey) > 24 ? 1 : Math.min(1, dt * 9);
+        bl.x += ex * k; bl.y += ey * k;
+        bl.tx += bl.vx * dt; bl.ty += bl.vy * dt;
+      }
     }
     // a team with nobody left: the host ends the game (after a short grace at the start)
-    if (LIVE && amMatchHost() && !match.final && now - match.startedAt > 8000) {
-      const here = Object.keys(match.teams).filter(id => id === net.uid || net.remotes.has(id));
-      const w = here.filter(id => match.teams[id] === 'w').length, bk = here.filter(id => match.teams[id] === 'b').length;
+    if (LIVE && host && !m.final && now - m.startedAt > 8000) {
+      const here = Object.keys(m.teams).filter(id => id === net.uid || net.remotes.has(id));
+      const w = here.filter(id => m.teams[id] === 'w').length, bk = here.filter(id => m.teams[id] === 'b').length;
       if (!w || !bk) endMatch('left');
     }
   }
   function drawBall(now) {
     if (!ball) return;
     const x = Math.round(ball.x), y = Math.round(ball.y), sp = Math.hypot(ball.vx, ball.vy), spin = Math.floor(now / Math.max(40, 400 - sp * 2)) % 2;
+    // a ring shows who the ball is stuck to; gold means it is mine and I can shoot right now
+    if (ball.own) {
+      const mine = ball.own === net.uid, k = 0.5 + 0.5 * Math.sin(now / 150);
+      b.globalAlpha = mine ? 0.55 + k * 0.45 : 0.4;
+      pixCircle(b, x, y + 1, 5, mine ? '#ffd65a' : 'rgba(255,255,255,.75)');
+      b.globalAlpha = 1; pixCircle(b, x, y + 1, 3, 'rgba(0,0,0,0)');
+    }
     b.fillStyle = 'rgba(20,40,20,.3)'; b.fillRect(x - 2, y + 1, 5, 2);
     pixCircle(b, x, y - 1, 3, '#2b2233'); pixCircle(b, x, y - 1, 2, '#f4f1ea'); P(b, x - (spin ? 1 : 0), y - (spin ? 2 : 1), 1, 1, '#2b2233');
   }
@@ -3480,6 +3578,6 @@
     bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
   };
   if (document.fonts && document.fonts.load) document.fonts.load('700 20px "Pixelify Sans"').then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx, vy }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk] };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();
