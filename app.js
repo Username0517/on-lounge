@@ -189,7 +189,7 @@
   const ROOM_INFO = {
     room1: { n: 'ROOM 1', sub: '회의실' }, room2: { n: 'ROOM 2', sub: '탕비실' },
     room3: { n: 'ROOM 3', sub: '세미나실' }, room4: { n: 'ROOM 4', sub: '라운지' },
-    f1r1: { n: 'ROOM 1', sub: '락커룸' }, f1r2: { n: 'ROOM 2', sub: '카탄 섬' }, f1r3: { n: 'ROOM 3', sub: '낙서 골목' }, f1r4: { n: 'ROOM 4', sub: '준비 중' }
+    f1r1: { n: 'ROOM 1', sub: '락커룸' }, f1r2: { n: 'ROOM 2', sub: '카탄 섬' }, f1r3: { n: 'ROOM 3', sub: '낙서 골목' }, f1r4: { n: 'ROOM 4', sub: '광야' }
   };
   const HALL_DOORS = [['room1', 16, 100, false], ['room2', 16, 200, false], ['room3', 144, 100, true], ['room4', 144, 200, true]];
   function bgHall(g, w, h) {
@@ -324,7 +324,7 @@
   const ELEV_SPOT = (w, h) => ({ id: 'elevator', item: null, x: w / 2, y: h - 18, r: 14, ax: w / 2, ay: h - 34, hit: [w / 2 - 18, h - 12, 36, 12], label: '엘리베이터 타기' });
 
   // 1층 복도: same as 2층, glass exit doors on the top wall
-  const F1_OPEN = ['f1r1', 'f1r2', 'f1r3'];
+  const F1_OPEN = ['f1r1', 'f1r2', 'f1r3', 'f1r4'];
   const HALL1_DOORS = [['f1r1', 16, 100, false], ['f1r2', 16, 200, false], ['f1r3', 144, 100, true], ['f1r4', 144, 200, true]];
   function bgHall1(g, w, h) {
     woodFloor(g, w, h, 40, ['#c4915f', '#bd8a5a', '#c99866'], '#d2a372', '#a87a4f');
@@ -340,7 +340,7 @@
     elevatorBottom(g, w, h);
     for (const [id, x, y, right] of HALL1_DOORS) {
       sideDoor(g, right ? x + 6 : x - 6, y, right);
-      P(g, right ? x - 6 : x + 1, y - 7, 5, 14, id === 'f1r1' ? '#2f8a55' : id === 'f1r2' ? '#4fa6dc' : id === 'f1r3' ? '#ff4f81' : '#8d8f99');
+      P(g, right ? x - 6 : x + 1, y - 7, 5, 14, id === 'f1r1' ? '#2f8a55' : id === 'f1r2' ? '#4fa6dc' : id === 'f1r3' ? '#ff4f81' : id === 'f1r4' ? '#e0b84a' : '#8d8f99');
       if (!F1_OPEN.includes(id)) { P(g, right ? x - 10 : x + 4, y - 3, 6, 6, '#ffcc4d'); P(g, right ? x - 9 : x + 5, y - 2, 4, 4, '#251c2c'); P(g, right ? x - 8 : x + 6, y - 1, 2, 2, '#ffcc4d'); }
     }
   }
@@ -644,6 +644,60 @@
     { id: 'dr-ladder', label: '사다리', box: [40, 44, 14, 28], sortY: 66, obs: [[40, 60, 14, 6]], draw: g => { P(g, 41, 44, 2, 26, '#c9c9d4'); P(g, 51, 44, 2, 26, '#c9c9d4'); for (let y = 48; y < 68; y += 5) P(g, 43, y, 8, 1, '#8d8f99'); P(g, 40, 69, 4, 2, '#2b2233'); P(g, 50, 69, 4, 2, '#2b2233'); } }
   ];
 
+  // ---- ROOM 4 (1층) · 광야: an open desert with Moses waiting in the middle ----
+  function bgWild(g, w, h) {
+    const R = rnd32(404);
+    // sky, sun, far mountains
+    P(g, 0, 0, w, 56, '#e8b36a'); P(g, 0, 0, w, 20, '#f2cf8c'); P(g, 0, 48, w, 10, '#dfa255');
+    pixCircle(g, 150, 22, 9, '#fff0bd'); pixCircle(g, 150, 22, 7, '#ffe08a');
+    for (const [bx, bw, bh, c] of [[0, 70, 20, '#9a7a6a'], [54, 86, 28, '#8a6a5c'], [126, 70, 22, '#9a7a6a']]) {
+      for (let x = 0; x < bw; x++) { const t = 56 - Math.round(Math.sin(x / bw * Math.PI) * bh); for (let y = t; y < 58; y++) P(g, bx + x, y, 1, 1, c); }
+    }
+    P(g, 64, 32, 14, 2, '#f0ddc0'); P(g, 70, 30, 6, 2, '#f0ddc0');   // a snowy ridge
+    // the sand itself, with dune lines
+    for (let y = 56; y < h; y++) P(g, 0, y, w, 1, y < 80 ? '#e3c086' : y < 120 ? '#dcb77b' : '#d2aa6d');
+    for (let k = 0; k < 7; k++) {
+      const yy = 62 + k * 15;
+      for (let x = 0; x < w; x++) { const o = Math.round(Math.sin((x + k * 30) / 26) * 3); P(g, x, yy + o, 1, 1, 'rgba(160,120,70,.30)'); P(g, x, yy + o + 1, 1, 1, 'rgba(255,235,190,.35)'); }
+    }
+    for (let i = 0; i < 160; i++) { const x = R() * w | 0, y = 60 + (R() * (h - 62) | 0); P(g, x, y, 1, 1, R() < 0.5 ? 'rgba(255,240,200,.4)' : 'rgba(150,110,60,.25)'); }
+    // footprints wandering off toward the horizon
+    for (let k = 0; k < 9; k++) { const x = 96 + Math.round(Math.sin(k) * 10) + (k % 2) * 4, y = 150 - k * 9; P(g, x, y, 2, 3, 'rgba(150,110,60,.35)'); }
+    // the way back
+    P(g, 84, 164, 24, h - 164, '#c49a62'); P(g, 84, 164, 24, 1, '#d9bb86');
+  }
+  const wildItems = [
+    { id: 'w-moses', label: '모세', box: [86, 86, 22, 36], sortY: 120, obs: [[90, 108, 14, 10]], draw: g => {
+      // Moses, with the staff
+      P(g, 92, 90, 12, 11, '#efe3cd'); P(g, 93, 91, 10, 9, '#d9b48a');     // head cloth and face
+      P(g, 92, 90, 12, 3, '#e8dcc4'); P(g, 95, 95, 1, 1, '#2b2233'); P(g, 100, 95, 1, 1, '#2b2233');
+      P(g, 94, 98, 8, 4, '#cfcfd6'); P(g, 95, 99, 6, 4, '#e6e6ec');        // beard
+      P(g, 89, 102, 18, 18, '#8a6a4a'); P(g, 90, 103, 16, 16, '#a3805a');  // robe
+      P(g, 89, 102, 18, 2, '#6f5238'); P(g, 96, 106, 4, 14, '#8a6a4a');
+      P(g, 106, 92, 2, 30, '#6f452c'); P(g, 105, 90, 4, 4, '#8a5a3b');     // the staff
+      P(g, 91, 120, 5, 3, '#6f5238'); P(g, 100, 120, 5, 3, '#6f5238');
+    } },
+    { id: 'w-rock1', label: '바위', box: [26, 96, 24, 18], sortY: 114, obs: [[27, 104, 22, 10]], draw: g => {
+      pixCircle(g, 38, 106, 9, '#2b2233'); pixCircle(g, 38, 106, 8, '#9a8470'); P(g, 32, 101, 5, 3, '#b3a08c'); P(g, 41, 108, 4, 2, '#7a6757');
+    } },
+    { id: 'w-rock2', label: '바위', box: [148, 112, 20, 16], sortY: 128, obs: [[149, 120, 18, 8]], draw: g => {
+      pixCircle(g, 158, 120, 7, '#2b2233'); pixCircle(g, 158, 120, 6, '#857160'); P(g, 154, 116, 4, 2, '#a08c78');
+    } },
+    { id: 'w-bush1', label: '마른 덤불', box: [44, 136, 16, 14], sortY: 150, obs: [], draw: g => {
+      for (const [x, y] of [[48, 142], [52, 140], [50, 145], [46, 146], [54, 144]]) { P(g, x, y, 1, 5, '#9a7a4a'); P(g, x - 1, y + 2, 3, 1, '#8a6a3a'); }
+    } },
+    { id: 'w-bush2', label: '마른 덤불', box: [136, 70, 16, 12], sortY: 82, obs: [], draw: g => {
+      for (const [x, y] of [[140, 74], [144, 72], [142, 77], [147, 75]]) { P(g, x, y, 1, 5, '#9a7a4a'); P(g, x - 1, y + 2, 3, 1, '#8a6a3a'); }
+    } },
+    { id: 'w-skull', label: '뼈', box: [160, 148, 14, 10], sortY: 158, obs: [], draw: g => {
+      P(g, 162, 150, 8, 6, '#efe9dc'); P(g, 163, 152, 2, 2, '#2b2233'); P(g, 167, 152, 2, 2, '#2b2233'); P(g, 164, 156, 4, 1, '#d8d0bf'); P(g, 170, 153, 4, 1, '#efe9dc');
+    } },
+    { id: 'w-tent', label: '천막', box: [12, 128, 28, 24], sortY: 152, obs: [[13, 140, 26, 12]], draw: g => {
+      P(g, 13, 150, 26, 2, '#8a6a4a');
+      for (let x = 0; x < 26; x++) { const t = 150 - Math.round((1 - Math.abs(x - 13) / 13) * 20); for (let y = t; y < 150; y++) P(g, 13 + x, y, 1, 1, (x + y) % 7 === 0 ? '#9a7a5a' : '#b08f68'); }
+      P(g, 24, 142, 4, 8, '#5a452f'); P(g, 25, 128, 2, 4, '#6f452c');
+    } }
+  ];
   const exitSpot = { id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 144, hit: [82, 160, 28, 16], label: '복도로 나가기' };
   const SCENES = {
     sanctuary: { name: '본당', w: 192, h: 360, bounds: [10, 50, 182, 354], lights: true, drawBg: bgSanctuary, items: sanctItems, seats: sanctSeats,
@@ -681,6 +735,9 @@
         .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ x: right ? x - 9 : x + 9, y: y + 18, t: ROOM_INFO[id].n, sub: ROOM_INFO[id].sub, align: right ? 'right' : 'left', count: F1_OPEN.includes(id) ? id : undefined }))) },
     f1r1: { name: '1층 ROOM 1 · 락커룸', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgLocker, items: lockerItems, seats: lockerSeats, spawns: { door: [96, 156, 'up'], field: [96, 74, 'down'] },
       spots: [exitSpot, { id: 'pitch', item: null, x: 96, y: 56, r: 14, ax: 96, ay: 2, hit: [82, 6, 28, 40], label: '축구장 가기' }] },
+    f1r4: { name: '1층 ROOM 4 · 광야', w: 192, h: 176, bounds: [10, 60, 182, 162], drawBg: bgWild, items: wildItems, seats: [], outdoor: true, spawns: { door: [96, 156, 'up'] },
+      spots: [{ id: 'toHall', item: null, x: 96, y: 160, r: 14, ax: 96, ay: 148, hit: [82, 162, 28, 14], label: '복도로 돌아가기' },
+        { id: 'moses', item: 'w-moses', x: 96, y: 128, r: 16, ax: 96, ay: 84, label: '모세와 이야기하기' }] },
     f1r2: { name: '1층 ROOM 2 · 카탄 섬', w: 192, h: 176, bounds: [16, 52, 176, 160], drawBg: bgIsland, items: islandItems, seats: [], outdoor: true, spawns: { door: [96, 154, 'up'] },
       spots: [{ id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 146, hit: [82, 160, 28, 16], label: '복도로 돌아가기' }, { id: 'catan', item: 'ct-table', x: 96, y: 120, r: 16, ax: 96, ay: 76, label: '카탄 하기' }] },
     f1r3: { name: '1층 ROOM 3 · 낙서 골목', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgGraffiti, items: graffitiItems, seats: graffitiSeats, spawns: { door: [96, 156, 'up'] },
@@ -690,8 +747,8 @@
     soccer: { name: '축구장', w: FIELD.w, h: FIELD.h, bounds: [8, 20, 312, 196], drawBg: bgSoccer, items: [], seats: [], soccer: true, spawns: { w: [110, 108, 'right'], b: [210, 108, 'left'] },
       spots: [{ id: 'leaveField', item: null, x: 160, y: 194, r: 12, ax: 160, ay: 182, hit: [146, 198, 28, 10], label: '락커룸으로 돌아가기' }] }
   };
-  const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1', f1r2: 'hall1', f1r3: 'hall1' };
-  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'soccer') ? 1 : 2;
+  const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1', f1r2: 'hall1', f1r3: 'hall1', f1r4: 'hall1' };
+  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'f1r4' || id === 'soccer') ? 1 : 2;
   const ALL_ITEMS = Object.values(SCENES).flatMap(sc => sc.items);
   const itemById = Object.fromEntries(ALL_ITEMS.map(it => [it.id, it]));
   let sceneId = 'sanctuary', scene = SCENES.sanctuary, W = scene.w, H = scene.h, ITEMS = scene.items, chairs = scene.seats, spots = [];
@@ -837,6 +894,7 @@
       elevator: () => openElevator(), outside: () => toast(pick(OUTSIDE_MSG)), weather: () => openWeather(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
       catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'),
+      moses: () => openMoses(),
       stand: () => openQt(), qr: () => openQr(), board: () => openModal('board'), prayer: () => openPrayers(),
       eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; const inst = EQ_INST[eqStep++ % EQ_INST.length]; eqFx(inst, 1); lobbySend('lights', { mode: lightMode, inst }); },
       water: () => useMachine('water'),
@@ -2946,6 +3004,7 @@
     if (sceneId === GM_ROOM) gmLeaveRoom();
     if (sceneId === 'f1r1' && party) leaveParty(true);
     if (TG.onLeaveScene) try { TG.onLeaveScene(); } catch (e) { console.error(e); }
+    if (window.ONL_WILD && ONL_WILD.isOpen()) ONL_WILD.close();
     player.tie = 0;
     const fade = $('fade'); fade.classList.add('on');
     setTimeout(() => {
@@ -3654,6 +3713,45 @@
   // if an older index.html is still being served, add the two elements the games need so nothing breaks
   if (!$('tg')) { const d = el('div', 'tg'); d.id = 'tg'; d.hidden = true; document.body.appendChild(d); }
   if (!$('tgBtn')) { const b = el('button', 'btn gm-btn', '🎲 게임'); b.type = 'button'; b.id = 'tgBtn'; b.hidden = true; ($('fbBtn') && $('fbBtn').parentNode || document.body).appendChild(b); }
+  // 모세와의 대화 → 광야 오르기
+  const MOSES_LINES = [
+    '…자네도 이 길에 서려는가.',
+    '이 길에는 끝이 없다네. 애굽에서 나온 백성도 사십 년을 걸었지.',
+    '발을 헛디디면 떨어지고, 떨어지면 다시 오르는 수밖에 없어.',
+    '그러니 인내하고, 또 인내해야만 하네.',
+    '불을 피워 둔 쉼터가 군데군데 있으니 거기서 숨을 고르게.',
+    '바로의 군대가 뒤를 쫓을 걸세. 창과 전차를 조심하게.'
+  ];
+  function openMoses() {
+    if (!window.ONL_WILD) { toast('광야를 불러오지 못했어요. 새로고침해 주세요.'); return; }
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🏜️ 광야의 모세';
+    const line = el('p', 'moses-line', ''), hint = el('p', 'small', '');
+    body.append(line, hint);
+    const row = el('div', 'btns'); body.appendChild(row);
+    let i = 0;
+    const next = el('button', 'btn btn-gold', '다음'); next.type = 'button';
+    const yes = el('button', 'btn btn-gold', '예, 가겠습니다'); yes.type = 'button'; yes.hidden = true;
+    const no = el('button', 'btn', '아니요'); no.type = 'button';
+    row.append(next, yes, no);
+    const show = () => {
+      line.textContent = MOSES_LINES[i];
+      const lastOne = i === MOSES_LINES.length - 1;
+      next.hidden = lastOne; yes.hidden = !lastOne;
+      no.textContent = lastOne ? '아니요, 아직은…' : '그만 듣기';
+      hint.textContent = lastOne ? '광야로 나아가시겠습니까?' : '';
+    };
+    next.addEventListener('click', () => { i = Math.min(i + 1, MOSES_LINES.length - 1); show(); });
+    no.addEventListener('click', () => { closeModal(); toast(pick(['모세가 고개를 끄덕입니다.', '"때가 되면 다시 오게."', '모세가 지팡이를 고쳐 쥡니다.'])); });
+    yes.addEventListener('click', () => {
+      closeModal();
+      if (!LIVE) { toast('혼자 보는 체험 모드에서는 기록이 남지 않아요'); }
+      log('', '🏜️ 광야로 들어갑니다. 인내하고 또 인내하세요.', 'sys game');
+      ONL_WILD.open(() => { if (sceneId === 'f1r4') toast('광야에서 돌아왔어요'); });
+    });
+    show();
+    $('modal').hidden = false;
+  }
   function tgOpen(kind) { if (TG.open) TG.open(kind); else toast('게임을 불러오지 못했어요. 페이지를 새로고침해 주세요.'); }
   window.ONL = {
     TG, $, el, toast, sfx, newId: gmNewId, P, pixCircle,
@@ -3667,9 +3765,13 @@
     here: id => id === net.uid || net.remotes.has(id),
     nameOf: id => id === net.uid ? player.name : (net.remotes.get(id) || {}).name || '',
     say: text => log('', text, 'sys game'),
+    // the wilderness record board (wilderness.sql)
+    submitScore: async (game, score) => { if (!LIVE) return 0; const { data } = await sb.rpc('submit_score', { p_game: game, p_score: Math.max(0, Math.min(1000000, Math.round(score))) }); return data || 0; },
+    topScores: async game => { if (!LIVE) return []; const { data } = await sb.rpc('top_scores', { p_game: game }); return data || []; },
+    myScore: async game => { if (!LIVE) return 0; const { data } = await sb.rpc('my_score', { p_game: game }); return data || 0; },
     bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
   };
   if (document.fonts && document.fonts.load) document.fonts.load('700 20px "Pixelify Sans"').then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();
