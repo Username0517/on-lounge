@@ -34,16 +34,12 @@
   const CUBE_L = [[4, 0, 0], [5, 0, 2], [6, 0, 4], [7, 0, 6], [8, 0, 7], [9, 0, 7], [10, 0, 7], [11, 0, 7], [12, 1, 7], [13, 3, 7], [14, 5, 7], [15, 7, 7]];
   const CUBE_R = [[4, 15, 15], [5, 13, 15], [6, 11, 15], [7, 9, 15], [8, 8, 15], [9, 8, 15], [10, 8, 15], [11, 8, 15], [12, 8, 14], [13, 8, 12], [14, 8, 10], [15, 8, 8]];
   const ICON_DRAW = {
-    lumber(g) {
-      spanDraw(g, [{ s: CUBE_TOP, c: '#f0d6a4' }, { s: CUBE_L, c: '#8a5a3b' }, { s: CUBE_R, c: '#6b4429' }], INK);
-      // growth rings on the top face
-      for (const [y, x0, x1] of [[2, 6, 9], [3, 4, 11], [4, 4, 11], [5, 6, 9]]) P(g, x0, y, x1 - x0 + 1, 1, '#c99a60');
-      for (const [y, x0, x1] of [[3, 6, 9], [4, 6, 9]]) P(g, x0, y, x1 - x0 + 1, 1, '#f0d6a4');
-      P(g, 7, 3, 2, 2, '#a87c49');
-      // bark grain down the sides
-      for (const x of [2, 5]) for (let y = 8; y < 14 - (x > 3 ? 0 : 2); y++) if (y > 6 + x / 2) P(g, x, y, 1, 1, '#6f452c');
-      for (const x of [10, 13]) for (let y = 8; y < 13; y++) P(g, x, y, 1, 1, '#573620');
-      P(g, 3, 10, 1, 3, '#9a6a45'); P(g, 11, 9, 1, 3, '#7a5033');
+    lumber(g) {   // a wooden stick
+      spanDraw(g, [{ s: [[1, 10, 13], [2, 10, 13], [3, 9, 12], [4, 9, 12], [5, 8, 11], [6, 8, 11], [7, 7, 10],
+        [8, 7, 10], [9, 6, 9], [10, 5, 8], [11, 5, 8], [12, 4, 7], [13, 3, 6], [14, 3, 6]], c: '#8a5a3b' }], INK);
+      P(g, 11, 2, 2, 1, '#d2a372'); P(g, 4, 13, 2, 1, '#d2a372');       // the cut ends
+      P(g, 11, 3, 1, 2, '#a8734f'); P(g, 9, 6, 1, 2, '#a8734f'); P(g, 7, 9, 1, 2, '#a8734f'); P(g, 5, 12, 1, 2, '#a8734f');
+      P(g, 10, 5, 1, 1, '#6f452c'); P(g, 8, 8, 1, 1, '#6f452c'); P(g, 6, 11, 1, 1, '#6f452c');   // knots
     },
     grain(g) {    // a fat ear of wheat on its stalk
       spanDraw(g, [{ s: [[9, 7, 8], [10, 7, 8], [11, 7, 8], [12, 7, 8], [13, 7, 8], [14, 7, 8]], c: '#8a5a3b' },
@@ -88,6 +84,30 @@
       P(g, 6, 3, 4, 1, '#ebe7dc'); P(g, 9, 5, 4, 1, '#ebe7dc'); P(g, 5, 6, 3, 1, '#ebe7dc');
     }
   };
+  // the robber and the dice faces, same pixel style
+  function robberCanvas() {
+    if (iconCache.__rob) return iconCache.__rob;
+    const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d');
+    spanDraw(g, [{ s: [[1, 6, 9], [2, 5, 10], [3, 4, 11], [4, 4, 11], [5, 3, 12], [6, 3, 12], [7, 2, 13], [8, 2, 13], [9, 2, 13], [10, 2, 13], [11, 3, 12], [12, 3, 12], [13, 4, 11]], c: '#3b3a44' }], '#17151c');
+    P(g, 5, 5, 6, 3, '#d8c9a8');                       // the face under the hood
+    P(g, 6, 6, 1, 1, '#17151c'); P(g, 9, 6, 1, 1, '#17151c');
+    P(g, 4, 9, 8, 1, '#5a5767'); P(g, 5, 11, 6, 1, '#2b2a33');
+    return (iconCache.__rob = c);
+  }
+  const DIE_PIPS = { 1: [[7, 7]], 2: [[4, 4], [10, 10]], 3: [[4, 4], [7, 7], [10, 10]], 4: [[4, 4], [10, 4], [4, 10], [10, 10]], 5: [[4, 4], [10, 4], [7, 7], [4, 10], [10, 10]], 6: [[4, 3], [10, 3], [4, 7], [10, 7], [4, 11], [10, 11]] };
+  function dieCanvas(n) {
+    const key = '__die' + n; if (iconCache[key]) return iconCache[key];
+    const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d');
+    P(g, 0, 0, 16, 16, '#2b2233'); P(g, 1, 1, 14, 14, '#fdfcf7'); P(g, 1, 1, 14, 1, '#ffffff'); P(g, 1, 14, 14, 1, '#ddd8cc');
+    for (const [x, y] of (DIE_PIPS[n] || [])) P(g, x - 1, y - 1, 3, 3, '#2b2233');
+    return (iconCache[key] = c);
+  }
+  function pixEl(canvas, cls, label) {
+    const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height; c.className = cls || '';
+    c.getContext('2d').drawImage(canvas, 0, 0);
+    if (label) { c.setAttribute('role', 'img'); c.setAttribute('aria-label', label); }
+    return c;
+  }
   const ICON_KO = { lumber: '나무', grain: '밀', dev: '발전 카드', brick: '벽돌', ore: '철', wool: '양털' };
   const iconCache = {};
   function iconCanvas(kind) {
@@ -129,38 +149,65 @@
   const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
   const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-  // ================= the table (lobby, host, members) =================
-  let T = null;          // { id, kind, host, members: [{ id, name }], started, v }
-  let G = null;          // the game itself (shape depends on the kind)
+  // ================= tables (several per room, each with its own host) =================
+  // A room can hold any number of tables at once. Every table is broadcast by its own host; each client
+  // keeps a list of what it has heard and only runs the game for the one table it is sitting at.
+  const TABLES = new Map();   // id -> { tbl, at }
+  let T = null;               // the table I am sitting at, or null while browsing the list
+  let G = null;               // the game itself (shape depends on the kind)
   let lastTbl = 0, askAt = -1e9, mountedKey = '', hostGoneAt = 0;
+  const TBL_GONE = 16000;     // a table nobody has broadcast for this long has closed
   const isHost = () => !!T && T.host === me();
   const inTable = () => !!T && T.members.some(m => m.id === me());
   const memberName = id => { const m = T && T.members.find(x => x.id === id); return (m && m.name) || O.nameOf(id) || '친구'; };
-  function send(p) { p.from = me(); p.k = T ? T.kind : kindHere(); if (T) p.tid = T.id; return O.send(p); }
+  function send(p) { p.from = me(); p.k = T ? T.kind : kindHere(); if (p.tid === undefined && T) p.tid = T.id; return O.send(p); }
   const seqNow = () => !G || !T ? 0 : T.kind === 'catan' ? (G.x ? G.x.seq : 0) : (G.seq || 0);
   function sendTbl() { if (!isHost()) return; lastTbl = now(); send({ t: 'tbl', tbl: T, seq: seqNow() }); }
   function bump() { T.v = (T.v || 0) + 1; sendTbl(); render(); }
   function ask() { const t = now(); if (t - askAt < 1500) return; askAt = t; O.send({ t: 'q', from: me(), k: kindHere() }); }
   function game() { return T ? GAMES[T.kind] : null; }
+  // every table in this room that we have heard from recently, newest first
+  function tableList() {
+    const t = now(), out = [];
+    for (const [id, e] of [...TABLES]) {
+      if (t - e.at > TBL_GONE) { TABLES.delete(id); continue; }
+      if (e.tbl.kind !== kindHere()) continue;
+      out.push(e.tbl);
+    }
+    return out.sort((x, y) => (x.at0 || 0) - (y.at0 || 0));
+  }
+  function noteTable(tbl) {
+    // one host can only hold one table: a newer one from the same person replaces the old
+    for (const [id, e] of [...TABLES]) if (id !== tbl.id && e.tbl.host === tbl.host) TABLES.delete(id);
+    const was = TABLES.get(tbl.id);
+    TABLES.set(tbl.id, { tbl, at: now(), at0: was ? was.at0 : now() });
+    tbl.at0 = TABLES.get(tbl.id).at0;
+  }
 
   function createTable() {
-    const kind = kindHere(); if (!kind || T) return;
+    const kind = kindHere(); if (!kind) return;
+    if (T) { if (inTable()) { toast('이미 자리에 앉아 있어요'); return; } T = null; }
     T = { id: O.newId(), kind, host: me(), members: [{ id: me(), name: O.name() }], started: false, v: 1 };
-    G = null; sendTbl(); render();
+    G = null; noteTable(T); sendTbl(); render();
     O.say(`${INFO[kind].icon} ${INFO[kind].title} 자리를 열었어요. 친구들이 들어오길 기다려요!`);
-    send({ t: 'note', text: `${INFO[kind].icon} ${O.name()}님이 ${INFO[kind].title} 자리를 열었어요. ${kind === 'catan' ? '테이블' : '그림판'}을 눌러 참가해요!` });
+    send({ t: 'note', text: `${INFO[kind].icon} ${O.name()}님이 ${INFO[kind].title} 자리를 열었어요. 같은 방에서 참가할 수 있어요!` });
   }
-  function joinTable() {
-    if (!T || inTable()) return;
-    if (isHost()) return;
-    send({ t: 'join', name: O.name() });
+  function joinTable(tid) {
+    const e = TABLES.get(tid); if (!e) return;
+    if (T && T.id === tid) return;
+    if (T && inTable()) { toast('지금 앉아 있는 자리에서 먼저 나와 주세요'); return; }
+    joinWait = { id: tid, at: now() };
+    O.send({ t: 'join', from: me(), k: kindHere(), tid, name: O.name() });
+    render();
   }
+  let joinWait = null;
   function hostJoin(id, name) {
-    if (!isHost() || T.members.some(m => m.id === id)) { sendTbl(); return; }
+    if (!isHost() || !T) return;
+    if (T.members.some(m => m.id === id)) { sendTbl(); return; }
     const g = game();
     if (T.members.length >= INFO[T.kind].max) { send({ t: 'err', to: id, msg: '자리가 꽉 찼어요' }); return; }
     if (T.started && !(g.lateJoin && g.lateJoin(id, name))) { send({ t: 'err', to: id, msg: '이미 시작한 게임이에요. 구경은 할 수 있어요!' }); return; }
-    if (!T.members.some(m => m.id === id)) T.members.push({ id, name: String(name || '친구').slice(0, 12) });
+    T.members.push({ id, name: String(name || '친구').slice(0, 12) });
     bump(); if (T.started) g.push();
   }
   // leaving: the host hands the table to the next player first
@@ -173,13 +220,13 @@
         T.members = T.members.filter(m => m.id !== me());
         const next = T.members.find(m => O.here(m.id));
         if (next && (!T.started || !G || !G.over)) { T.host = next.id; T.v++; lastTbl = now(); send({ t: 'tbl', tbl: T, seq: seqNow() }); if (T.started && g.handover) g.handover(); }
-        else send({ t: 'close', id: T.id });
+        else { send({ t: 'close', id: T.id }); TABLES.delete(T.id); }
       } else send({ t: 'leave' });
     }
     if (game() && game().unmount) game().unmount();
-    T = null; G = null; mountedKey = '';
+    T = null; G = null; mountedKey = ''; joinWait = null;
     if (!quiet) render(); else label();
-    setTimeout(ask, 1200);
+    setTimeout(ask, 800);
   }
   function hostLeave(id) {
     if (!isHost() || !T.members.some(m => m.id === id)) return;
@@ -205,12 +252,12 @@
     T.members = live; T.started = true; T.v++;
     game().start(); sendTbl(); game().push(); render();
   }
-  function backToLobby() { if (!isHost()) return; if (game().unmount) game().unmount(); T.started = false; G = null; mountedKey = ''; T.members = T.members.filter(m => O.here(m.id)); bump(); }
+  function backToLobby() { if (!isHost()) return; if (game().unmount) game().unmount(); T.started = false; G = null; mountedKey = ''; T.members = T.members.filter(m => m.bot || O.here(m.id)); bump(); }
   // the host vanished: the first player still in the room takes over
   function takeOver() {
     if (!T || isHost()) return;
     const next = T.members.find(m => m.id !== T.host && O.here(m.id));
-    if (!next) { if (game() && game().unmount) game().unmount(); T = null; G = null; mountedKey = ''; render(); return; }
+    if (!next) { if (game() && game().unmount) game().unmount(); TABLES.delete(T.id); T = null; G = null; mountedKey = ''; render(); return; }
     if (next.id !== me()) return;   // someone ahead of me does it
     const old = T.host, g = game();
     T.host = me(); T.v = (T.v || 0) + 1;
@@ -227,28 +274,43 @@
     if (p.t === 'q') { if (isHost()) { sendTbl(); if (T.started) game().push(p.from); } return; }
     if (p.t === 'note') { O.say(p.text); return; }
     if (p.t === 'tbl') {
-      const t = p.tbl; if (!t || t.host !== p.from) return;
-      if (T && T.id !== t.id) { if (isHost() && T.id < t.id) return; if (!isHost() && O.here(T.host) && now() - lastTbl < 9000) return; if (game() && game().unmount) game().unmount(); G = null; mountedKey = ''; }
-      else if (T) {
-        // two browsers both think they host this table (one of them was cut off for a while): the one further along in the game keeps it
+      const t = p.tbl; if (!t || !t.id || t.host !== p.from) return;
+      noteTable(t);
+      const amMember = t.members.some(m => m.id === me());
+      // this is the table I am sitting at (or just got into)
+      if (T && T.id === t.id) {
         const mine = seqNow(), theirs = p.seq || 0;
         if (isHost() && t.host !== me()) {
+          // two browsers both think they host it: the one further along keeps it
           if (mine > theirs || (mine === theirs && me() < t.host)) { sendTbl(); if (T.started) game().push(); return; }
           if (game().unmount) game().unmount(); G = null; mountedKey = '';
-        } else if (!isHost() && t.host !== T.host) { if (theirs < mine && O.here(T.host) && now() - lastTbl < 9000) return; if (theirs < mine) { if (game().unmount) game().unmount(); G = null; mountedKey = ''; } }
-        else if ((t.v || 0) < (T.v || 0)) return;
+        } else if (!isHost() && t.host !== T.host && theirs < mine) { if (game().unmount) game().unmount(); G = null; mountedKey = ''; }
+        else if (t.host === T.host && (t.v || 0) < (T.v || 0)) return;
+        const wasStarted = T.started, wasIn = inTable();
+        T = t; lastTbl = now(); hostGoneAt = 0;
+        if (wasStarted && !T.started) { if (game().unmount) game().unmount(); G = null; mountedKey = ''; }
+        if (T.started && !G) send({ t: 'q' });
+        if (wasIn && !inTable() && T.started) toast('게임에서 빠졌어요');
+        render(); return;
       }
-      const wasStarted = T && T.started, wasIn = inTable();
-      T = t; lastTbl = now(); hostGoneAt = 0;
-      if (wasStarted && !T.started) { if (game().unmount) game().unmount(); G = null; mountedKey = ''; }
-      if (T.started && !G) send({ t: 'q' });
-      if (wasIn && !inTable() && T.started) toast('게임에서 빠졌어요');
+      // the host let me in: sit down here
+      if (amMember && (!T || !inTable())) {
+        if (joinWait && joinWait.id !== t.id) { /* a different table answered: ignore */ }
+        if (game() && game().unmount) game().unmount();
+        T = t; G = null; mountedKey = ''; joinWait = null; lastTbl = now(); hostGoneAt = 0;
+        if (T.started) send({ t: 'q' });
+        render(); return;
+      }
+      render(); return;   // somebody else's table: just refresh the list
+    }
+    if (p.t === 'close') {
+      TABLES.delete(p.id);
+      if (T && T.id === p.id) { const was = inTable(); if (game().unmount) game().unmount(); T = null; G = null; mountedKey = ''; if (was) toast('자리가 닫혔어요'); }
       render(); return;
     }
-    if (p.t === 'close') { if (T && T.id === p.id) { const was = inTable(); if (game().unmount) game().unmount(); T = null; G = null; mountedKey = ''; if (was) toast('자리가 닫혔어요'); render(); } return; }
-    if (p.t === 'err') { toast(p.msg); if (game() && game().onErr) game().onErr(); return; }
+    if (p.t === 'err') { toast(p.msg); joinWait = null; if (game() && game().onErr) game().onErr(); render(); return; }
+    if (p.t === 'join') { if (T && p.tid === T.id) hostJoin(p.from, p.name); return; }
     if (!T || p.tid !== T.id) return;
-    if (p.t === 'join') { hostJoin(p.from, p.name); return; }
     if (p.t === 'leave') { hostLeave(p.from); return; }
     const g = game(); if (g && g.onMsg) g.onMsg(p);
   };
@@ -257,24 +319,29 @@
     if (isHost()) { sendTbl(); if (T.started) game().push(); } else setTimeout(() => { askAt = -1e9; ask(); }, 500);
     label();
   };
-  TG.onHello = () => {};
+  TG.onHello = () => { if (isHost()) sendTbl(); };
   TG.onGone = id => {
-    if (!T) return;
+    for (const [tid, e] of [...TABLES]) if (e.tbl.host === id && (!T || T.id !== tid)) TABLES.delete(tid);
+    if (!T) { render(); return; }
     if (isHost()) { if (T.members.some(m => m.id === id)) { if (!T.started) hostLeave(id); else if (game().memberGone) game().memberGone(id); else hostLeave(id); } return; }
     if (id === T.host) takeOver();
   };
-  TG.onLeaveScene = () => { if (T) leaveTable(true); T = null; G = null; mountedKey = ''; chatBack(); root.hidden = true; root.innerHTML = ''; btn.hidden = true; };
+  TG.onLeaveScene = () => {
+    if (T) leaveTable(true);
+    T = null; G = null; mountedKey = ''; TABLES.clear(); joinWait = null;
+    chatBack(); root.hidden = true; root.innerHTML = ''; card = null; btn.hidden = true;
+  };
   TG.busy = () => inTable() && T.started;
   TG.hide = () => {
     chatBack();
     const k = kindHere();
     if (mountedKey.startsWith('game:') && k && GAMES[k].unmount) GAMES[k].unmount();
-    mountedKey = ''; root.hidden = true; root.innerHTML = ''; label();
+    mountedKey = ''; root.hidden = true; root.innerHTML = ''; card = null; label();
   };
   TG.open = kind => {
     if (!O.live()) { toast('혼자 보는 체험 모드에서는 함께 하는 게임을 할 수 없어요'); return; }
     if (!kindHere()) return;
-    root.hidden = false; mountedKey = ''; render(); if (!T) ask();
+    root.hidden = false; mountedKey = ''; card = null; render(); ask();
   };
   btn.addEventListener('click', () => TG.open(kindHere()));
 
@@ -285,15 +352,17 @@
     if (!kind) { if (!btn.hidden) btn.hidden = true; return; }
     if (!O.ready()) return;
     const t = now();
+    if (joinWait && t - joinWait.at > 6000) { joinWait = null; toast('자리에 들어가지 못했어요. 다시 눌러 보세요.'); render(); }
     if (isHost()) { if (t - lastTbl > 4000) sendTbl(); if (T.started && game().tick) game().tick(t); }
     else if (T) {
       // the host is silent: ask, then take over if it has really gone
       if (t - lastTbl > 9000) ask();
       if (!O.here(T.host) || t - lastTbl > 30000) { if (!hostGoneAt) hostGoneAt = t; if (t - hostGoneAt > 2500) { hostGoneAt = 0; lastTbl = t; takeOver(); } } else hostGoneAt = 0;
       if (T && T.started && game().clientTick) game().clientTick(t);
-    }
+    } else if (!root.hidden) { ask(); if (t - (lastList || 0) > 2500) { lastList = t; render(); } }
     label();
   }, 1000);
+  let lastList = 0;
 
   // the computer players move on their own, quicker timer; everything else stays on the 1 s one
   setInterval(() => {
@@ -631,10 +700,16 @@
   let chatOpen = false, chatHome = null, chatUnread = 0;
   const pane = () => document.querySelector('.chat-pane');
   const wide = () => window.innerWidth >= 900;
+  const chatBottom = () => {
+    const sc = root.querySelector('.tg-chat .chat-scroll'); if (!sc) return;
+    sc.scrollTop = sc.scrollHeight;
+    requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });   // again once the layout has settled
+  };
   function chatHold(box) {
     const p = pane(); if (!p || !box) return;
     if (!chatHome) chatHome = { parent: p.parentNode, next: p.nextSibling, hidden: p.hidden };
     p.hidden = false; box.appendChild(p);
+    chatBottom(); setTimeout(chatBottom, 60);   // moving it resets the scroll, so put it back at the newest line
   }
   function chatBack() {
     const p = pane(); if (!p || !chatHome) return;
@@ -644,7 +719,7 @@
     const box = root.querySelector('.tg-chat'), btn = root.querySelector('.tg-chatbtn'); if (!box) return;
     const on = chatOpen || wide();
     box.classList.toggle('show', on);
-    if (on) { chatUnread = 0; const sc = box.querySelector('.chat-scroll'); if (sc) sc.scrollTop = sc.scrollHeight; }
+    if (on) { chatUnread = 0; chatBottom(); }
     if (btn) { btn.hidden = wide(); btn.setAttribute('aria-pressed', String(chatOpen)); btn.dataset.unread = chatUnread ? (chatUnread > 9 ? '9+' : chatUnread) : ''; }
   }
   TG.onChat = kind => { if (root.hidden || kind === 'me') return; if (!(chatOpen || wide())) { chatUnread++; applyChat(); } };
@@ -656,33 +731,67 @@
     y.type = n.type = 'button'; y.addEventListener('click', () => { bar.remove(); cb(); }); n.addEventListener('click', () => bar.remove());
     row.append(y, n); bar.appendChild(row); card.appendChild(bar); y.focus();
   }
+  // The card is built once and kept. Only the body is redrawn, so the chat pane never moves and
+  // whatever you were typing (and where you had scrolled to) stays put when somebody joins or leaves.
+  let card = null, bodyEl = null, headTitle = null, headBtns = null, outBtn = null;
+  function ensureCard(kind) {
+    if (card && root.contains(card)) return;
+    root.innerHTML = '';
+    card = el('div', 'tg-card tg-' + kind);
+    const head = el('div', 'tg-head'); headTitle = el('h2', '', ''); headBtns = el('div', 'tg-row');
+    outBtn = el('button', 'btn', '나가기'); outBtn.type = 'button'; outBtn.hidden = true;
+    outBtn.addEventListener('click', () => {
+      if (T && T.started && !(G && G.over)) confirmBar(card, T.kind === 'catan' ? '게임에서 나갈까요? 내 차례는 자동으로 넘어가게 돼요.' : '게임에서 나갈까요?', '나가기', () => leaveTable());
+      else leaveTable();
+    });
+    const cBtn = el('button', 'btn tg-chatbtn', '💬 대화'); cBtn.type = 'button';
+    cBtn.addEventListener('click', () => { chatOpen = !chatOpen; applyChat(); });
+    const fold = el('button', 'btn', '접기'); fold.type = 'button'; fold.addEventListener('click', TG.hide);
+    headBtns.append(outBtn, cBtn, fold); head.append(headTitle, headBtns); card.appendChild(head);
+    const main = el('div', 'tg-main'); bodyEl = el('div', 'tg-body');
+    const chatBox = el('div', 'tg-chat');
+    main.append(bodyEl, chatBox); card.appendChild(main); root.appendChild(card);
+    chatHold(chatBox); applyChat();
+  }
   function render() {
     label();
     if (root.hidden) return;
-    const kind = kindHere(); if (!kind) { chatBack(); root.hidden = true; return; }
+    const kind = kindHere(); if (!kind) { chatBack(); root.hidden = true; card = null; return; }
     const inf = INFO[kind];
-    const key = !T ? 'none' : !T.started ? 'lobby' : (G ? 'game:' + T.id : 'wait');
-    if (key.startsWith('game:') && key === mountedKey && root.firstChild) { GAMES[kind].update(); return; }
+    ensureCard(kind);
+    const key = !T ? 'list' : !T.started ? 'lobby' : (G ? 'game:' + T.id : 'wait');
+    headTitle.textContent = `${inf.icon} ${inf.title}`;
+    outBtn.hidden = !inTable();
+    card.classList.toggle('tg-play', key.startsWith('game:'));
+    if (key.startsWith('game:') && key === mountedKey && bodyEl.firstChild) { GAMES[kind].update(); return; }
     if (mountedKey.startsWith('game:') && GAMES[kind].unmount) GAMES[kind].unmount();
-    mountedKey = key; chatBack(); root.innerHTML = '';   // give the chat pane back before the card is thrown away
-    const card = el('div', 'tg-card tg-' + kind + (key.startsWith('game:') ? ' tg-play' : ''));
-    const head = el('div', 'tg-head'), h = el('h2', '', `${inf.icon} ${inf.title}`), hb = el('div', 'tg-row');
-    const fold = el('button', 'btn', '접기'); fold.type = 'button'; fold.addEventListener('click', TG.hide);
-    if (inTable()) {
-      const out = el('button', 'btn', '나가기'); out.type = 'button';
-      out.addEventListener('click', () => { if (T && T.started && !(G && G.over)) confirmBar(card, kind === 'catan' ? '게임에서 나갈까요? 내 차례는 자동으로 넘어가게 돼요.' : '게임에서 나갈까요?', '나가기', () => leaveTable()); else leaveTable(); });
-      hb.appendChild(out);
-    }
-    const cBtn = el('button', 'btn tg-chatbtn', '💬 대화'); cBtn.type = 'button';
-    cBtn.addEventListener('click', () => { chatOpen = !chatOpen; applyChat(); });
-    hb.appendChild(cBtn); hb.appendChild(fold); head.append(h, hb); card.appendChild(head);
-    const main = el('div', 'tg-main'), body = el('div', 'tg-body'), chatBox = el('div', 'tg-chat');
-    main.append(body, chatBox); card.append(main); root.appendChild(card);
-    chatHold(chatBox); applyChat();
-    if (key === 'none') {
+    mountedKey = key;
+    bodyEl.innerHTML = '';
+    const body = bodyEl;
+    if (key === 'list') {
+      // every table open in this room right now
       body.appendChild(el('p', 'tg-blurb', inf.blurb));
-      body.appendChild(el('p', 'tg-empty', '아직 열린 자리가 없어요. 먼저 자리를 열고 친구들을 기다려 보세요!'));
-      const b = el('button', 'btn btn-gold tg-big', '자리 열기'); b.type = 'button'; b.addEventListener('click', createTable); body.appendChild(b);
+      const list = tableList();
+      if (!list.length) body.appendChild(el('p', 'tg-empty', '아직 열린 자리가 없어요. 먼저 자리를 열고 친구들을 기다려 보세요!'));
+      else {
+        const wrap = el('div', 'tg-list');
+        list.forEach(t => {
+          const r = el('div', 'tg-room' + (t.started ? ' playing' : ''));
+          const who = el('div', 'tg-roomwho');
+          t.members.slice(0, 6).forEach(m => who.appendChild(avatarEl(m.id, m.look)));
+          const info = el('div', 'tg-roominfo');
+          const hostName = (t.members.find(m => m.id === t.host) || {}).name || '친구';
+          info.append(el('b', '', `${hostName}님의 자리`), el('span', 'tg-tag', `${t.members.length}/${inf.max}명 · ${t.started ? '진행 중' : '대기 중'}`));
+          const j = el('button', 'btn ' + (t.started ? '' : 'btn-gold'), joinWait && joinWait.id === t.id ? '들어가는 중…' : t.started ? '구경하기' : t.members.length >= inf.max ? '꽉 참' : '참가하기');
+          j.type = 'button'; j.disabled = !!joinWait || (!t.started && t.members.length >= inf.max);
+          j.addEventListener('click', () => joinTable(t.id));
+          r.append(who, info, j); wrap.appendChild(r);
+        });
+        body.appendChild(wrap);
+      }
+      const b = el('button', 'btn btn-gold tg-big', '➕ 새 자리 만들기'); b.type = 'button'; b.addEventListener('click', createTable);
+      body.appendChild(b);
+      body.appendChild(el('p', 'ct-tip', '한 방에서 여러 자리가 동시에 열릴 수 있어요. 원하는 자리에 들어가세요.'));
     } else if (key === 'lobby') {
       body.appendChild(el('p', 'tg-blurb', inf.blurb));
       const list = el('div', 'tg-list');
@@ -715,12 +824,17 @@
         body.appendChild(bRow);
       }
       const row = el('div', 'tg-row');
-      if (!inTable()) { const j = el('button', 'btn btn-gold tg-big', T.members.length >= inf.max ? '자리가 꽉 찼어요' : '참가하기'); j.type = 'button'; j.disabled = T.members.length >= inf.max; j.addEventListener('click', joinTable); row.appendChild(j); }
+      if (!inTable()) {
+        const j = el('button', 'btn btn-gold tg-big', T.members.length >= inf.max ? '자리가 꽉 찼어요' : '참가하기'); j.type = 'button';
+        j.disabled = T.members.length >= inf.max || !!joinWait; j.addEventListener('click', () => joinTable(T.id)); row.appendChild(j);
+        const bk = el('button', 'btn', '← 자리 목록'); bk.type = 'button'; bk.addEventListener('click', () => { T = null; mountedKey = ''; render(); }); row.appendChild(bk);
+      }
       else if (isHost()) {
         const ok = T.members.length >= inf.min;
         const s = el('button', 'btn btn-gold tg-big', ok ? '게임 시작' : `${inf.min}명부터 시작할 수 있어요`); s.type = 'button'; s.disabled = !ok; s.addEventListener('click', startGame); row.appendChild(s);
       } else row.appendChild(el('p', 'tg-empty', '방장이 시작하기를 기다리고 있어요…'));
       body.appendChild(row);
+      if (inTable()) { const bk = el('button', 'btn tg-backlist', '← 다른 자리 보기'); bk.type = 'button'; bk.addEventListener('click', () => { leaveTable(); }); body.appendChild(bk); }
       if (GAMES[kind].lobbyExtra) GAMES[kind].lobbyExtra(body);
     } else if (key === 'wait') {
       body.appendChild(el('p', 'tg-empty', '게임 상황을 불러오고 있어요…'));
@@ -733,7 +847,9 @@
   const RES = ['brick', 'lumber', 'wool', 'grain', 'ore'];
   const RES_KO = { brick: '벽돌', lumber: '나무', wool: '양털', grain: '밀', ore: '철' };
   const RES_COL = { brick: '#c45a2c', lumber: '#2d7a3a', wool: '#8fc76a', grain: '#e0b84a', ore: '#7d8597' };
-  const TERRAIN_COL = { hills: '#c9643a', forest: '#2f7d3f', pasture: '#9bd070', fields: '#e6c04f', mountains: '#8a90a0', desert: '#ead9ad' };
+  const TERRAIN_COL = { hills: '#c75b33', forest: '#2f7d3f', pasture: '#7fc257', fields: '#e8c044', mountains: '#8d93a3', desert: '#e8d9ae' };
+  const TERRAIN_EDGE = { hills: 'rgba(255,255,255,.22)', forest: 'rgba(255,255,255,.18)', pasture: 'rgba(255,255,255,.3)', fields: 'rgba(255,255,255,.32)', mountains: 'rgba(255,255,255,.28)', desert: 'rgba(0,0,0,.12)' };
+  const TERRAIN_ICON = { hills: 'brick', forest: 'lumber', pasture: 'wool', fields: 'grain', mountains: 'ore', desert: null };
   const TERRAIN_KO = { hills: '벽돌', forest: '나무', pasture: '양털', fields: '밀', mountains: '철', desert: '사막' };
   const DEV_KO = { knight: '기사', victoryPoint: '승점 +1', roadBuilding: '도로 건설', yearOfPlenty: '풍년', monopoly: '독점' };
   const DEV_TIP = { knight: '도둑을 옮기고 카드 1장을 뺏어요', victoryPoint: '가지고만 있어도 1점 (쓰지 않아요)', roadBuilding: '길 2개를 공짜로 놓아요', yearOfPlenty: '원하는 자원 2장을 받아요', monopoly: '자원 하나를 골라 모두에게서 가져와요' };
@@ -1140,7 +1256,7 @@
     // as big as the space allows, in width and in height, so a wide screen gets a big board
     // and a phone never has to scroll past it
     const box = cv.parentNode, availW = (box && box.clientWidth) || cv.clientWidth || 300;
-    const availH = Math.max(200, window.innerHeight - (window.innerWidth >= 900 ? 240 : 400));
+    const availH = Math.max(200, window.innerHeight - (window.innerWidth >= 900 ? 240 : 430));
     const S = Math.min(availW / bw, availH / bh), wCss = Math.round(S * bw), hCss = Math.round(S * bh);
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     if (cv.width !== Math.round(wCss * dpr) || cv.height !== Math.round(hCss * dpr)) { cv.width = Math.round(wCss * dpr); cv.height = Math.round(hCss * dpr); cv.style.width = wCss + 'px'; cv.style.height = hCss + 'px'; }
@@ -1161,20 +1277,30 @@
       g.fillStyle = p.res && p.res !== 'grain' && p.res !== 'wool' ? '#fff' : INK; g.fillText(p.ratio + ':1', X(p.x), Y(p.y));
     }
     const roll = G.diceRoll && G.diceRoll.total, glow = now() - C.flash < 2600;
+    g.imageSmoothingEnabled = false;
     for (const h of geo.H) {
       const hx = G.hexes[h.k];
-      hexPath(h.x, h.y, 0.97); g.fillStyle = TERRAIN_COL[hx.terrain] || '#ccc'; g.fill(); g.strokeStyle = 'rgba(37,28,44,.55)'; g.lineWidth = 1.5; g.stroke();
-      if (glow && roll && hx.number === roll && h.k !== G.robber) { hexPath(h.x, h.y, 0.9); g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke(); }
-      g.fillStyle = hx.terrain === 'forest' || hx.terrain === 'hills' ? 'rgba(255,255,255,.92)' : 'rgba(37,28,44,.8)';
-      g.font = `700 ${Math.max(8, S * 0.25)}px sans-serif`; g.fillText(TERRAIN_KO[hx.terrain], X(h.x), Y(h.y - 0.58));
+      // one flat main colour per land, with the matching resource picture on it
+      hexPath(h.x, h.y, 0.99); g.fillStyle = TERRAIN_COL[hx.terrain] || '#ccc'; g.fill();
+      hexPath(h.x, h.y, 0.99); g.strokeStyle = INK; g.lineWidth = Math.max(1.5, S * 0.05); g.stroke();
+      hexPath(h.x, h.y, 0.86); g.strokeStyle = TERRAIN_EDGE[hx.terrain] || 'rgba(0,0,0,.12)'; g.lineWidth = Math.max(1, S * 0.04); g.stroke();
+      const ic = TERRAIN_ICON[hx.terrain];
+      if (ic) { const w = S * 0.74; g.globalAlpha = 0.95; g.drawImage(iconCanvas(ic), X(h.x) - w / 2, Y(h.y - 0.62) - w / 2, w, w); g.globalAlpha = 1; }
+      if (glow && roll && hx.number === roll && h.k !== G.robber) { hexPath(h.x, h.y, 0.88); g.strokeStyle = '#fff'; g.lineWidth = Math.max(3, S * 0.09); g.stroke(); }
       if (hx.number) {
-        g.fillStyle = '#fff8ea'; g.strokeStyle = INK; g.lineWidth = 1.5; g.beginPath(); g.arc(X(h.x), Y(h.y + 0.08), S * 0.33, 0, 6.3); g.fill(); g.stroke();
-        const hot = hx.number === 6 || hx.number === 8; g.fillStyle = hot ? '#d6362b' : INK; g.font = `800 ${Math.max(10, S * 0.36)}px sans-serif`; g.fillText(hx.number, X(h.x), Y(h.y + 0.04));
-        const n = PIPS[hx.number], pw = S * 0.055; for (let i = 0; i < n; i++) g.fillRect(X(h.x) - (n * pw * 1.6) / 2 + i * pw * 1.6 + pw * 0.3, Y(h.y + 0.27), pw, pw);
-      }
+        const hot = hx.number === 6 || hx.number === 8, cx = X(h.x), cy = Y(h.y + 0.24), rad = S * 0.42;
+        g.beginPath(); g.arc(cx, cy, rad, 0, 6.3); g.fillStyle = hot ? '#fff1ef' : '#fff8ea'; g.fill();
+        g.strokeStyle = INK; g.lineWidth = Math.max(2, S * 0.06); g.stroke();
+        g.fillStyle = hot ? '#cf2f24' : '#251c2c';
+        g.font = `800 ${Math.max(12, S * 0.5)}px "Pixelify Sans", sans-serif`;
+        g.fillText(hx.number, cx, cy - S * 0.04);
+        const n = PIPS[hx.number], pw = Math.max(1.5, S * 0.06);
+        for (let i = 0; i < n; i++) g.fillRect(cx - (n * pw * 1.7) / 2 + i * pw * 1.7 + pw * 0.35, cy + rad * 0.44, pw, pw);
+      } else { g.fillStyle = 'rgba(37,28,44,.5)'; g.font = `700 ${Math.max(9, S * 0.26)}px sans-serif`; g.fillText('사막', X(h.x), Y(h.y + 0.3)); }
       if (h.k === G.robber) {
-        const rx = X(h.x - 0.5), ry = Y(h.y + 0.22); g.fillStyle = '#3b3a44'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
-        g.beginPath(); g.arc(rx, ry - S * 0.3, S * 0.14, 0, 6.3); g.fill(); g.stroke(); g.beginPath(); g.ellipse(rx, ry, S * 0.17, S * 0.26, 0, 0, 6.3); g.fill(); g.stroke();
+        const w = S * 0.95;
+        g.globalAlpha = 0.25; g.fillStyle = '#000'; hexPath(h.x, h.y, 0.99); g.fill(); g.globalAlpha = 1;
+        g.drawImage(robberCanvas(), X(h.x) - w / 2, Y(h.y + 0.1) - w / 2, w, w);
       }
     }
     // roads
@@ -1289,7 +1415,12 @@
       d.players.appendChild(c);
     });
     cStatus();
-    d.dice.innerHTML = ''; if (g.diceRoll) { d.dice.append(el('span', 'ct-die', g.diceRoll.die1), el('span', 'ct-die', g.diceRoll.die2), el('b', '', '= ' + g.diceRoll.total)); }
+    d.dice.innerHTML = '';
+    if (g.diceRoll) {
+      d.dice.append(pixEl(dieCanvas(g.diceRoll.die1), 'ct-die', '주사위 ' + g.diceRoll.die1), pixEl(dieCanvas(g.diceRoll.die2), 'ct-die', '주사위 ' + g.diceRoll.die2));
+      const tot = el('b', 'ct-total' + (g.diceRoll.total === 7 ? ' seven' : ''), String(g.diceRoll.total));
+      d.dice.appendChild(tot);
+    } else d.dice.appendChild(el('span', 'ct-tip', '아직 주사위를 굴리지 않았어요'));
     // panel: whatever needs an answer right now
     const pn = d.panel; pn.innerHTML = '';
     const disc = playing && g.turnPhase === 'discard' && g.discardingPlayers.find(x => x.playerIndex === i);
@@ -1344,34 +1475,69 @@
       }
     }
     pn.hidden = !pn.firstChild;
-    // my hand
+    // my hand: one big card per resource, plus the development cards
     d.hand.innerHTML = '';
     if (meP) {
-      const row = el('div', 'ct-step'); RES.forEach(k => row.appendChild(resChip(k, meP.resources[k], meP.resources[k] ? '' : ' zero'))); d.hand.appendChild(row);
+      const row = el('div', 'ct-cards');
+      for (const k of ['lumber', 'brick', 'wool', 'grain', 'ore']) {
+        const c = el('div', 'ct-card' + (meP.resources[k] ? '' : ' zero'));
+        c.append(pixEl(iconCanvas(k), 'ct-cardic', ICON_KO[k]), el('b', '', String(meP.resources[k])), el('span', '', RES_KO[k]));
+        row.appendChild(c);
+      }
+      d.hand.appendChild(row);
       const devs = meP.developmentCards.concat(meP.newDevCards);
       if (devs.length) {
         const dr = el('div', 'ct-devs'), canPlay = mine && playing && !g.devCardPlayedThisTurn && (g.turnPhase === 'main' || g.turnPhase === 'roll');
-        // the card says what it does, so nobody has to hover (phones cannot)
-        const devCard = (cd, cls, note, fn, dis) => { const b = mkBtn('', 'ct-dev ' + cls, fn, dis); b.append(el('b', '', DEV_KO[cd]), el('i', '', DEV_TIP[cd])); if (note) b.appendChild(el('u', '', note)); b.title = DEV_TIP[cd]; dr.appendChild(b); };
-        meP.developmentCards.forEach(cd => devCard(cd, '', cd === 'victoryPoint' ? '쓰는 카드가 아니에요' : !canPlay ? (g.devCardPlayedThisTurn ? '이번 차례엔 이미 썼어요' : '내 차례에 쓸 수 있어요') : '눌러서 쓰기',
-          () => { if (cd === 'monopoly') { C.panel = { t: 'mono' }; cUpdate(); } else cAct('dev', [cd]); }, cd === 'victoryPoint' || !canPlay));
-        meP.newDevCards.forEach(cd => devCard(cd, 'new', cd === 'victoryPoint' ? '이미 점수에 들어가 있어요' : '다음 차례부터 쓸 수 있어요', () => {}, true));
+        meP.developmentCards.forEach(cd => {
+          const b2 = mkBtn('', 'ct-dev', () => { if (cd === 'monopoly') { C.panel = { t: 'mono' }; cUpdate(); } else cAct('dev', [cd]); }, cd === 'victoryPoint' || !canPlay);
+          b2.append(pixEl(iconCanvas('dev'), 'ct-devic', '발전 카드'), el('b', '', DEV_KO[cd]), el('i', '', DEV_TIP[cd]),
+            el('u', '', cd === 'victoryPoint' ? '쓰는 카드가 아니에요' : !canPlay ? (g.devCardPlayedThisTurn ? '이번 차례엔 이미 썼어요' : '내 차례에 쓸 수 있어요') : '눌러서 쓰기'));
+          dr.appendChild(b2);
+        });
+        meP.newDevCards.forEach(cd => {
+          const b2 = mkBtn('', 'ct-dev new', () => {}, true);
+          b2.append(pixEl(iconCanvas('dev'), 'ct-devic', '발전 카드'), el('b', '', DEV_KO[cd]), el('i', '', DEV_TIP[cd]), el('u', '', cd === 'victoryPoint' ? '이미 점수에 들어가 있어요' : '다음 차례부터 쓸 수 있어요'));
+          dr.appendChild(b2);
+        });
         d.hand.appendChild(dr);
       }
     } else d.hand.appendChild(el('p', 'tg-empty', '구경하고 있어요'));
-    // actions
+    // build: each thing with what it costs, greyed out when I cannot afford it
     const a = d.acts; a.innerHTML = '';
     if (meP && playing) {
       const has = c => RES.every(k => meP.resources[k] >= (c[k] || 0)), main = mine && g.turnPhase === 'main', BC = R.BUILDING_COSTS;
       const tog = m => () => { C.mode = C.mode === m ? null : m; C.pend = null; C.panel = null; cUpdate(); };
-      if (mine && g.turnPhase === 'roll') a.appendChild(mkBtn('🎲 주사위 굴리기', 'btn-gold tg-big', () => cAct('roll', [])));
-      if (main) {
-        a.append(mkBtn('길', C.mode === 'road' ? 'btn-gold' : '', tog('road'), !has(BC.road) || !meP.roads), mkBtn('마을', C.mode === 'settle' ? 'btn-gold' : '', tog('settle'), !has(BC.settlement) || !meP.settlements),
-          mkBtn('도시', C.mode === 'city' ? 'btn-gold' : '', tog('city'), !has(BC.city) || !meP.cities), mkBtn('발전 카드', '', () => cAct('buyDev', []), !has(BC.developmentCard) || !g.devCardDeck.length),
-          mkBtn('교환', C.panel && C.panel.t === 'trade' ? 'btn-gold' : '', () => { C.panel = C.panel && C.panel.t === 'trade' ? null : { t: 'trade', tab: 'bank', offer: {}, req: {} }; C.mode = null; cUpdate(); }, !!tr),
-          mkBtn('턴 종료 ▶', 'btn-gold', () => { C.mode = null; C.panel = null; cAct('end', []); }));
+      if (mine && g.turnPhase === 'roll') {
+        const rb = mkBtn('🎲 주사위 굴리기', 'btn-gold ct-roll', () => cAct('roll', []));
+        a.appendChild(rb);
       }
-      a.appendChild(el('p', 'ct-tip', COST_KO));
+      const grid = el('div', 'ct-build');
+      const item = (key, ko, cost, left, onClick, active) => {
+        const can = has(cost) && left > 0 && main;
+        const bx = mkBtn('', 'ct-bi' + (active ? ' on' : '') + (can ? '' : ' no'), onClick, !can);
+        const cs = el('div', 'ct-cost');
+        for (const k of RES) for (let i = 0; i < (cost[k] || 0); i++) cs.appendChild(pixEl(iconCanvas(k === 'brick' ? 'brick' : k), 'ct-costic', RES_KO[k]));
+        bx.append(el('b', '', ko), cs, el('u', '', left > 0 ? `남은 말 ${left}` : '다 썼어요'));
+        grid.appendChild(bx);
+      };
+      item('road', '길', BC.road, meP.roads, tog('road'), C.mode === 'road');
+      item('settle', '마을', BC.settlement, meP.settlements, tog('settle'), C.mode === 'settle');
+      item('city', '도시', BC.city, meP.cities, tog('city'), C.mode === 'city');
+      {
+        const can = has(BC.developmentCard) && g.devCardDeck.length > 0 && main;
+        const bx = mkBtn('', 'ct-bi' + (can ? '' : ' no'), () => cAct('buyDev', []), !can);
+        const cs = el('div', 'ct-cost');
+        for (const k of RES) for (let i = 0; i < (BC.developmentCard[k] || 0); i++) cs.appendChild(pixEl(iconCanvas(k), 'ct-costic', RES_KO[k]));
+        bx.append(el('b', '', '발전 카드'), cs, el('u', '', `남은 카드 ${g.devCardDeck.length}`));
+        grid.appendChild(bx);
+      }
+      a.appendChild(grid);
+      if (main) {
+        const row2 = el('div', 'tg-row');
+        row2.append(mkBtn('🔄 교환', C.panel && C.panel.t === 'trade' ? 'btn-gold ct-wide' : 'ct-wide', () => { C.panel = C.panel && C.panel.t === 'trade' ? null : { t: 'trade', tab: 'bank', offer: {}, req: {} }; C.mode = null; cUpdate(); }, !!tr),
+          mkBtn('턴 종료 ▶', 'btn-gold ct-wide', () => { C.mode = null; C.panel = null; cAct('end', []); }));
+        a.appendChild(row2);
+      }
     }
     if (isHost() && g.phase !== 'finished') {
       const w = cWaiting().filter(id => id !== me());
@@ -1715,7 +1881,7 @@
   };
   // test hook (only with ?debug in the address)
   if (/[?&]debug\b/.test(location.search)) window.__tg = {
-    T: () => T, G: () => G, C, D, H, createTable, joinTable, startGame, leaveTable, cAct, cAuto, cValid, WORDS, addBot, setBotLevel, removeBot, botTurn, botStep, chAct, chDo, chResign,
+    T: () => T, G: () => G, C, D, H, createTable, joinTable, startGame, leaveTable, tables: tableList, TABLES, cAct, cAuto, cValid, WORDS, addBot, setBotLevel, removeBot, botTurn, botStep, chAct, chDo, chResign,
     // a simple robot player for automated tests
     bot() {
       if (!G || !T || T.kind !== 'catan' || G.phase === 'finished' || !cWaiting().includes(me()) || now() - C.busy < 500) return;

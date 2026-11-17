@@ -962,7 +962,7 @@
     if (player.brew && player.path.length) player.brew = null;
     if (player.hold && now - player.hold.t0 > HOLD_MS) player.hold = null;
     if (player.playing && now > (player.riffAt || 0)) { player.riffAt = now + 3200; sfx(player.playing, 0.55); }
-    updateZz(now); soccerUpdate(dt, now);
+    updateZz(now); soccerUpdate(dt, now); dustCough(now);
     if (player.dnd && !player.moving && !player.path.length && !player.action) { player.action = 'pray'; player.actionUntil = Infinity; player.actionT0 = now; }
 
     if (LIVE) updateRemotes(dt);
@@ -1055,7 +1055,7 @@
     if (!net.ready) return;
     const st = myState(), kb = player.moving && !player.path.length;
     const sig = [st.seat, st.act, st.play, st.dnd, st.og, st.zz, st.tie, st.hold, st.brew, st.to && st.to.join(','), st.mv, kb ? Math.round(player.x / 6) + ':' + Math.round(player.y / 6) : '', st.mv ? '' : st.x + ':' + st.y + ':' + st.dir].join('|');
-    if (sig !== net.sig && now - net.lastSend > (kb ? (sceneId === 'soccer' ? 170 : 250) : 60)) { net.sig = sig; net.lastSend = now; netSend('st', st); }
+    if (sig !== net.sig && now - net.lastSend > (kb ? (sceneId === 'soccer' ? 110 : 250) : 60)) { net.sig = sig; net.lastSend = now; netSend('st', st); }
   }
   function addRemote(id, meta) {
     const sp = Object.values(scene.spawns)[0];
@@ -1086,7 +1086,16 @@
         if (ent.goalKey !== key) { ent.goalKey = key; ent.path = findPath(ent, { x: p.to[0], y: p.to[1] }); }
         ent.tx = null;
       } else {
-        ent.goalKey = null; ent.path = []; ent.tx = p.x; ent.ty = p.y; ent.rdir = p.dir;
+        ent.goalKey = null; ent.path = [];
+        // guess their speed from the last two updates: between packets they keep gliding instead of
+        // stopping and starting, which is what made a dribbling player (and the ball) stutter
+        const gap = (now - (ent.lastP || 0)) / 1000;
+        if (ent.tx != null && gap > 0.03 && gap < 0.6 && p.mv) {
+          const vx = (p.x - ent.tx) / gap, vy = (p.y - ent.ty) / gap, sp = Math.hypot(vx, vy), cap = SPEED * 1.3;
+          const k = sp > cap ? cap / sp : 1; ent.vx = vx * k; ent.vy = vy * k;
+        } else { ent.vx = 0; ent.vy = 0; }
+        ent.lastP = now; ent.tx = p.x; ent.ty = p.y; ent.rdir = p.dir;
+        if (!p.mv) { ent.vx = 0; ent.vy = 0; }
         if (snap || Math.hypot(p.x - ent.x, p.y - ent.y) > 60) { ent.x = p.x; ent.y = p.y; }
       }
     }
@@ -1103,9 +1112,15 @@
       if (ent.seat) { ent.moving = false; continue; }
       if (ent.path.length) { follow(ent, dt, 1); if (!ent.path.length) ent.goalKey = null; continue; }
       if (ent.tx != null) {
+        if (ent.vx || ent.vy) {   // carry the guess forward, fading it out if nothing new arrives
+          ent.tx += ent.vx * dt; ent.ty += ent.vy * dt;
+          const fade = Math.exp(-2.6 * dt); ent.vx *= fade; ent.vy *= fade;
+          if (Math.hypot(ent.vx, ent.vy) < 4) { ent.vx = 0; ent.vy = 0; }
+          ent.tx = clamp(ent.tx, 0, scene.w); ent.ty = clamp(ent.ty, 0, scene.h);
+        }
         const dx = ent.tx - ent.x, dy = ent.ty - ent.y, d = Math.hypot(dx, dy);
-        if (d > 0.8) {
-          const sp = Math.min(d, SPEED * 1.1 * dt); ent.x += dx / d * sp; ent.y += dy / d * sp; ent.moving = true;
+        if (d > 0.4) {
+          const sp = Math.min(d, Math.max(SPEED * 1.1, d * 9) * dt); ent.x += dx / d * sp; ent.y += dy / d * sp; ent.moving = d > 1.2;
           ent.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
         } else { ent.moving = false; if (ent.rdir) ent.dir = ent.rdir; }
       } else ent.moving = false;
@@ -1260,7 +1275,10 @@
   let lastFrom = null, unread = 0;
   const hhmm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   function log(name, text, cls, at) {
-    const pane = logEl.parentElement, atBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 60;
+    // A pane that is not laid out yet (hidden, or just moved into the game card) reports zero sizes and
+    // used to count as "scrolled up", so new lines stopped following along and then all appeared at once.
+    const pane = logEl.parentElement;
+    const atBottom = !pane.clientHeight || pane.scrollHeight - pane.scrollTop - pane.clientHeight < 60;
     const li = document.createElement('li'), c = cls || '';
     const kind = /\bsys\b/.test(c) ? 'sys' : /\bme\b/.test(c) ? 'me' : 'them';
     li.className = ['msg', kind, c].filter(Boolean).join(' ');
@@ -2128,6 +2146,7 @@
       case 'whistle': tone(a, t, 2600, 0.25, 'sine', v(0.12)); tone(a, t + 0.3, 2600, 0.5, 'sine', v(0.12)); tone(a, t + 0.3, 2660, 0.5, 'sine', v(0.06)); break;
       case 'goal': noise(a, t, 1.6, v(0.18), 'bandpass', 900, 0.5); [72, 76, 79, 84].forEach((m, i) => tone(a, t + 0.1 + i * 0.12, mtof(m), 0.5, 'triangle', v(0.14))); break;
       case 'sip': tone(a, t, 520, 0.09, 'sine', v(0.06), { slide: 760 }); break;
+      case 'cough': noise(a, t, 0.1, v(0.13), 'bandpass', 620, 1.2); tone(a, t, 180, 0.09, 'sawtooth', v(0.05), { slide: 110 }); noise(a, t + 0.16, 0.08, v(0.09), 'bandpass', 520, 1.2); break;
       case 'pop': tone(a, t, mtof(76), 0.12, 'sine', v(0.08)); tone(a, t + 0.07, mtof(83), 0.16, 'sine', v(0.07)); break;
     }
   }
@@ -2443,12 +2462,38 @@
       if (k === 'snow') for (let i = 0; i < 3; i++) { const sx = cx - 4 + i * 4, sy = cy + 3 + ((f + i) % 2) * 2; P(b, sx, sy, 1, 1, '#9fc6ff'); P(b, sx - 1, sy, 3, 1, '#9fc6ff'); P(b, sx, sy - 1, 1, 3, '#9fc6ff'); }
       if (k === 'storm') { P(b, cx, cy + 2, 2, 2, '#ffd65a'); P(b, cx - 1, cy + 4, 2, 2, '#ffd65a'); P(b, cx, cy + 6, 1, 1, '#ffd65a'); for (let i = 0; i < 2; i++) P(b, cx - 5 + i * 9, cy + 3 + f * 2, 1, 2, '#3f8fd8'); }
     }
+    drawDustBar(x0, y0);
+  }
+  // a small bar on the sign for the dust level, green through to deep red
+  const DUST_COL = v => v == null ? '#8d8f99' : v <= 50 ? '#49b36b' : v <= 100 ? '#e0b84a' : v <= 150 ? '#f08a3a' : v <= 200 ? '#e0514a' : '#9a4fc0';
+  function drawDustBar(x0, y0) {
+    const v = WX.aqi, col = DUST_COL(v);
+    P(b, x0 + 2, y0 + 11, 20, 3, '#2b2233');
+    const w = v == null ? 0 : Math.max(1, Math.min(18, Math.round(v / 300 * 18)));
+    if (w) P(b, x0 + 3, y0 + 12, w, 1, col);
+    P(b, x0 + 2, y0 + 10, 2, 1, col); P(b, x0 + 5, y0 + 10, 1, 1, col); P(b, x0 + 8, y0 + 10, 2, 1, col);
   }
   function openWeather() {
     loadWeather();
     if (!WX.ok) { toast('☁️ 날씨를 불러오는 중이에요. 잠시 후 다시 눌러 주세요'); return; }
     const [ic, nm] = WX_NAME[wxKind()];
     toast(`${ic} 오늘 베이징: ${nm} · 지금 ${Math.round(WX.temp)}°C${WX.hi != null ? ` (최고 ${Math.round(WX.hi)}° / 최저 ${Math.round(WX.lo)}°)` : ''}`);
+    setTimeout(() => toast(`${dustIcon()} 미세먼지 ${aqiText(WX.aqi)}${WX.aqi != null && WX.aqi > DUST_BAD ? ' · 마스크 챙기세요!' : ''}`), 2600);
+  }
+  const DUST_BAD = 150;   // US AQI: above this the air is "unhealthy" for everyone
+  const dustIcon = () => WX.aqi == null ? '🌫️' : WX.aqi <= 50 ? '😀' : WX.aqi <= 100 ? '🙂' : WX.aqi <= 150 ? '😷' : WX.aqi <= 200 ? '😰' : '🤢';
+  // on a bad-air day everyone on the roof coughs now and then
+  let coughAt = 0;
+  function dustCough(now) {
+    if (!scene || !scene.weather || !WX.ok || WX.aqi == null || WX.aqi <= DUST_BAD) { coughAt = 0; return; }
+    if (!coughAt) { coughAt = now + 1500; return; }
+    if (now < coughAt) return;
+    coughAt = now + 5000;
+    for (const c of chars) {
+      if (c.dnd) continue;
+      floaters.push({ x: c.x, y: c.y - 30, t0: now, text: '콜록!', bare: true });
+      if (c.isPlayer) sfx('cough', 0.4);
+    }
   }
 
   // ================= 1층 락커룸: 축구 파티 =================
@@ -2617,8 +2662,10 @@
     KICK_POW = 195,       // how hard the ball goes
     TAKE_R = 8,           // close enough for the ball to stick to your feet
     KEEP_R = 17,          // you keep it until it is knocked this far away
-    HOLD_AT = 7,          // how far in front of you it sits
-    KICK_CD = 420;        // nobody can pick it up right after a kick
+    HOLD_AT = 5,          // how far in front of you it sits
+    KICK_CD = 420,        // nobody can pick it up right after a kick
+    HOLD_MIN = 700,       // once you have it, it is yours for at least this long
+    STEAL_BY = 3;         // and a challenger must be this much closer to take it
   const FACE = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] };
   const matchHost = () => {
     if (!match) return null;
@@ -2682,7 +2729,7 @@
     if (ux == null) { const f = FACE[player.dir] || FACE.right; ux = f[0]; uy = f[1]; }
     const gx = teamOf(net.uid) === 'w' ? FIELD.x1 : FIELD.x0, gy = (FIELD.gy0 + FIELD.gy1) / 2;
     const tx = gx - ball.x, ty = gy - ball.y, tl = Math.hypot(tx, ty) || 1;
-    if ((ux * tx + uy * ty) / tl > 0.6) { ux = tx / tl; uy = ty / tl; }
+    if ((ux * tx + uy * ty) / tl > 0.72) { ux = tx / tl; uy = ty / tl; }
     return [ux, uy];
   }
   function kick() {
@@ -2698,7 +2745,7 @@
     }
     myKickAt = now;
     const [ux, uy] = aimDir();
-    ball.own = null; ball.kickAt = now; ball.ks = (ball.ks || 0) + 1; ball.by = net.uid; ball.tx = null;
+    ball.own = null; ball.ang = null; ball.kickAt = now; ball.ks = (ball.ks || 0) + 1; ball.by = net.uid; ball.tx = null;
     if (d < 10) { ball.x = player.x + ux * 5; ball.y = (player.y - 1) + uy * 5; }   // never leave it stuck behind me
     ball.vx = ux * KICK_POW; ball.vy = uy * KICK_POW;
     if (match.phase === 'kickoff') match.phase = 'play';
@@ -2713,10 +2760,18 @@
     const ow = bl.own ? entById(bl.own) : null;
     if (bl.own && (!ow || !teamOf(bl.own))) bl.own = null;
     if (ow) {
-      const [hx, hy] = ballHome(ow);
-      if (host && Math.hypot(hx - bl.x, hy - bl.y) > KEEP_R) bl.own = null;
-      else { const k = Math.min(1, dt * 16); bl.x += (hx - bl.x) * k; bl.y += (hy - bl.y) * k; bl.vx = bl.vy = 0; }
-    }
+      const f = FACE[ow.dir] || FACE.right, want = Math.atan2(f[1], f[0]);
+      if (bl.ang == null) bl.ang = Math.atan2(bl.y - (ow.y - 1), bl.x - ow.x) || want;
+      let turn = want - bl.ang;
+      while (turn > Math.PI) turn -= Math.PI * 2;
+      while (turn < -Math.PI) turn += Math.PI * 2;
+      const max = 11 * dt; bl.ang += Math.max(-max, Math.min(max, turn));   // it rolls round your feet
+      // the dribbler's own packet beats working it out from their character, which always runs a step behind
+      const fresh = bl.own !== net.uid && bl.tx != null && now - (bl.ownAt || 0) < 500;
+      const hx = fresh ? bl.tx : ow.x + Math.cos(bl.ang) * HOLD_AT, hy = fresh ? bl.ty : (ow.y - 1) + Math.sin(bl.ang) * HOLD_AT;
+      if (host && !fresh && Math.hypot(ow.x - bl.x, (ow.y - 1) - bl.y) > KEEP_R) bl.own = null;
+      else { const k = Math.min(1, dt * (fresh ? 24 : 20)); bl.x += (hx - bl.x) * k; bl.y += (hy - bl.y) * k; bl.vx = bl.vy = 0; }
+    } else bl.ang = null;
     if (!bl.own) {
       bl.x += bl.vx * dt; bl.y += bl.vy * dt;
       const fr = Math.exp(-1.6 * dt); bl.vx *= fr; bl.vy *= fr;
@@ -2761,7 +2816,7 @@
       if (!teamOf(p.from) || match.final) return;
       const ks = +p.ks || 0, mine = ball.ks || 0;
       if (ks < mine || (ks === mine && String(ball.by || '') >= p.from)) return;
-      ball.ks = ks; ball.by = p.from; ball.own = null; ball.kickAt = now; ball.tx = null;
+      ball.ks = ks; ball.by = p.from; ball.own = null; ball.ang = null; ball.kickAt = now; ball.tx = null;
       ball.x = clamp(+p.x || 0, FIELD.x0, FIELD.x1); ball.y = clamp(+p.y || 0, FIELD.y0, FIELD.y1);
       ball.vx = clamp(+p.vx || 0, -280, 280); ball.vy = clamp(+p.vy || 0, -280, 280);
       if (match.phase === 'kickoff') match.phase = 'play';
@@ -2771,21 +2826,26 @@
     if (p.t === 'grab') {   // a player says the ball reached their feet
       if (!amMatchHost() || !teamOf(p.from) || match.final || now - (ball.kickAt || 0) < KICK_CD) return;
       const c = net.remotes.get(p.from); if (!c || ball.own) return;
-      if (Math.hypot(ball.x - c.x, ball.y - (c.y - 1)) < TAKE_R + 7) ball.own = p.from;
+      if (Math.hypot(ball.x - c.x, ball.y - (c.y - 1)) < TAKE_R + 7) { ball.own = p.from; ball.tookAt = now; }
       return;
     }
-    if (amMatchHost()) return;   // only follow the host
     if (p.t === 'ball') {
-      match.score.w = p.sw; match.score.b = p.sb; match.rem = p.rem; if (p.ph && match.phase !== 'goal') match.phase = p.ph;
+      const fromHost = p.from === matchHost(), fromOwner = !!ball.own && p.from === ball.own;
+      if (!fromOwner && !fromHost) return;
+      if (fromHost && !amMatchHost()) { match.score.w = p.sw; match.score.b = p.sb; match.rem = p.rem; if (p.ph && match.phase !== 'goal') match.phase = p.ph; }
       if ((+p.ks || 0) < (ball.ks || 0)) return;   // the host has not seen my kick yet: keep my own ball
       ball.ks = +p.ks || 0;
-      const own = p.own || null;
-      // do not drop the ball I just picked up before the host has heard about it
-      if (!(own !== net.uid && ball.own === net.uid && now - (ball.grabAt || 0) < 900)) ball.own = own;
+      // only the host hands the ball around; a dribbler's packet just says where it is
+      if (fromHost) {
+        const own = p.own || null;
+        if (!(own !== net.uid && ball.own === net.uid && now - (ball.grabAt || 0) < 900)) ball.own = own;
+      }
+      if (ball.own === net.uid) return;   // it is at my feet: I decide where it is
       // while someone has the ball it rides on their feet on my screen too, so no need to snap it about
       if (ball.own) { ball.tx = null; ball.vx = ball.vy = 0; }
       else { ball.tx = p.x; ball.ty = p.y; ball.vx = p.vx; ball.vy = p.vy; }
-    } else if (p.t === 'goal') { match.score.w = p.sw; match.score.b = p.sb; match.phase = 'goal'; match.phaseAt = now; match.lastGoal = p.team; ball.own = null; ball.vx = ball.vy = 0; sfx('goal'); }
+    } else if (amMatchHost()) return;
+    else if (p.t === 'goal') { match.score.w = p.sw; match.score.b = p.sb; match.phase = 'goal'; match.phaseAt = now; match.lastGoal = p.team; ball.own = null; ball.vx = ball.vy = 0; sfx('goal'); }
     else if (p.t === 'reset') { match.phase = 'kickoff'; match.phaseAt = now; centreBall(); ball.ks = +p.ks || ball.ks; toKickoffSpot(); }
     else if (p.t === 'end') { match.score.w = p.sw; match.score.b = p.sb; if (!match.final) { match.final = { sw: p.sw, sb: p.sb, why: p.why, at: now }; finishMatchUI(); } }
   }
@@ -2805,16 +2865,23 @@
             let best = null, bd = 1e9;
             for (const [id, c] of fbChars()) { const d = ballDist(c); if (d < bd) { bd = d; best = id; } }
             if (best && bd < TAKE_R) {
-              if (!bl.own) bl.own = best;
-              else if (bl.own !== best) { const ow = entById(bl.own), od = ow ? ballDist(ow) : 1e9; if (bd < od - 2) bl.own = best; }
+              if (!bl.own) { bl.own = best; bl.tookAt = now; }
+              else if (bl.own !== best && now - (bl.tookAt || 0) > HOLD_MIN) {
+                const ow2 = entById(bl.own), od = ow2 ? ballDist(ow2) : 1e9;
+                if (bd < od - STEAL_BY) { bl.own = best; bl.tookAt = now; }
+              }
             }
-          } else if (!bl.own && ballDist(player) < TAKE_R) { bl.own = net.uid; bl.grabAt = now; fbSend({ t: 'grab', ks: bl.ks || 0 }); }
+          } else if (!bl.own && ballDist(player) < TAKE_R) { bl.own = net.uid; bl.grabAt = now; bl.tookAt = now; fbSend({ t: 'grab', ks: bl.ks || 0 }); }
         }
         if (host && scored) return goal(scored);
         if (host && m.rem <= 0) return endMatch('time');
       }
-      if (host) { if (now - fbLastSend > 100) { fbLastSend = now; sendBall(); } }
-      else if (!bl.own && bl.tx != null) {   // ease onto the host's ball, but jump if we drifted badly apart
+      // the ball is sent by whoever has it at their feet — deriving it from their character on screen
+      // always left it a step behind, which is what made dribbling look like it was stuttering
+      const iHaveIt = bl.own === net.uid;
+      if ((host || iHaveIt) && now - fbLastSend > (iHaveIt ? 85 : 100)) { fbLastSend = now; sendBall(); }
+      if (!host && !iHaveIt && !bl.own && bl.tx != null) {
+        // ease onto the ball we were sent, but jump if we drifted badly apart
         const ex = bl.tx - bl.x, ey = bl.ty - bl.y, k = Math.hypot(ex, ey) > 24 ? 1 : Math.min(1, dt * 9);
         bl.x += ex * k; bl.y += ey * k;
         bl.tx += bl.vx * dt; bl.ty += bl.vy * dt;
@@ -3603,6 +3670,6 @@
     bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
   };
   if (document.fonts && document.fonts.load) document.fonts.load('700 20px "Pixelify Sans"').then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();

@@ -162,6 +162,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .tg-empty { margin: 0; font-size: 13px; color: var(--muted); background: var(--cream-2); border-radius: 6px; padding: 8px 10px; }
 .tg-big { padding: 8px 18px; font-size: 15px; }
 .tg-list { display: flex; flex-direction: column; gap: 5px; }
+.tg-room { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 9px; padding: 5px 9px; min-height: 48px; }
+.tg-room.playing { background: #f1ede4; }
+.tg-roomwho { display: flex; gap: 1px; flex: none; }
+.tg-roomwho .ct-avatar { width: 18px; height: 25px; }
+.tg-roominfo { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tg-roominfo b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-room .btn { flex: none; padding: 4px 11px; }
+.tg-backlist { align-self: flex-start; padding: 3px 10px; font-size: 12px; }
 .tg-mem { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 4px 10px; font-weight: 700; min-height: 44px; }
 .tg-mem .ct-avatar { width: 22px; height: 31px; flex: none; }
 .tg-mem.bot { background: #f2eefb; }
@@ -204,8 +212,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .ct-status { margin: 0; font-size: 14px; font-weight: 800; color: var(--muted); }
 .ct-status.mine { color: #2f8f80; }
 .ct-status.done { color: var(--ink); }
-.ct-dice { display: flex; align-items: center; gap: 4px; font-size: 13px; white-space: nowrap; }
-.ct-die { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; background: #fff; border: 2px solid var(--ink); border-radius: 5px; font-weight: 800; }
+.ct-dice { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ct-die { width: 38px; height: 38px; image-rendering: pixelated; display: block; }
+.ct-total { font-size: 24px; font-weight: 800; min-width: 30px; text-align: center; }
+.ct-total.seven { color: #cf2f24; }
+/* my cards, big enough to count at a glance */
+.ct-cards { display: flex; gap: 5px; flex-wrap: wrap; }
+.ct-card { display: flex; flex-direction: column; align-items: center; gap: 0; background: #fff; border: 2px solid var(--ink); border-radius: 9px; padding: 4px 6px 2px; min-width: 50px; box-shadow: 0 2px 0 var(--ink); }
+.ct-card.zero { opacity: .42; box-shadow: none; }
+.ct-card b { font-size: 19px; line-height: 1.1; }
+.ct-card span { font-size: 10px; color: var(--muted); }
+.ct-cardic { width: 26px; height: 26px; image-rendering: pixelated; display: block; }
+/* what I can build, with what it costs */
+.ct-build { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; }
+.ct-bi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 5px 8px; text-align: left; white-space: normal; }
+.ct-bi b { font-size: 14px; }
+.ct-bi u { text-decoration: none; font-size: 10px; color: var(--muted); }
+.ct-bi.on { background: var(--gold); }
+.ct-bi.no { opacity: .5; }
+.ct-cost { display: flex; gap: 1px; flex-wrap: wrap; }
+.ct-costic { width: 15px; height: 15px; image-rendering: pixelated; display: block; }
+.ct-roll { width: 100%; padding: 9px; font-size: 16px; }
+.ct-wide { flex: 1; padding: 7px; font-size: 14px; }
+.ct-devic { width: 18px; height: 18px; image-rendering: pixelated; display: block; }
 .ct-cols { display: flex; flex-direction: column; gap: 8px; }
 .ct-left { flex: none; }
 .ct-right { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -223,17 +252,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .ct-res.pick { cursor: pointer; box-shadow: 0 2px 0 var(--ink); }
 .ct-res.sel { outline: 3px solid var(--gold); outline-offset: 1px; }
 .ct-res.no { opacity: .35; cursor: default; box-shadow: none; }
-.ct-hand { display: flex; flex-direction: column; gap: 5px; }
+.ct-hand { display: flex; flex-direction: column; gap: 6px; }
 .ct-devs { display: flex; gap: 5px; flex-wrap: wrap; }
 .ct-devs { gap: 6px; }
-.ct-dev { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 9px; font-size: 12px; line-height: 1.35; background: #efe6ff; text-align: left; white-space: normal; max-width: 190px; }
+.ct-dev { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 6px; row-gap: 0; padding: 5px 9px; font-size: 12px; line-height: 1.35; background: #efe6ff; text-align: left; white-space: normal; max-width: 220px; }
+.ct-dev .ct-devic { grid-row: span 3; }
 .ct-dev b { font-size: 13px; font-weight: 800; }
 .ct-dev i { font-style: normal; font-weight: 500; color: #5b4a63; }
 .ct-dev u { text-decoration: none; font-size: 10px; font-weight: 700; color: #8a5a00; }
 .ct-dev:disabled { opacity: .62; }
 .ct-dev.new { background: #eee; }
 .ct-dev.new u { color: var(--muted); }
-.ct-acts { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.ct-acts { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
 .ct-acts .btn { padding: 5px 11px; }
 .ct-acts .ct-tip { flex-basis: 100%; }
 .ct-log { background: #fff; border: 2px solid var(--cream-2); border-radius: 8px; padding: 5px 9px; font-size: 12px; max-height: 110px; overflow-y: auto; }
@@ -246,7 +276,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .tg-card.tg-play .tg-body { overflow: auto; }
 }
 /* phone: the board gets the width, the rest stacks under it */
-@media (max-width: 899px) { .ct-acts .btn { flex: 1 1 29%; } .ct-log { max-height: 84px; } }
+/* phone: trim the chrome so the board, the dice and what you are holding fit on one screen */
+@media (max-width: 899px) {
+  .ct-acts .btn { flex: 1 1 29%; }
+  .ct-log { max-height: 72px; }
+  .ct-icimg { width: 15px; height: 15px; }
+  .ct-ic b { font-size: 11px; }
+  .ct-avatar { width: 24px; height: 34px; }
+  .ct-avwrap { width: 26px; }
+  .ct-p { padding: 2px 5px; }
+  .ct-phead { font-size: 10px; }
+  .tg-body { gap: 6px; }
+}
 .dw-info { display: flex; align-items: center; gap: 10px; flex: none; flex-wrap: wrap; }
 .dw-round { font-size: 12px; font-weight: 800; background: #fff; border: 2px solid var(--ink); border-radius: 999px; padding: 1px 10px; white-space: nowrap; }
 .dw-word { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
