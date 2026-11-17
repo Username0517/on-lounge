@@ -196,8 +196,19 @@
     const e = TABLES.get(tid); if (!e) return;
     if (T && T.id === tid) return;
     if (T && inTable()) { toast('지금 앉아 있는 자리에서 먼저 나와 주세요'); return; }
+    if (e.tbl.started) { watchTable(tid); return; }   // already playing: watch instead of asking to join
     joinWait = { id: tid, at: now() };
     O.send({ t: 'join', from: me(), k: kindHere(), tid, name: O.name() });
+    render();
+  }
+  // onlookers do not need the host's permission; the state is already going out to the whole room
+  function watchTable(tid) {
+    const e = TABLES.get(tid); if (!e) return;
+    if (T && inTable()) { toast('지금 앉아 있는 자리에서 먼저 나와 주세요'); return; }
+    if (game() && game().unmount) game().unmount();
+    joinWait = null; T = e.tbl; G = null; mountedKey = ''; lastTbl = now(); hostGoneAt = 0; clearChat();
+    askAt = -1e9; ask(); send({ t: 'q' });
+    toast('구경하는 중이에요. 다음 판부터 함께할 수 있어요!');
     render();
   }
   let joinWait = null;
@@ -249,10 +260,10 @@
     if (!isHost() || T.started) return;
     const live = T.members.filter(m => m.bot || O.here(m.id));
     if (live.length < INFO[T.kind].min) { toast(`${INFO[T.kind].min}명부터 시작할 수 있어요`); return; }
-    T.members = live; T.started = true; T.v++;
+    T.members = live; T.started = true; T.v++; clearChat('게임 시작! 여기 대화는 같이 하는 사람들만 봐요.');
     game().start(); sendTbl(); game().push(); render();
   }
-  function backToLobby() { if (!isHost()) return; if (game().unmount) game().unmount(); T.started = false; G = null; mountedKey = ''; T.members = T.members.filter(m => m.bot || O.here(m.id)); bump(); }
+  function backToLobby() { if (!isHost()) return; if (game().unmount) game().unmount(); T.started = false; G = null; mountedKey = ''; clearChat('게임이 끝나서 대화를 비웠어요.'); T.members = T.members.filter(m => m.bot || O.here(m.id)); bump(); }
   // the host vanished: the first player still in the room takes over
   function takeOver() {
     if (!T || isHost()) return;
@@ -288,7 +299,8 @@
         else if (t.host === T.host && (t.v || 0) < (T.v || 0)) return;
         const wasStarted = T.started, wasIn = inTable();
         T = t; lastTbl = now(); hostGoneAt = 0;
-        if (wasStarted && !T.started) { if (game().unmount) game().unmount(); G = null; mountedKey = ''; }
+        if (wasStarted && !T.started) { if (game().unmount) game().unmount(); G = null; mountedKey = ''; clearChat('게임이 끝나서 대화를 비웠어요.'); }
+        if (!wasStarted && T.started) clearChat('게임 시작! 여기 대화는 같이 하는 사람들만 봐요.');
         if (T.started && !G) send({ t: 'q' });
         if (wasIn && !inTable() && T.started) toast('게임에서 빠졌어요');
         render(); return;
@@ -311,6 +323,11 @@
     if (p.t === 'err') { toast(p.msg); joinWait = null; if (game() && game().onErr) game().onErr(); render(); return; }
     if (p.t === 'join') { if (T && p.tid === T.id) hostJoin(p.from, p.name); return; }
     if (!T || p.tid !== T.id) return;
+    if (p.t === 'say') {
+      if (!inTable()) return;   // only the people playing see it
+      pushChat({ id: p.from, name: String(p.name || '친구').slice(0, 12), text: String(p.text || '').slice(0, 120) });
+      return;
+    }
     if (p.t === 'leave') { hostLeave(p.from); return; }
     const g = game(); if (g && g.onMsg) g.onMsg(p);
   };
@@ -373,6 +390,9 @@
   // ================================================================================================
   //  체스
   // ================================================================================================
+  // 빨·주·노·초·파·보 — told apart at a glance on the board, which the shipped palette was not
+  const PCOL = ['#e03131', '#f76707', '#f2b705', '#2f9e44', '#1c7ed6', '#9c36b5'];
+  const pcol = i => PCOL[i] || (R.PLAYER_COLORS && R.PLAYER_COLORS[i]) || '#888';
   const CR = window.ONL_CHESS;
   const CS = { dom: null, sel: -1, dest: [], promo: null, lastSeq: -1, think: 0, raf: 0 };
   const PIECE_KO = { p: '폰', n: '나이트', b: '비숍', r: '룩', q: '퀸', k: '킹' };
@@ -697,32 +717,61 @@
   // ---- lounge chat inside the game ----
   // The real chat pane is borrowed from the side panel and put back when the game closes, so chatting
   // during a game uses exactly the same box (and the same history) as everywhere else.
-  let chatOpen = false, chatHome = null, chatUnread = 0;
-  const pane = () => document.querySelector('.chat-pane');
+  // ---- chat for the table only ----
+  // Its own little chat, not the lounge one: only the people sitting at this table see it, and it is
+  // wiped when a game ends so the next game starts on a clean slate.
+  let chatOpen = false, chatUnread = 0, tchat = [], chatLog = null, chatInput = null;
   const wide = () => window.innerWidth >= 900;
-  const chatBottom = () => {
-    const sc = root.querySelector('.tg-chat .chat-scroll'); if (!sc) return;
-    sc.scrollTop = sc.scrollHeight;
-    requestAnimationFrame(() => { sc.scrollTop = sc.scrollHeight; });   // again once the layout has settled
-  };
-  function chatHold(box) {
-    const p = pane(); if (!p || !box) return;
-    if (!chatHome) chatHome = { parent: p.parentNode, next: p.nextSibling, hidden: p.hidden };
-    p.hidden = false; box.appendChild(p);
-    chatBottom(); setTimeout(chatBottom, 60);   // moving it resets the scroll, so put it back at the newest line
+  function buildChat(box) {
+    box.innerHTML = '';
+    box.appendChild(el('div', 'tgc-head', '💬 게임 대화'));
+    chatLog = el('div', 'tgc-log');
+    const form = el('form', 'tgc-form');
+    chatInput = el('input'); chatInput.type = 'text'; chatInput.maxLength = 120; chatInput.autocomplete = 'off'; chatInput.setAttribute('aria-label', '게임 대화 입력');
+    const send1 = el('button', 'btn btn-gold', '보내기'); send1.type = 'submit';
+    form.append(chatInput, send1);
+    form.addEventListener('submit', ev => { ev.preventDefault(); const t = chatInput.value.trim(); if (!t) return; chatInput.value = ''; sayChat(t); });
+    box.append(chatLog, form);
+    drawChat();
   }
-  function chatBack() {
-    const p = pane(); if (!p || !chatHome) return;
-    p.hidden = chatHome.hidden; chatHome.parent.insertBefore(p, chatHome.next); chatHome = null;
+  function drawChat() {
+    if (!chatLog) return;
+    const sc = chatLog, stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 40 || !sc.clientHeight;
+    sc.innerHTML = '';
+    if (!tchat.length) sc.appendChild(el('p', 'tgc-sys', inTable() ? '같이 하는 사람들끼리만 보이는 대화예요. 게임이 끝나면 지워져요.' : '게임에 참여하면 대화할 수 있어요.'));
+    for (const m of tchat) {
+      const line = el('p', 'tgc-line' + (m.sys ? ' sys' : m.id === me() ? ' me' : ''));
+      if (m.sys) line.textContent = m.text;
+      else { line.append(el('b', '', m.name), document.createTextNode(' ' + m.text)); }
+      sc.appendChild(line);
+    }
+    if (stick) sc.scrollTop = sc.scrollHeight;
+    if (chatInput) {
+      const can = inTable();
+      chatInput.disabled = !can;
+      chatInput.placeholder = can ? '메시지를 입력하세요' : '구경 중에는 보낼 수 없어요';
+    }
   }
+  function pushChat(m) {
+    tchat.push(m); if (tchat.length > 80) tchat.shift();
+    if (!m.sys && m.id !== me() && !(chatOpen || wide())) chatUnread++;
+    drawChat(); applyChat();
+  }
+  function sayChat(text) {
+    if (!inTable()) return;
+    const t = String(text).slice(0, 120);
+    send({ t: 'say', text: t, name: O.name() });
+    pushChat({ id: me(), name: O.name(), text: t });
+  }
+  function clearChat(note) { tchat = []; if (note) tchat.push({ sys: 1, text: note }); chatUnread = 0; drawChat(); }
   function applyChat() {
     const box = root.querySelector('.tg-chat'), btn = root.querySelector('.tg-chatbtn'); if (!box) return;
     const on = chatOpen || wide();
     box.classList.toggle('show', on);
-    if (on) { chatUnread = 0; chatBottom(); }
+    if (on) { chatUnread = 0; if (chatLog) chatLog.scrollTop = chatLog.scrollHeight; }
     if (btn) { btn.hidden = wide(); btn.setAttribute('aria-pressed', String(chatOpen)); btn.dataset.unread = chatUnread ? (chatUnread > 9 ? '9+' : chatUnread) : ''; }
   }
-  TG.onChat = kind => { if (root.hidden || kind === 'me') return; if (!(chatOpen || wide())) { chatUnread++; applyChat(); } };
+  const chatBack = () => {};   // nothing is borrowed any more
   window.addEventListener('resize', () => { if (!root.hidden) applyChat(); });
   function confirmBar(card, text, yesText, cb) {
     const old = card.querySelector('.tg-ask'); if (old) old.remove();
@@ -741,7 +790,7 @@
     const head = el('div', 'tg-head'); headTitle = el('h2', '', ''); headBtns = el('div', 'tg-row');
     outBtn = el('button', 'btn', '나가기'); outBtn.type = 'button'; outBtn.hidden = true;
     outBtn.addEventListener('click', () => {
-      if (T && T.started && !(G && G.over)) confirmBar(card, T.kind === 'catan' ? '게임에서 나갈까요? 내 차례는 자동으로 넘어가게 돼요.' : '게임에서 나갈까요?', '나가기', () => leaveTable());
+      if (inTable() && T.started && !(G && G.over)) confirmBar(card, T.kind === 'catan' ? '게임에서 나갈까요? 내 차례는 자동으로 넘어가게 돼요.' : '게임에서 나갈까요?', '나가기', () => leaveTable());
       else leaveTable();
     });
     const cBtn = el('button', 'btn tg-chatbtn', '💬 대화'); cBtn.type = 'button';
@@ -751,7 +800,7 @@
     const main = el('div', 'tg-main'); bodyEl = el('div', 'tg-body');
     const chatBox = el('div', 'tg-chat');
     main.append(bodyEl, chatBox); card.appendChild(main); root.appendChild(card);
-    chatHold(chatBox); applyChat();
+    buildChat(chatBox); applyChat();
   }
   function render() {
     label();
@@ -761,7 +810,9 @@
     ensureCard(kind);
     const key = !T ? 'list' : !T.started ? 'lobby' : (G ? 'game:' + T.id : 'wait');
     headTitle.textContent = `${inf.icon} ${inf.title}`;
-    outBtn.hidden = !inTable();
+    const watching = !!T && !inTable();
+    outBtn.hidden = !T;
+    outBtn.textContent = watching ? '그만 보기' : '나가기';
     card.classList.toggle('tg-play', key.startsWith('game:'));
     if (key.startsWith('game:') && key === mountedKey && bodyEl.firstChild) { GAMES[kind].update(); return; }
     if (mountedKey.startsWith('game:') && GAMES[kind].unmount) GAMES[kind].unmount();
@@ -784,7 +835,7 @@
           info.append(el('b', '', `${hostName}님의 자리`), el('span', 'tg-tag', `${t.members.length}/${inf.max}명 · ${t.started ? '진행 중' : '대기 중'}`));
           const j = el('button', 'btn ' + (t.started ? '' : 'btn-gold'), joinWait && joinWait.id === t.id ? '들어가는 중…' : t.started ? '구경하기' : t.members.length >= inf.max ? '꽉 참' : '참가하기');
           j.type = 'button'; j.disabled = !!joinWait || (!t.started && t.members.length >= inf.max);
-          j.addEventListener('click', () => joinTable(t.id));
+          j.addEventListener('click', () => t.started ? watchTable(t.id) : joinTable(t.id));
           r.append(who, info, j); wrap.appendChild(r);
         });
         body.appendChild(wrap);
@@ -864,6 +915,38 @@
   const cMine = () => !!G && G.phase !== 'finished' && cCur().id === me();
   function cLog(text) { const X = G.x; X.log.push(text); if (X.log.length > 40) X.log.splice(0, X.log.length - 40); }
 
+  // Digits drawn by hand. The pixel font we were using made 2 and 5 look like the same squiggle.
+  const DIGITS = {
+    '0': ['0110', '1001', '1001', '1001', '1001', '1001', '0110'],
+    '1': ['0010', '0110', '1010', '0010', '0010', '0010', '0111'],
+    '2': ['0110', '1001', '0001', '0010', '0100', '1000', '1111'],
+    '3': ['1110', '0001', '0001', '0110', '0001', '1001', '0110'],
+    '4': ['0010', '0110', '1010', '1010', '1111', '0010', '0010'],
+    '5': ['1111', '1000', '1110', '0001', '0001', '1001', '0110'],
+    '6': ['0110', '1000', '1110', '1001', '1001', '1001', '0110'],
+    '7': ['1111', '0001', '0010', '0010', '0100', '0100', '0100'],
+    '8': ['0110', '1001', '1001', '0110', '1001', '1001', '0110'],
+    '9': ['0110', '1001', '1001', '0111', '0001', '0001', '0110']
+  };
+  // draws the text centred on (cx, cy); u is the size of one pixel
+  function pixNum(g, text, cx, cy, u, col) {
+    text = String(text);
+    // Draw in real screen pixels. The board canvas is scaled, so drawing in board units puts cell
+    // edges on fractions of a pixel and the browser smears 2 and 5 into the same squiggle.
+    const m = g.getTransform ? g.getTransform() : null;
+    const sx = m ? m.a : 1, sy = m ? m.d : 1, ox = m ? m.e : 0, oy = m ? m.f : 0;
+    const du = Math.max(1, Math.round(u * sx));
+    const gw = 4 * du, gap = du, total = text.length * gw + (text.length - 1) * gap;
+    let x = Math.round(cx * sx + ox - total / 2), y = Math.round(cy * sy + oy - (7 * du) / 2);
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = col;
+    for (const ch of text) {
+      const rows = DIGITS[ch];
+      if (rows) for (let r = 0; r < 7; r++) for (let c = 0; c < 4; c++) if (rows[r][c] === '1') g.fillRect(x + c * du, y + r * du, du, du);
+      x += gw + gap;
+    }
+    g.restore();
+  }
   function cGeo() {
     const key = G.id + ':' + Object.keys(G.hexes).length;
     if (C.geo && C.geoKey === key) return C.geo;
@@ -1206,6 +1289,14 @@
     if (r && r.error) { const f = cAutoMove(pid); if (!f) cDo(pid, 'end', []); }   // never let a computer jam the game
     cPush(); return true;
   }
+  // how long the person whose turn it is has left, in milliseconds
+  const TURN_MS = { setup: 60000, roll: 45000, main: 100000, robber: 45000, discard: 45000 };
+  function turnWindow() {
+    if (!G) return TURN_MS.main;
+    if (G.phase === 'setup') return TURN_MS.setup;
+    return TURN_MS[G.turnPhase] || TURN_MS.main;
+  }
+  const turnLeft = now => Math.max(0, turnWindow() - ((now || Date.now()) - (G.x.actAt || Date.now())));
   function cTick() {
     if (!G || G.phase === 'finished') return;
     if (botStep(performance.now())) return;
@@ -1214,6 +1305,12 @@
       if (id === me() || O.here(id) || isBot(id)) { delete C.absent[id]; continue; }
       if (!C.absent[id]) C.absent[id] = t;
       else if (t - C.absent[id] > 6000) { C.absent[id] = t - 3500; cAuto(id); return; }
+    }
+    // a turn clock, so one person thinking forever cannot stall the table
+    const waits = cWaiting().filter(id => !isBot(id));
+    if (waits.length) {
+      const left = turnLeft(t);
+      if (left <= 0) { G.x.actAt = t; for (const id of waits) cAuto(id); return; }
     }
     // a trade offer nobody in the room can answer
     if (G.tradeOffer && !G.players.some((p, i) => i !== G.tradeOffer.from && (O.here(p.id) || p.bot) && G.tradeOffer.responses[p.id] !== 'decline')) { G.tradeOffer = null; G.x.seq++; cPush(); }
@@ -1291,9 +1388,10 @@
         const hot = hx.number === 6 || hx.number === 8, cx = X(h.x), cy = Y(h.y + 0.24), rad = S * 0.42;
         g.beginPath(); g.arc(cx, cy, rad, 0, 6.3); g.fillStyle = hot ? '#fff1ef' : '#fff8ea'; g.fill();
         g.strokeStyle = INK; g.lineWidth = Math.max(2, S * 0.06); g.stroke();
-        g.fillStyle = hot ? '#cf2f24' : '#251c2c';
-        g.font = `800 ${Math.max(12, S * 0.5)}px "Pixelify Sans", sans-serif`;
-        g.fillText(hx.number, cx, cy - S * 0.04);
+        // the pixel size has to be a whole number of screen pixels or the digits blur into squiggles
+        const dn = String(hx.number).length, fit = (rad * 1.05) / (5 * dn - 1);
+        pixNum(g, hx.number, cx, cy - S * 0.055, Math.max(1, Math.floor(Math.min(rad * 0.17, fit))), hot ? '#cf2f24' : '#251c2c');
+        g.fillStyle = hot ? '#cf2f24' : '#251c2c';   // pixNum puts the colour back, so set it again for the pips
         const n = PIPS[hx.number], pw = Math.max(1.5, S * 0.06);
         for (let i = 0; i < n; i++) g.fillRect(cx - (n * pw * 1.7) / 2 + i * pw * 1.7 + pw * 0.35, cy + rad * 0.44, pw, pw);
       } else { g.fillStyle = 'rgba(37,28,44,.5)'; g.font = `700 ${Math.max(9, S * 0.26)}px sans-serif`; g.fillText('사막', X(h.x), Y(h.y + 0.3)); }
@@ -1309,13 +1407,13 @@
       const rd = eRoad(e); if (!rd) continue;
       const ax = e.x1 + (e.x2 - e.x1) * 0.16, ay = e.y1 + (e.y2 - e.y1) * 0.16, bx = e.x1 + (e.x2 - e.x1) * 0.84, by = e.y1 + (e.y2 - e.y1) * 0.84;
       g.strokeStyle = INK; g.lineWidth = S * 0.2; g.beginPath(); g.moveTo(X(ax), Y(ay)); g.lineTo(X(bx), Y(by)); g.stroke();
-      g.strokeStyle = R.PLAYER_COLORS[rd.owner]; g.lineWidth = S * 0.12; g.beginPath(); g.moveTo(X(ax), Y(ay)); g.lineTo(X(bx), Y(by)); g.stroke();
+      g.strokeStyle = pcol(rd.owner); g.lineWidth = S * 0.12; g.beginPath(); g.moveTo(X(ax), Y(ay)); g.lineTo(X(bx), Y(by)); g.stroke();
     }
     // buildings
     for (const v of geo.V) {
       const bd = vBuild(v); if (!bd) continue;
       const cx = X(v.x), cy = Y(v.y), u = S * (bd.building === 'city' ? 0.2 : 0.16);
-      g.fillStyle = R.PLAYER_COLORS[bd.owner]; g.strokeStyle = INK; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
+      g.fillStyle = pcol(bd.owner); g.strokeStyle = INK; g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
       if (bd.building === 'city') { g.moveTo(cx - u * 1.5, cy + u); g.lineTo(cx - u * 1.5, cy - u * 0.2); g.lineTo(cx - u * 0.2, cy - u * 0.2); g.lineTo(cx - u * 0.2, cy - u * 1.1); g.lineTo(cx + u * 0.65, cy - u * 1.9); g.lineTo(cx + u * 1.5, cy - u * 1.1); g.lineTo(cx + u * 1.5, cy + u); }
       else { g.moveTo(cx - u, cy + u); g.lineTo(cx - u, cy - u * 0.3); g.lineTo(cx, cy - u * 1.3); g.lineTo(cx + u, cy - u * 0.3); g.lineTo(cx + u, cy + u); }
       g.closePath(); g.fill(); g.stroke();
@@ -1323,7 +1421,7 @@
     // where I can act
     const spots = cValid(); C.spots = spots;
     if (spots.length) {
-      const pulse = 0.5 + 0.5 * Math.sin(now() / 260), col = R.PLAYER_COLORS[cIdx()] || '#fff';
+      const pulse = 0.5 + 0.5 * Math.sin(now() / 260), col = pcol(cIdx());
       for (const s of spots) {
         const sel = C.pend === s.key, rad = S * (s.hex ? 0.5 : 0.2) * (sel ? 1.25 : 1);
         g.beginPath(); g.arc(X(s.x), Y(s.y), rad, 0, 6.3);
@@ -1369,24 +1467,35 @@
   function cStatus() {
     const d = C.dom; if (!d) return;
     const [text, cls] = cStatusText(); d.status.textContent = C.pend ? '같은 곳을 한 번 더 누르면 확정돼요' : text; d.status.className = 'ct-status ' + cls;
+    cClock();
+  }
+  // the turn clock, shown only when it is getting tight
+  function cClock() {
+    const d = C.dom; if (!d || !d.clock || !G) return;
+    const waiting = G.phase !== 'finished' && cWaiting().some(id => !isBot(id));
+    const left = waiting ? turnLeft() : 0, secs = Math.ceil(left / 1000);
+    const show = waiting && left < 30000;
+    d.clock.hidden = !show;
+    if (show) { d.clock.textContent = '⏱ ' + secs + '초'; d.clock.classList.toggle('hurry', left < 10000); }
   }
   const resChip = (k, n, extra) => { const c = el('span', 'ct-res' + (extra || '')); c.style.setProperty('--c', RES_COL[k]); c.append(el('b', '', RES_KO[k]), el('i', '', n)); return c; };
   function cMount(body) {
     const d = C.dom = {};
-    d.players = el('div', 'ct-players'); d.status = el('p', 'ct-status'); d.dice = el('div', 'ct-dice');
-    const top = el('div', 'ct-top'); top.append(d.status, d.dice);
+    d.players = el('div', 'ct-players'); d.status = el('p', 'ct-status'); d.dice = el('div', 'ct-dice'); d.clock = el('span', 'ct-clock'); d.clock.hidden = true;
+    const top = el('div', 'ct-top'); top.append(d.status, d.clock, d.dice);
     d.cv = el('canvas', 'ct-board'); d.cv.addEventListener('pointerdown', cTap);
     d.panel = el('div', 'ct-panel'); d.hand = el('div', 'ct-hand'); d.acts = el('div', 'ct-acts'); d.log = el('div', 'ct-log');
     const left = d.left = el('div', 'ct-left'), right = el('div', 'ct-right');
     left.append(d.cv); right.append(d.panel, d.hand, d.acts, d.log);
     const cols = el('div', 'ct-cols'); cols.append(left, right);
     body.append(d.players, top, cols);
-    d.ro = new ResizeObserver(() => cDraw()); d.ro.observe(d.left);   // the box, not the canvas: its size is ours to set
+    d.ro = new ResizeObserver(() => cDraw()); d.ro.observe(d.left);
+    d.clockIv = setInterval(cClock, 500);   // the box, not the canvas: its size is ours to set
     d.onwin = () => cDraw(); window.addEventListener('resize', d.onwin);
     cUpdate();
   }
   function cUnmount() {
-    if (C.dom) { if (C.dom.ro) C.dom.ro.disconnect(); if (C.dom.onwin) window.removeEventListener('resize', C.dom.onwin); }
+    if (C.dom) { if (C.dom.ro) C.dom.ro.disconnect(); if (C.dom.onwin) window.removeEventListener('resize', C.dom.onwin); clearInterval(C.dom.clockIv); }
     cancelAnimationFrame(C.raf); C.dom = null; C.panel = null; C.mode = null; C.pend = null; C.lastSeq = -1;
   }
   const mkBtn = (text, cls, fn, dis) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; if (dis) b.disabled = true; b.addEventListener('click', fn); return b; };
@@ -1398,7 +1507,7 @@
     d.players.innerHTML = '';
     g.players.forEach((p, pi) => {
       const c = el('div', 'ct-p' + (pi === g.currentPlayerIndex && g.phase !== 'finished' ? ' on' : '') + (O.here(p.id) || p.bot ? '' : ' away'));
-      const head = el('div', 'ct-phead'), dot = el('i', 'ct-dot'); dot.style.background = R.PLAYER_COLORS[pi];
+      const head = el('div', 'ct-phead'), dot = el('i', 'ct-dot'); dot.style.background = pcol(pi);
       const vp = p.victoryPoints + (pi === i ? (p.hiddenVictoryPoints || 0) : 0);
       head.append(dot, el('b', 'ct-pname', p.name + (p.id === me() ? ' (나)' : '')), el('span', 'ct-vp', `★${vp}`));
       if (p.knightsPlayed) head.appendChild(el('span', 'ct-mini', `🛡${p.knightsPlayed}`));
@@ -1573,35 +1682,48 @@
   // something worth showing off with.
   const uniq = s => s.split(' ').filter((w, i, a) => w && a.indexOf(w) === i);
   const WORD_SETS = [
-    uniq('사과 바나나 수박 포도 딸기 당근 옥수수 감자 고구마 양파 버섯 호박 토마토 라면 피자 햄버거 치킨 만두 케이크 도넛 커피 우유 ' +
-      '강아지 고양이 토끼 코끼리 기린 사자 호랑이 곰 판다 원숭이 돼지 소 말 양 닭 오리 펭귄 상어 고래 문어 거북이 뱀 개구리 나비 벌 개미 거미 공룡 ' +
-      '자동차 버스 기차 비행기 배 자전거 택시 트럭 로켓 ' +
-      '집 학교 교회 병원 아파트 다리 성 텐트 ' +
-      '의자 책상 침대 소파 냉장고 텔레비전 컴퓨터 휴대폰 시계 안경 우산 가방 모자 신발 양말 장갑 열쇠 가위 연필 책 거울 칫솔 비누 수건 촛불 전구 카메라 ' +
-      '기타 피아노 드럼 축구공 농구공 그네 미끄럼틀 시소 풍선 주사위 로봇 인형 ' +
-      '해 달 별 구름 비 눈 무지개 번개 산 바다 강 섬 나무 꽃 장미 해바라기 선인장 잎 숲 눈사람 ' +
-      '의사 경찰 소방관 요리사 선생님 가수 왕 공주 유령 ' +
-      '눈물 웃음 악수 박수 기도 십자가 성경 선물 생일 ' +
-      '코 입 귀 손 발 수염 이빨 젓가락 숟가락 포크 냄비 컵 접시 칼 ' +
-      '지구 태양 왕관 반지 목걸이 돈 지갑 편지 신호등 계단 사다리 썰매'),
-    uniq('복숭아 파인애플 김밥 떡볶이 짜장면 비빔밥 삼겹살 아이스크림 초콜릿 붕어빵 솜사탕 팝콘 탕후루 버블티 마라탕 ' +
-      '돌고래 오징어 악어 달팽이 낙타 캥거루 코알라 다람쥐 고슴도치 부엉이 독수리 앵무새 ' +
-      '지하철 헬리콥터 오토바이 소방차 구급차 잠수함 킥보드 열기구 ' +
-      '놀이터 도서관 편의점 공항 등대 풍차 피라미드 ' +
-      '세탁기 노트북 목도리 지우개 달력 빗 선풍기 에어컨 청소기 마이크 이어폰 리모컨 프라이팬 주전자 도마 ' +
-      '바이올린 트럼펫 야구 배드민턴 탁구 볼링 스케이트 스키 수영 낚시 줄넘기 퍼즐 연 ' +
-      '바람 폭포 사막 화산 ' +
-      '화가 농부 우주인 해적 마법사 천사 목사님 ' +
-      '하품 재채기 찬양 방주 크리스마스 결혼식 졸업 소풍 캠핑 불꽃놀이 눈싸움 훠궈 ' +
-      '머리카락 심장 뼈 지도 나침반 망원경 현미경 우주선 외계인 보물상자 다이아몬드 저금통 우체통 횡단보도 엘리베이터 낙하산 만리장성 에펠탑'),
-    uniq('회전목마 롤러코스터 관람차 분수대 모래시계 돋보기 지팡이 목발 깁스 반창고 주사기 체온계 청진기 ' +
-      '다리미 믹서기 전자레인지 가습기 드라이기 계산기 저울 망치 못 드라이버 톱 사다리차 굴착기 경운기 ' +
-      '하프 아코디언 색소폰 트라이앵글 캐스터네츠 지휘자 발레 태권도 씨름 양궁 역도 마라톤 ' +
-      '오로라 빙산 종유석 선인장꽃 단풍 낙엽 새싹 뿌리 씨앗 벌집 거미줄 둥지 ' +
-      '소방훈련 예배 성찬 세례 부활절 추수감사절 성탄절 십일조 전도 선교 ' +
-      '시험 발표 면접 운전면허 여권 비자 환승 시차 유학 기숙사 ' +
-      '한복 갓 부채 연날리기 제기차기 윷놀이 투호 가야금 장구 탈춤 ' +
-      '만리장성 자금성 천단 이화원 용 봉황 판다인형 월병 춘절 홍등')
+    // 쉬움
+    uniq('사과 바나나 수박 포도 딸기 당근 옥수수 감자 고구마 양파 버섯 호박 토마토 오이 가지 배추 무 파 마늘 레몬 오렌지 키위 체리 멜론 참외 밤 땅콩 ' +
+      '라면 피자 햄버거 치킨 만두 케이크 도넛 커피 우유 밥 국 빵 계란 치즈 김 두부 소시지 핫도그 아이스크림 사탕 초콜릿 젤리 과자 떡 꿀 ' +
+      '강아지 고양이 토끼 코끼리 기린 사자 호랑이 곰 판다 원숭이 돼지 소 말 양 닭 오리 펭귄 상어 고래 문어 거북이 뱀 개구리 나비 벌 개미 거미 공룡 쥐 다람쥐 사슴 여우 늑대 올빼미 병아리 금붕어 ' +
+      '자동차 버스 기차 비행기 배 자전거 택시 트럭 로켓 풍선 연 썰매 ' +
+      '집 학교 교회 병원 아파트 다리 성 텐트 문 창문 계단 지붕 굴뚝 울타리 ' +
+      '의자 책상 침대 소파 냉장고 텔레비전 컴퓨터 휴대폰 시계 안경 우산 가방 모자 신발 양말 장갑 열쇠 가위 연필 책 거울 칫솔 비누 수건 촛불 전구 카메라 빗자루 베개 이불 컵 접시 숟가락 젓가락 포크 칼 냄비 ' +
+      '기타 피아노 드럼 축구공 농구공 그네 미끄럼틀 시소 주사위 로봇 인형 공 ' +
+      '해 달 별 구름 비 눈 무지개 번개 산 바다 강 섬 나무 꽃 장미 해바라기 선인장 잎 숲 눈사람 모닥불 돌 모래 ' +
+      '의사 경찰 소방관 요리사 선생님 가수 왕 공주 유령 아기 할머니 할아버지 ' +
+      '눈물 웃음 악수 박수 기도 십자가 성경 선물 생일 하트 ' +
+      '코 입 귀 손 발 눈 머리 이빨 혀 수염 ' +
+      '지구 태양 왕관 반지 목걸이 돈 지갑 편지 신호등 사다리 사탕수수 깃발 지도 열쇠고리'),
+    // 보통
+    uniq('복숭아 파인애플 아보카도 블루베리 석류 자몽 망고 두리안 브로콜리 시금치 양배추 고추 깻잎 미역 ' +
+      '김밥 떡볶이 짜장면 비빔밥 삼겹살 붕어빵 솜사탕 팝콘 탕후루 마라탕 훠궈 초밥 라자냐 파스타 샐러드 토스트 와플 크로플 마카롱 티라미수 푸딩 식혜 수정과 버블티 아메리카노 라떼 ' +
+      '돌고래 오징어 악어 달팽이 낙타 캥거루 코알라 고슴도치 부엉이 독수리 앵무새 공작 플라밍고 해파리 불가사리 소라게 메뚜기 잠자리 무당벌레 두더지 하마 코뿔소 얼룩말 치타 수달 너구리 ' +
+      '지하철 헬리콥터 오토바이 소방차 구급차 잠수함 킥보드 열기구 요트 경운기 지게차 유모차 롤러코스터 관람차 회전목마 ' +
+      '놀이터 도서관 편의점 공항 등대 풍차 피라미드 분수대 터널 고속도로 주차장 백화점 미용실 목욕탕 노래방 ' +
+      '세탁기 노트북 목도리 지우개 달력 선풍기 에어컨 청소기 마이크 이어폰 리모컨 프라이팬 주전자 도마 다리미 믹서기 전자레인지 가습기 드라이기 계산기 저울 망치 못 드라이버 줄자 ' +
+      '바이올린 트럼펫 하모니카 탬버린 야구 배드민턴 탁구 볼링 스케이트 스키 수영 낚시 줄넘기 퍼즐 윷놀이 제기차기 딱지 팽이 보드게임 카드 ' +
+      '바람 폭포 사막 화산 빙산 오로라 단풍 낙엽 새싹 뿌리 씨앗 벌집 거미줄 둥지 이슬 안개 서리 고드름 ' +
+      '화가 농부 우주인 해적 마법사 천사 목사님 간호사 기자 판사 배우 개그맨 바리스타 미용사 사육사 ' +
+      '하품 재채기 딸꾹질 코골이 찬양 방주 크리스마스 결혼식 졸업 소풍 캠핑 불꽃놀이 눈싸움 생일파티 운동회 ' +
+      '머리카락 심장 뼈 근육 지문 ' +
+      '나침반 망원경 현미경 우주선 외계인 보물상자 다이아몬드 저금통 우체통 횡단보도 엘리베이터 낙하산 만리장성 에펠탑 자유의여신상 피사의사탑 ' +
+      '마스크 미세먼지 백신 체온계 반창고 깁스 목발 돋보기 자물쇠'),
+    // 어려움
+    uniq('회전초밥 에그타르트 슈크림 양갱 약과 인절미 호떡 군고구마 곱창 막창 닭발 순대 어묵 번데기 ' +
+      '두바이초콜릿 쫀득쿠키 요거트아이스크림 흑당 민트초코 깐풍기 마라샹궈 꿔바로우 월병 ' +
+      '치이카와 우사기 하치와레 산리오 쿠로미 마이멜로디 시나모롤 폼폼푸린 케로피 짱구 도라에몽 피카츄 포켓몬 디지몬 스누피 무민 리락쿠마 ' +
+      '카카오프렌즈 라이언 어피치 춘식이 펭수 뽀로로 타요 핑크퐁 아기상어 ' +
+      '레고 닌텐도 플레이스테이션 메이플스토리 마인크래프트 로블록스 테트리스 ' +
+      '스타벅스 맥도날드 코카콜라 애플 삼성 나이키 아디다스 샤오미 알리페이 위챗 ' +
+      '하프 아코디언 색소폰 트라이앵글 캐스터네츠 지휘자 발레 태권도 씨름 양궁 역도 마라톤 펜싱 승마 컬링 봅슬레이 ' +
+      '종유석 간헐천 산호초 맹그로브 툰드라 사바나 협곡 삼각주 운석 블랙홀 은하수 일식 월식 ' +
+      '예배 성찬 세례 부활절 추수감사절 성탄절 십일조 전도 선교 주일학교 수련회 성가대 헌금 축도 ' +
+      '시험 발표 면접 운전면허 여권 비자 환승 시차 유학 기숙사 월세 이사 택배 환불 적금 ' +
+      '한복 갓 부채 연날리기 투호 가야금 장구 탈춤 사물놀이 상모돌리기 ' +
+      '자금성 천단 이화원 용 봉황 춘절 홍등 경극 태극권 서예 ' +
+      '모래시계 타임캡슐 미로 신기루 도미노 매듭 풍선아트 마술 복화술 그림자놀이 ' +
+      '인공지능 드론 전기차 태양광 재활용 분리수거 텀블러 에코백 기후변화 지진 태풍 홍수 가뭄')
   ];
   const WORDS = WORD_SETS[0].concat(WORD_SETS[1], WORD_SETS[2]);
   const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
@@ -1612,8 +1734,9 @@
   const SIZES = [5, 12, 26];
   const PICK_MS = 15000, DRAW_MS = 80000, REVEAL_MS = 5000, END_MS = 60000, ROUNDS = 3;
 
-  const D = { dom: null, strokes: [], cur: null, color: COLORS[0], size: 1, endAt: 0, total: 1, myWord: null, choices: null, chat: [], out: [], flushT: 0, need: false, needAt: 0, used: [] };
-  const H = { word: null, choices: null, hint1: false, hint2: false, phaseEnd: 0 };   // host-only secrets
+  const GUESS_COOL = 2500;   // one answer every 2.5 s per person
+  const D = { coolUntil: 0, dom: null, strokes: [], cur: null, color: COLORS[0], size: 1, endAt: 0, total: 1, myWord: null, choices: null, chat: [], out: [], flushT: 0, need: false, needAt: 0, used: [] };
+  const H = { word: null, choices: null, hint1: false, hint2: false, phaseEnd: 0, lastGuess: {} };   // host-only secrets
   const dDrawer = () => G && G.drawer;
   const dAmDrawer = () => !!G && G.drawer === me() && inTable();
   const dName = id => (G && G.names && G.names[id]) || memberName(id);
@@ -1623,7 +1746,8 @@
   function dStart() {
     G = { kind: 'draw', seq: 1, round: 1, rounds: ROUNDS, order: shuffle(T.members.map(m => m.id)), turn: 0, drawer: null, phase: 'pick', rem: 0, total: 1, mask: [], scores: {}, got: {}, names: {}, word: null, over: false };
     T.members.forEach(m => { G.scores[m.id] = 0; G.names[m.id] = m.name; });
-    D.used = []; dBeginPick();
+    if (D.used.length > 220) D.used = D.used.slice(-120);   // keep avoiding recent words across games
+    dBeginPick();
   }
   function dSetPhase(phase, ms) { G.phase = phase; G.total = ms; H.phaseEnd = now() + ms; G.seq++; }
   function dBeginPick() {
@@ -1631,7 +1755,7 @@
     if (G.order.length < 2) { dFinish(); return; }
     if (G.turn >= G.order.length) { G.turn = 0; G.round++; }
     if (G.round > G.rounds) { dFinish(); return; }
-    G.drawer = G.order[G.turn]; G.got = {}; G.word = null; G.mask = []; H.word = null; H.hint1 = H.hint2 = false;
+    G.drawer = G.order[G.turn]; G.got = {}; G.word = null; G.mask = []; H.word = null; H.hint1 = H.hint2 = false; H.lastGuess = {};
     // one easy, one middling, one hard — in a random order so the drawer cannot tell which is which
     H.choices = shuffle(WORD_SETS.map(set => { const left = set.filter(w => !D.used.includes(w)); return (left.length ? left : set)[Math.random() * (left.length || set.length) | 0]; }));
     dSetPhase('pick', PICK_MS);
@@ -1654,6 +1778,8 @@
   function dFinish() { G.over = true; G.word = H.word; dSetPhase('end', END_MS); dPush(); }
   function dGuess(id, text) {
     if (!G || G.phase !== 'draw' || id === G.drawer || G.got[id] != null || !G.order.includes(id)) return;
+    const t = now(); if (t - (H.lastGuess[id] || 0) < GUESS_COOL - 250) return;
+    H.lastGuess[id] = t;
     text = String(text || '').slice(0, 30); const a = norm(text), w = norm(H.word); if (!a) return;
     if (a === w) {
       const rem = Math.max(0, H.phaseEnd - now()), pts = Math.round(60 + 240 * rem / DRAW_MS);
@@ -1767,8 +1893,11 @@
     d.sendBtn = el('button', 'btn btn-gold', '정답!'); d.sendBtn.type = 'submit'; d.form.append(d.input, d.sendBtn);
     d.form.addEventListener('submit', ev => {
       ev.preventDefault(); const text = d.input.value.trim(); if (!text || !G || G.phase !== 'draw' || !inTable() || dAmDrawer() || G.got[me()] != null) return;
+      if (now() < D.coolUntil) return;                 // no spamming the answer box
+      D.coolUntil = now() + GUESS_COOL;
       d.input.value = '';
       if (isHost()) dGuess(me(), text); else send({ t: 'g', text });
+      dUpdate();
     });
     const side = el('div', 'dw-side'); side.append(d.scores, d.chat, d.form);
     const main = el('div', 'dw-main'); main.append(d.wrap, d.tools);
@@ -1778,7 +1907,7 @@
     clearInterval(D.clock); D.clock = setInterval(dClock, 250);
     if (G && G.phase === 'draw' && !dAmDrawer()) { D.need = true; D.needAt = now(); send({ t: 'need' }); }
   }
-  function dUnmount() { clearInterval(D.clock); clearInterval(D.flushT); D.dom = null; D.cur = null; D.strokes = []; D.chat = []; D.prev = null; D.choices = null; D.myWord = null; }
+  function dUnmount() { clearInterval(D.clock); clearTimeout(D.coolT); D.coolUntil = 0; clearInterval(D.flushT); D.dom = null; D.cur = null; D.strokes = []; D.chat = []; D.prev = null; D.choices = null; D.myWord = null; }
   function dTools() { const d = D.dom; if (!d) return; d.tools.querySelectorAll('[data-c]').forEach(b => b.classList.toggle('sel', b.dataset.c === D.color)); d.tools.querySelectorAll('[data-s]').forEach(b => b.classList.toggle('sel', D.color !== 'eraser' && +b.dataset.s === D.size)); }
   function dChat() { const d = D.dom; if (!d) return; d.chat.innerHTML = ''; D.chat.slice(-40).forEach(m => d.chat.appendChild(el('p', m.cls, m.text))); d.chat.scrollTop = d.chat.scrollHeight; }
   function dClock() {
@@ -1826,8 +1955,11 @@
     });
     // guess box
     const can = member && g.phase === 'draw' && !drawer && g.got[me()] == null;
-    d.input.disabled = !can; d.sendBtn.disabled = !can;
-    d.input.placeholder = !member ? '구경하고 있어요' : drawer ? '내가 그리는 차례예요' : g.got[me()] != null ? '정답을 맞혔어요! 🎉' : g.phase === 'draw' ? '정답을 입력하세요' : '잠깐 기다려요…';
+    const wait = Math.max(0, D.coolUntil - now());
+    d.input.disabled = !can || wait > 0; d.sendBtn.disabled = !can || wait > 0;
+    d.input.placeholder = !member ? '구경하고 있어요' : drawer ? '내가 그리는 차례예요' : g.got[me()] != null ? '정답을 맞혔어요! 🎉'
+      : wait > 0 ? `${Math.ceil(wait / 1000)}초 뒤에 다시 쓸 수 있어요` : g.phase === 'draw' ? '정답을 입력하세요' : '잠깐 기다려요…';
+    if (wait > 0) { clearTimeout(D.coolT); D.coolT = setTimeout(() => { if (D.dom) dUpdate(); }, Math.min(wait, 400)); }
     dClock();
   }
   GAMES.draw = {
@@ -1881,7 +2013,7 @@
   };
   // test hook (only with ?debug in the address)
   if (/[?&]debug\b/.test(location.search)) window.__tg = {
-    T: () => T, G: () => G, C, D, H, createTable, joinTable, startGame, leaveTable, tables: tableList, TABLES, cAct, cAuto, cValid, WORDS, addBot, setBotLevel, removeBot, botTurn, botStep, chAct, chDo, chResign,
+    T: () => T, G: () => G, C, D, H, createTable, joinTable, startGame, leaveTable, tables: tableList, TABLES, cAct, cAuto, cValid, WORDS, addBot, setBotLevel, removeBot, backToLobby, cPush, watchTable, botTurn, botStep, chAct, chDo, chResign,
     // a simple robot player for automated tests
     bot() {
       if (!G || !T || T.kind !== 'catan' || G.phase === 'finished' || !cWaiting().includes(me()) || now() - C.busy < 500) return;

@@ -33,6 +33,7 @@ window.ONL_WILD = (function () {
 
   // ================= state =================
   let cv, g, root, hud, raf = 0, last = 0, running = false;
+  let rowBy = new Map(), maxRow = -1;
   let rows, hazards, arrows, player, cam, hearts, best, highest, overAt, startedAt, checkRow, shake, wind, msg, msgAt;
   let keys = Object.create(null), touch = { l: 0, r: 0, j: 0 };
   let onQuit = null, board = [], myBest = 0, saving = false;
@@ -40,7 +41,7 @@ window.ONL_WILD = (function () {
   const diffAt = r => clamp(r / 220, 0, 1);   // 0 at the bottom, 1 once you are properly high
 
   function reset() {
-    rows = []; hazards = []; arrows = [];
+    rows = []; hazards = []; arrows = []; rowBy = new Map(); maxRow = -1;
     player = { x: W / 2 - PW / 2, y: BASE_Y - PH, vx: 0, vy: 0, onGround: true, face: 1, hurtUntil: 0, animT: 0 };
     cam = BASE_Y - H + 60; hearts = 3; highest = 0; overAt = 0; startedAt = performance.now();
     checkRow = 0; shake = 0; wind = 0; msg = '광야로 나아가세요'; msgAt = performance.now();
@@ -51,11 +52,11 @@ window.ONL_WILD = (function () {
 
   // one platform row, plus whatever is standing on it
   function genRow(i) {
-    if (rows.some(r => r.i === i)) return;
+    if (rowBy.has(i)) return;
     const d = diffAt(i), y = BASE_Y - (i + 1) * ROW;
     const check = i > 0 && i % CHECK_EVERY === 0;
     let w = check ? 56 : Math.round(rnd(lerp(44, 20, d), lerp(62, 30, d)));
-    const prev = rows.filter(r => r.i === i - 1)[0];
+    const prev = rowBy.get(i - 1);
     const reach = lerp(46, 64, d);
     let x;
     if (!prev) x = rnd(10, W - w - 10);
@@ -66,8 +67,8 @@ window.ONL_WILD = (function () {
     const kinds = check ? ['check'] : d < 0.25 ? ['rock', 'rock', 'sand'] : d < 0.6 ? ['rock', 'sand', 'move'] : ['rock', 'sand', 'move', 'crumble'];
     const kind = pick(kinds);
     const row = { i, x, y, w, kind, t0: Math.random() * 6, dead: 0, span: kind === 'move' ? rnd(18, 40) * (d + 0.4) : 0, x0: x };
-    rows.push(row);
-    if (check) { msgFor(i); return; }
+    rows.push(row); rowBy.set(i, row); if (i > maxRow) maxRow = i;
+    if (check) return;   // the sign only speaks when you actually get there, not when the row is built
     // Pharaoh's army and the hazards of the road
     const roll = Math.random();
     if (i > 4 && roll < lerp(0.08, 0.42, d) && w >= 26) hazards.push({ t: 'soldier', row: i, x: x + 4, dir: 1, sp: rnd(16, 24) + d * 22 });
@@ -78,14 +79,23 @@ window.ONL_WILD = (function () {
   const CHECK_WORDS = ['여기까지 잘 견뎠어요', '마라의 쓴 물도 달아졌어요', '만나가 내렸어요', '반석에서 물이 났어요', '구름 기둥이 앞서 갑니다', '불 기둥이 지켜 줍니다', '아말렉을 이겼어요', '시내산이 보입니다', '놋뱀을 보세요', '요단이 멀지 않았어요'];
   function msgFor(i) { msg = CHECK_WORDS[(i / CHECK_EVERY - 1) % CHECK_WORDS.length] + ` · ${Math.round(i * ROW * M_PER_PX)}m`; msgAt = performance.now(); }
 
-  function topRow() { return rows.reduce((m, r) => Math.max(m, r.i), 0); }
+  // Build only as far as the view needs, and throw away what is far below and out of reach.
+  // Building a fixed number of rows past the highest one each frame grew the world without limit,
+  // which is what made the game crawl and set the sign to distances nobody had walked yet.
   function groom() {
-    const cut = cam + H + 80;
-    rows = rows.filter(r => r.y < cut || r.kind === 'ground');
-    hazards = hazards.filter(h => { const r = rows.find(x => x.i === h.row); return !!r; });
-    const want = topRow();
-    const need = Math.ceil((cam - (-40)) / ROW);
-    for (let i = want + 1; i <= want + 6; i++) genRow(i);
+    const cut = cam + H + 120;
+    if (rows.length > 120) {
+      const keep = [];
+      for (const r of rows) {
+      if (r.y < cam - 40 || r.y > cam + H + 40) continue;
+        if (r.kind === 'ground' || r.y < cut || r.i >= checkRow - 1) keep.push(r);
+        else rowBy.delete(r.i);
+      }
+      rows = keep;
+      hazards = hazards.filter(h => rowBy.has(h.row));
+    }
+    const need = Math.ceil((BASE_Y - cam + 80) / ROW);
+    for (let i = maxRow + 1; i <= Math.min(need, maxRow + 12); i++) genRow(i);
   }
 
   // ================= loop =================
@@ -128,7 +138,7 @@ window.ONL_WILD = (function () {
 
     // hazards
     for (const h of hazards) {
-      const r = rows.find(x => x.i === h.row); if (!r) continue;
+      const r = rowBy.get(h.row); if (!r) continue;
       if (h.t === 'soldier') {
         h.x += h.dir * h.sp * dt;
         if (h.x < r.x + 1) { h.x = r.x + 1; h.dir = 1; }
@@ -184,7 +194,7 @@ window.ONL_WILD = (function () {
   }
   function backToCheck(now, soft) {
     const p = player;
-    const r = rows.find(x => x.i === checkRow);
+    const r = rowBy.get(checkRow);
     p.x = r ? r.x + r.w / 2 - PW / 2 : W / 2; p.y = (r ? r.y : BASE_Y) - PH;
     p.vx = p.vy = 0; p.hurtUntil = now + 700;
     if (soft) { msg = checkRow ? '쉼터에서 다시 시작해요' : '다시 올라가 봐요'; msgAt = now; }
@@ -241,7 +251,7 @@ window.ONL_WILD = (function () {
     }
     // hazards
     for (const h of hazards) {
-      const r = rows.find(x => x.i === h.row); if (!r || r.dead) continue;
+      const r = rowBy.get(h.row); if (!r || r.dead) continue;
       if (r.y < cam - 40 || r.y > cam + H + 40) continue;
       if (h.t === 'soldier') drawSoldier(g, h.x, r.y - 13, h.dir, now);
       else if (h.t === 'spike') { for (let i = 0; i < h.w; i += 3) { P(g, h.x + i, r.y - 4, 3, 4, '#c9c9d4'); P(g, h.x + i + 1, r.y - 5, 1, 2, '#f0f0f6'); } P(g, h.x, r.y - 1, h.w, 1, '#6f452c'); }
@@ -401,5 +411,5 @@ window.ONL_WILD = (function () {
     if (highest > 0 && !overAt) { overAt = 1; save(); }
     if (onQuit) onQuit();
   }
-  return { open, close, isOpen: () => !!root && !root.hidden, _state: () => ({ highest, hearts, rows: rows && rows.length, over: !!overAt }) };
+  return { open, close, isOpen: () => !!root && !root.hidden, _state: () => ({ highest, hearts, rows: rows && rows.length, over: !!overAt, msg, checkRow, maxRow }) };
 })();
