@@ -240,7 +240,16 @@
     roomShell(g, w, h, (gg) => floorTiles(gg, w, h, 44, ['#e9e4da', '#ddd6c9'], 10, '#cfc7b8'), '#f6efe3');
     P(g, 20, 6, 100, 18, '#c99a63'); for (let x = 20; x < 120; x += 25) { P(g, x, 6, 1, 18, '#8a5a3b'); P(g, x + 11, 13, 3, 2, '#f2c94c'); } P(g, 20, 23, 100, 2, '#8a5a3b');
   }
+  const chessSeats = [mkSeat(136, 104, 'down', 'wood'), mkSeat(136, 136, 'up', 'wood', 16)];
   const room2Items = [
+    { id: 'r2-chess', label: '체스 테이블', fixed: true, box: [124, 110, 26, 26], sortY: 134, obs: [[125, 114, 24, 16]], draw: g => {
+      P(g, 124, 112, 26, 22, '#2b2233'); P(g, 125, 113, 24, 18, '#a8734f'); P(g, 125, 113, 24, 1, '#c99866');
+      P(g, 128, 115, 18, 15, '#3b2a22');
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 6; c++) P(g, 129 + c * 3, 116 + r * 3, 3, 3, (r + c) % 2 ? '#8a5a3b' : '#edd9b0');
+      // a few pieces left standing on the board
+      for (const [x, y, c] of [[130, 118, '#fdfcf7'], [136, 118, '#fdfcf7'], [142, 124, '#2b2233'], [133, 127, '#2b2233'], [139, 121, '#fdfcf7']]) { P(g, x, y, 2, 3, '#17151c'); P(g, x, y, 2, 2, c); }
+      P(g, 127, 131, 4, 5, '#3b2a22'); P(g, 143, 131, 4, 5, '#3b2a22');
+    } },
     { id: 'r2-counter', label: '싱크대·커피머신', box: [20, 26, 100, 32], sortY: 58, obs: [[20, 44, 100, 14]], draw: g => {
       P(g, 20, 40, 100, 18, '#3b2a22'); P(g, 21, 41, 98, 6, '#e9e4da'); P(g, 21, 47, 98, 10, '#c99a63'); for (let x = 21; x < 119; x += 24) P(g, x, 47, 1, 10, '#8a5a3b');
       P(g, 56, 42, 18, 4, '#9aa0ab'); P(g, 58, 43, 14, 2, '#cfe0ea'); P(g, 64, 36, 2, 6, '#9aa0ab');
@@ -660,8 +669,8 @@
       labels: [{ x: 80, y: 2, t: '본당', align: 'center', count: 'sanctuary' }]
         .concat(HALL_DOORS.map(([id, x, y, right]) => ({ x: right ? x - 9 : x + 9, y: y + 18, t: ROOM_INFO[id].n, sub: ROOM_INFO[id].sub, align: right ? 'right' : 'left', count: id }))) },
     room1: { name: 'ROOM 1 · 회의실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom1, items: room1Items, seats: r1Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
-    room2: { name: 'ROOM 2 · 탕비실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom2, items: room2Items, seats: r2Seats, spawns: { door: [96, 156, 'up'] },
-      spots: [exitSpot, { id: 'water', item: 'r2-water', x: 167, y: 70, r: 12, ax: 167, ay: 12, label: '물 한 잔 마시기' }, { id: 'coffee', item: 'r2-counter', x: 96, y: 68, r: 12, ax: 96, ay: 20, label: '커피 내리기' }] },
+    room2: { name: 'ROOM 2 · 탕비실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom2, items: room2Items, seats: r2Seats.concat(chessSeats), spawns: { door: [96, 156, 'up'] },
+      spots: [exitSpot, { id: 'chess', item: 'r2-chess', x: 137, y: 142, r: 14, ax: 137, ay: 104, label: '체스 두기' }, { id: 'water', item: 'r2-water', x: 167, y: 70, r: 12, ax: 167, ay: 12, label: '물 한 잔 마시기' }, { id: 'coffee', item: 'r2-counter', x: 96, y: 68, r: 12, ax: 96, ay: 20, label: '커피 내리기' }] },
     room3: { name: 'ROOM 3 · 세미나실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom3, items: room3Items, seats: r3Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
     room4: { name: 'ROOM 4 · 라운지', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom4, items: room4Items, seats: r4Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
     hall1: { name: '1층 복도', w: 160, h: 280, bounds: [22, 52, 138, 266], drawBg: bgHall1, items: hall1Items, seats: [],
@@ -827,7 +836,7 @@
     const RUN = {
       elevator: () => openElevator(), outside: () => toast(pick(OUTSIDE_MSG)), weather: () => openWeather(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
-      catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'),
+      catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'),
       stand: () => openQt(), qr: () => openQr(), board: () => openModal('board'), prayer: () => openPrayers(),
       eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; const inst = EQ_INST[eqStep++ % EQ_INST.length]; eqFx(inst, 1); lobbySend('lights', { mode: lightMode, inst }); },
       water: () => useMachine('water'),
@@ -2445,7 +2454,7 @@
   // ================= 1층 락커룸: 축구 파티 =================
   // The party lives on the host's page; the host shares it on the room channel ('pty') and everyone else asks the host.
   let party = null, partyAt = 0;
-  const FB_MODES = [3, 4, 5];
+  const FB_MODES = [1, 2, 3, 4];
   const inParty = () => !!(party && net.uid && party.members[net.uid]);
   const isPartyHost = () => !!(party && party.host === net.uid);
   function ptySend(p) { netSend('pty', Object.assign({ from: net.uid }, p)); }
@@ -2478,6 +2487,12 @@
   function setReady(r) { if (!inParty()) return; if (isPartyHost()) { party.members[net.uid].ready = r; hostShare(); } else { ptySend({ t: 'ready', pid: party.id, ready: r }); party.members[net.uid].ready = r; applyParty(); } }
   // the demo (one person) can try a practice match on its own
   function canStart() { return !!(party && isPartyHost() && Object.values(party.members).every(m => m.ready) && (LIVE ? teamCount(party, 'w') >= 1 && teamCount(party, 'b') >= 1 : true)); }
+  // kick about on my own: no opponents, no waiting, just me and the ball
+  function startPractice() {
+    if (party) leaveParty(true);
+    const uid = net.uid || 'me';
+    enterMatch({ id: gmNewId(), host: uid, mode: 1, teams: { [uid]: 'w' }, names: { [uid]: gmClip(player.name) }, dur: 600, practice: true });
+  }
   function startMatch() {
     if (!canStart()) return;
     const teams = {}, names = {};
@@ -2547,7 +2562,7 @@
     $('modalTitle').textContent = '⚽ 축구 파티';
     if (!party) {
       body.appendChild(el('p', '', '아직 파티가 없어요. 파티를 만들고 팀을 골라 벤치에 앉으면 다른 사람들이 참가할 수 있어요.'));
-      let mode = +(store.get('onl-fb-mode') || 3); if (!FB_MODES.includes(mode)) mode = 3;
+      let mode = +(store.get('onl-fb-mode') || 2); if (!FB_MODES.includes(mode)) mode = 2;
       const row = el('div', 'gm-opt'); row.appendChild(el('span', 'gm-opt-l', '인원'));
       for (const m of FB_MODES) { const c = el('button', 'btn gm-chip', `${m} : ${m}`); c.type = 'button'; c.setAttribute('aria-pressed', String(m === mode)); c.addEventListener('click', () => { store.set('onl-fb-mode', String(m)); openParty(true); }); row.appendChild(c); }
       body.appendChild(row);
@@ -2555,7 +2570,10 @@
       const w = el('button', 'btn fb-w', '⚪ 흰 팀으로 만들기'), bk = el('button', 'btn fb-b', '⚫ 검정 팀으로 만들기'); w.type = bk.type = 'button';
       w.addEventListener('click', () => { createParty(mode, 'w'); openParty(true); }); bk.addEventListener('click', () => { createParty(mode, 'b'); openParty(true); });
       btns.append(w, bk); body.appendChild(btns);
-      body.appendChild(el('p', 'small', '팀마다 최소 1명씩 있고 모두 레디하면 방장이 경기를 시작할 수 있어요. 경기는 3분이에요.'));
+      const solo = el('button', 'btn fb-solo', '🥅 혼자 연습하기'); solo.type = 'button';
+      solo.addEventListener('click', () => { closeModal(); startPractice(); });
+      body.appendChild(solo);
+      body.appendChild(el('p', 'small', '팀마다 최소 1명씩 있고 모두 레디하면 방장이 경기를 시작할 수 있어요. 경기는 3분이에요. 혼자 연습은 10분 동안 아무 때나 나올 수 있어요.'));
     } else {
       body.appendChild(el('p', 'small', `방장 ${party.hostName} · ${party.mode} 대 ${party.mode}`));
       const cols = el('div', 'fb-cols');
@@ -2634,7 +2652,9 @@
   function onSoccerEnter() {
     if (!match) { setTimeout(() => goScene('f1r1', 'field'), 50); return; }
     toKickoffSpot();
-    log('', `⚽ 킥오프! ${match.mode} 대 ${match.mode}, 3분 경기예요. 공으로 달려가면 공이 발에 붙고, ⚽ 슛 버튼(또는 Space)으로 차요.`, 'sys game');
+    log('', match.practice
+      ? '🥅 연습 모드예요. 공으로 달려가면 공이 발에 붙고, ⚽ 슛 버튼(또는 Space)으로 차요. 골대는 양쪽 다 써도 돼요!'
+      : `⚽ 킥오프! ${match.mode} 대 ${match.mode}, 3분 경기예요. 공으로 달려가면 공이 발에 붙고, ⚽ 슛 버튼(또는 Space)으로 차요.`, 'sys game');
     match.phase = 'kickoff'; match.phaseAt = performance.now();
     sfx('whistle');
   }
@@ -2730,7 +2750,7 @@
     const m = match; sfx('whistle');
     const { sw, sb } = m.final, mine = teamOf(net.uid);
     const res = sw === sb ? '무승부' : (sw > sb ? 'w' : 'b') === mine ? '승리! 🎉' : '패배 😢';
-    log('', `🏁 경기 끝! ⚪ 흰 팀 ${sw} : ${sb} 검정 팀 ⚫ · ${res}`, 'sys game');
+    log('', m.practice ? `🏁 연습 끝! 골 ${sw + sb}개 넣었어요.` : `🏁 경기 끝! ⚪ 흰 팀 ${sw} : ${sb} 검정 팀 ⚫ · ${res}`, 'sys game');
     setTimeout(() => { if (match === m) { match = null; ball = null; if (sceneId === 'soccer') goScene('f1r1', 'field'); } }, 6000);
   }
   function onFb(p) {
@@ -2801,7 +2821,7 @@
       }
     }
     // a team with nobody left: the host ends the game (after a short grace at the start)
-    if (LIVE && host && !m.final && now - m.startedAt > 8000) {
+    if (LIVE && host && !m.final && !m.practice && now - m.startedAt > 8000) {
       const here = Object.keys(m.teams).filter(id => id === net.uid || net.remotes.has(id));
       const w = here.filter(id => m.teams[id] === 'w').length, bk = here.filter(id => m.teams[id] === 'b').length;
       if (!w || !bk) endMatch('left');
@@ -3571,6 +3591,11 @@
   window.ONL = {
     TG, $, el, toast, sfx, newId: gmNewId, P, pixCircle,
     uid: () => net.uid, name: () => player.name, scene: () => sceneId, ready: () => net.ready, live: () => LIVE,
+    // the player's own little character, drawn onto a canvas the games can put in their panels
+    lookOf: id => id === net.uid ? player.look : ((net.remotes.get(id) || {}).look || null),
+    avatar: (look, dir) => sprite(validLook(look) ? look : DEFAULT_LOOK, dir || 'down', 'stand', 'none', 0),
+    randomLook,
+    SW, SH,
     send: p => netSend('tg', p),
     here: id => id === net.uid || net.remotes.has(id),
     nameOf: id => id === net.uid ? player.name : (net.remotes.get(id) || {}).name || '',

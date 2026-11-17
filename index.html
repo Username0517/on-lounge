@@ -135,7 +135,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 
 /* table games: 카탄, 그림 퀴즈 */
 .tg { position: fixed; inset: 0; z-index: 14; background: rgba(20,16,28,.6); display: flex; align-items: center; justify-content: center; padding: 8px; }
-.tg-card { position: relative; background: var(--cream); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; width: min(420px, 100%); max-height: 100%; overflow: hidden; }
+.tg-card { position: relative; background: var(--cream); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; width: min(480px, 100%); max-height: 100%; overflow: hidden; }
 .tg-card.tg-play { width: min(1500px, 100%); height: 100%; }
 .tg-main { position: relative; display: flex; flex: 1; min-height: 0; }
 .tg-chat { display: none; flex-direction: column; min-width: 0; min-height: 0; }
@@ -148,7 +148,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .tg-chatbtn[data-unread]:not([data-unread=""])::after { content: attr(data-unread); position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: #e5484d; color: #fff; font-size: 11px; line-height: 14px; border: 2px solid var(--ink); }
 @media (min-width: 900px) {
   .tg-card.tg-play .tg-chat.show { position: static; width: 290px; flex: none; border-left: 3px solid var(--ink); }
-  .tg-card:not(.tg-play) .tg-chat.show { position: static; width: 270px; flex: none; border-left: 3px solid var(--ink); }
+  /* the waiting room has to hold the chat as well, so it gets much wider */
+  .tg-card:not(.tg-play) { width: min(900px, 100%); height: min(640px, 100%); }
+  .tg-card:not(.tg-play) .tg-chat.show { position: static; width: 300px; flex: none; border-left: 3px solid var(--ink); }
+  .tg-card:not(.tg-play) .tg-body { min-width: 0; }
 }
 .tg-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; background: var(--gold); border-bottom: 3px solid var(--ink); flex: none; }
 .tg-head h2 { margin: 0; font-size: 17px; font-weight: 800; }
@@ -159,7 +162,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .tg-empty { margin: 0; font-size: 13px; color: var(--muted); background: var(--cream-2); border-radius: 6px; padding: 8px 10px; }
 .tg-big { padding: 8px 18px; font-size: 15px; }
 .tg-list { display: flex; flex-direction: column; gap: 5px; }
-.tg-mem { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 5px 12px; font-weight: 700; }
+.tg-mem { display: flex; align-items: center; gap: 8px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 4px 10px; font-weight: 700; min-height: 44px; }
+.tg-mem .ct-avatar { width: 22px; height: 31px; flex: none; }
+.tg-mem.bot { background: #f2eefb; }
+.tg-lv { display: flex; gap: 3px; align-items: center; flex: none; }
+.tg-lv .gm-chip { padding: 1px 7px; font-size: 12px; }
+.tg-x { padding: 1px 7px; font-size: 12px; background: #ffe1d6; }
 .tg-mem.empty { border-style: dashed; opacity: .45; font-weight: 500; }
 .tg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tg-tag { font-size: 11px; color: var(--muted); }
@@ -169,11 +177,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .tg-ask { position: absolute; left: 50%; top: 50px; transform: translateX(-50%); z-index: 3; width: min(300px, calc(100% - 24px)); background: #fff; border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 5px 0 var(--ink); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .tg-ask p { margin: 0; font-weight: 700; }
 .btn:disabled { opacity: .45; cursor: default; }
-.ct-players { display: flex; gap: 5px; flex-wrap: wrap; flex: none; }
-.ct-p { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 11px; background: #fff; border: 2px solid var(--ink); border-radius: 8px; padding: 2px 7px; opacity: .8; }
+.ct-players { display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; flex: none; padding-bottom: 2px; }
+.ct-p { flex: none; }
+.ct-p { display: flex; flex-direction: column; gap: 3px; font-size: 11px; background: #fff; border: 2px solid var(--ink); border-radius: 9px; padding: 3px 6px; opacity: .85; }
 .ct-p.on { opacity: 1; background: #fff3c9; box-shadow: 0 2px 0 var(--ink); }
 .ct-p.away { opacity: .5; }
 .ct-p b { font-size: 12px; }
+.ct-phead { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ct-pname { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-mini { font-size: 10px; color: var(--muted); }
+/* the player's own character with what they hold on either side */
+.ct-pbody { display: flex; align-items: center; gap: 4px; }
+.ct-icside { display: flex; flex-direction: column; gap: 2px; }
+.ct-ic { display: flex; align-items: center; gap: 2px; }
+.ct-ic b { font-size: 12px; min-width: 10px; text-align: right; }
+.ct-ic.zero { opacity: .32; }
+.ct-ic.dev b { color: #6b3fa0; }
+.ct-icimg { width: 18px; height: 18px; image-rendering: pixelated; display: block; }
+.ct-avatar { width: 30px; height: 42px; image-rendering: pixelated; display: block; }
+.ct-avwrap { display: flex; align-items: flex-end; justify-content: center; width: 32px; }
 .ct-dot { width: 11px; height: 11px; border: 2px solid var(--ink); border-radius: 3px; display: inline-block; }
 .ct-vp { font-weight: 800; color: #b06a00; }
 .ct-badge { background: var(--gold); border-radius: 999px; padding: 0 6px; font-weight: 700; }
@@ -218,10 +240,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .ct-log p { margin: 0; }
 @media (min-width: 900px) {
   .ct-cols { flex-direction: row; align-items: stretch; flex: 1; min-height: 0; }
-  .ct-left { flex: 1; min-width: 0; align-items: flex-start; }
+  .ct-left, .ch-left { flex: 1; min-width: 0; align-items: flex-start; }
   .ct-right { flex: 0 0 330px; }
   .ct-log { flex: 1; max-height: none; min-height: 120px; }
-  .tg-card.tg-play .tg-body { overflow: hidden; }
+  .tg-card.tg-play .tg-body { overflow: auto; }
 }
 /* phone: the board gets the width, the rest stacks under it */
 @media (max-width: 899px) { .ct-acts .btn { flex: 1 1 29%; } .ct-log { max-height: 84px; } }
@@ -283,6 +305,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
   .dw-mask i { width: 18px; height: 22px; font-size: 14px; } .dw-my { font-size: 16px; }
 }
 
+/* 체스 */
+.ch-left { display: flex; justify-content: center; min-width: 0; }
+.ch-wrap { position: relative; }
+.ch-board { display: block; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 8px; touch-action: manipulation; cursor: pointer; background: #6f452c; max-width: 100%; }
+.ch-sides { display: flex; flex-direction: column; gap: 5px; }
+.ch-side { display: flex; flex-direction: column; gap: 3px; background: #fff; border: 2px solid var(--ink); border-radius: 9px; padding: 3px 7px; opacity: .85; }
+.ch-side.on { opacity: 1; background: #fff3c9; box-shadow: 0 2px 0 var(--ink); }
+.ch-sidehead { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.ch-sidehead .ct-avatar { width: 20px; height: 28px; }
+.ch-dot { width: 12px; height: 12px; border: 2px solid var(--ink); border-radius: 3px; display: inline-block; flex: none; }
+.ch-dot.w { background: #f6f1e3; } .ch-dot.b { background: #3f3a52; }
+.ch-taken { display: flex; flex-wrap: wrap; gap: 1px; min-height: 14px; }
+.ch-pc { width: 16px; height: 16px; image-rendering: pixelated; display: block; }
+.ch-pc.small { width: 13px; height: 13px; }
+.ch-promo { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: var(--cream); border: 3px solid var(--ink); border-radius: 10px; box-shadow: 0 5px 0 var(--ink); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+.ch-promo[hidden] { display: none; }
+.ch-promo p { margin: 0; font-weight: 800; font-size: 13px; }
+.ch-promob { display: flex; align-items: center; gap: 4px; padding: 3px 8px; }
+
 /* elevator, weather, soccer party */
 .ev-list { display: flex; flex-direction: column; gap: 8px; }
 .ev-btn { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; column-gap: 10px; text-align: left; padding: 8px 10px; }
@@ -304,6 +345,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .fb-btns { display: flex; gap: 6px; flex-wrap: wrap; }
 .fb-w { background: #fffdf7; }
 .fb-b { background: #3a3446; color: #fff; }
+.fb-solo { background: #d9f5e6; margin-top: 8px; }
 .chat { display: flex; gap: 6px; flex: 1; min-width: 0; }
 input[type="text"], input[type="password"], input[type="date"], textarea { font: inherit; color: var(--text); background: #fff; border: 2px solid var(--ink); border-radius: 6px; padding: 7px 10px; width: 100%; min-width: 0; }
 textarea { resize: vertical; min-height: 70px; line-height: 1.6; }
@@ -681,6 +723,7 @@ details.paste textarea { margin-block: 6px; }
 <script src="sprite.js"></script>
 <script src="parse.js"></script>
 <script src="catan-rules.js"></script>
+<script src="chess.js"></script>
 <script src="app.js"></script>
 <script src="games.js"></script>
 </body>

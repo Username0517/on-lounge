@@ -13,11 +13,113 @@
   'use strict';
   const O = window.ONL; if (!O) return;
   const { TG, $, el, toast, sfx } = O;
+  const P = O.P, pixCircle = O.pixCircle;
+
+  // ---- pixel icons for the six things you can hold in Catan ----
+  // Drawn here in the lounge's own pixel style so they match the rooms and need no extra image files.
+  // Icons are built from horizontal spans and the 1-pixel outline is worked out from the shape itself,
+  // which keeps the silhouettes clean at 16x16.
+  function spanDraw(g, groups, edge) {
+    const on = {}, col = {}, k = (x, y) => x + ',' + y;
+    for (const grp of groups) for (const [y, x0, x1] of grp.s) for (let x = x0; x <= x1; x++) { on[k(x, y)] = 1; col[k(x, y)] = grp.c; }
+    for (const key in on) {
+      const [x, y] = key.split(',').map(Number);
+      const e = !on[k(x - 1, y)] || !on[k(x + 1, y)] || !on[k(x, y - 1)] || !on[k(x, y + 1)];
+      P(g, x, y, 1, 1, e ? edge : col[key]);
+    }
+  }
+  const INK = '#2b2233';
+  // an upright log, seen as a block: a diamond top with the rings, then the two side faces
+  const CUBE_TOP = [[0, 7, 8], [1, 5, 10], [2, 3, 12], [3, 1, 14], [4, 1, 14], [5, 3, 12], [6, 5, 10], [7, 7, 8]];
+  const CUBE_L = [[4, 0, 0], [5, 0, 2], [6, 0, 4], [7, 0, 6], [8, 0, 7], [9, 0, 7], [10, 0, 7], [11, 0, 7], [12, 1, 7], [13, 3, 7], [14, 5, 7], [15, 7, 7]];
+  const CUBE_R = [[4, 15, 15], [5, 13, 15], [6, 11, 15], [7, 9, 15], [8, 8, 15], [9, 8, 15], [10, 8, 15], [11, 8, 15], [12, 8, 14], [13, 8, 12], [14, 8, 10], [15, 8, 8]];
+  const ICON_DRAW = {
+    lumber(g) {
+      spanDraw(g, [{ s: CUBE_TOP, c: '#f0d6a4' }, { s: CUBE_L, c: '#8a5a3b' }, { s: CUBE_R, c: '#6b4429' }], INK);
+      // growth rings on the top face
+      for (const [y, x0, x1] of [[2, 6, 9], [3, 4, 11], [4, 4, 11], [5, 6, 9]]) P(g, x0, y, x1 - x0 + 1, 1, '#c99a60');
+      for (const [y, x0, x1] of [[3, 6, 9], [4, 6, 9]]) P(g, x0, y, x1 - x0 + 1, 1, '#f0d6a4');
+      P(g, 7, 3, 2, 2, '#a87c49');
+      // bark grain down the sides
+      for (const x of [2, 5]) for (let y = 8; y < 14 - (x > 3 ? 0 : 2); y++) if (y > 6 + x / 2) P(g, x, y, 1, 1, '#6f452c');
+      for (const x of [10, 13]) for (let y = 8; y < 13; y++) P(g, x, y, 1, 1, '#573620');
+      P(g, 3, 10, 1, 3, '#9a6a45'); P(g, 11, 9, 1, 3, '#7a5033');
+    },
+    grain(g) {    // a fat ear of wheat on its stalk
+      spanDraw(g, [{ s: [[9, 7, 8], [10, 7, 8], [11, 7, 8], [12, 7, 8], [13, 7, 8], [14, 7, 8]], c: '#8a5a3b' },
+        { s: [[0, 7, 8], [1, 6, 9], [2, 5, 10], [3, 4, 11], [4, 4, 11], [5, 4, 11], [6, 4, 11], [7, 5, 10], [8, 6, 9]], c: '#edc84e' },
+        { s: [[10, 2, 6], [11, 1, 6], [12, 1, 5], [10, 9, 13], [11, 9, 14], [12, 10, 14]], c: '#7fa84a' }], INK);
+      P(g, 6, 2, 2, 6, '#fae9a8');
+      for (const y of [2, 4, 6]) { P(g, 6, y, 4, 1, '#d9ae38'); }
+      for (const y of [3, 5, 7]) { P(g, 5, y, 1, 1, INK); P(g, 10, y, 1, 1, INK); }
+      P(g, 6, 1, 2, 1, '#fae9a8');
+      P(g, 3, 11, 2, 1, '#9ec46a'); P(g, 11, 11, 2, 1, '#9ec46a');
+    },
+    dev(g) {      // an arrow pointing up: the development card
+      spanDraw(g, [{ s: [[1, 7, 8], [2, 6, 9], [3, 5, 10], [4, 4, 11], [5, 3, 12], [6, 2, 13], [7, 2, 13],
+        [8, 5, 10], [9, 5, 10], [10, 5, 10], [11, 5, 10], [12, 5, 10], [13, 5, 10], [14, 5, 10]], c: '#f2c13c' }], INK);
+      P(g, 7, 2, 1, 5, '#ffe9a0'); P(g, 6, 8, 1, 6, '#ffe9a0');
+      P(g, 9, 9, 1, 5, '#c99a1e'); P(g, 11, 6, 2, 1, '#c99a1e');
+    },
+    brick(g) {    // one brick, seen a little from above
+      spanDraw(g, [{ s: [[4, 3, 12], [5, 2, 13], [6, 1, 14]], c: '#e27a52' },
+        { s: [[7, 1, 14], [8, 1, 14], [9, 1, 14], [10, 1, 14], [11, 1, 14]], c: '#c05430' }], INK);
+      P(g, 3, 5, 8, 1, '#f09874');
+      P(g, 2, 11, 12, 1, '#8f3b1c');
+      P(g, 5, 7, 1, 4, '#9c4420'); P(g, 10, 7, 1, 4, '#9c4420');
+      P(g, 2, 7, 1, 4, '#d4663c');
+    },
+    ore(g) {      // a dark lump of ore with bright flecks
+      spanDraw(g, [{ s: [[2, 7, 9], [3, 6, 10], [4, 5, 11], [5, 4, 12], [6, 3, 12], [7, 2, 13], [8, 2, 13], [9, 1, 14], [10, 1, 14], [11, 2, 13], [12, 3, 12], [13, 5, 10]], c: '#3b3a44' }], INK);
+      P(g, 6, 5, 2, 2, '#6f7280'); P(g, 9, 7, 2, 2, '#8d8f99'); P(g, 4, 9, 2, 2, '#6f7280');
+      P(g, 11, 10, 2, 1, '#565763'); P(g, 7, 11, 2, 1, '#565763');
+      P(g, 6, 5, 1, 1, '#c9d4e8'); P(g, 10, 7, 1, 1, '#c9d4e8');
+    },
+    wool(g) {     // a sheep from the side: woolly body, head out to the left, four legs
+      spanDraw(g, [
+        { s: [[1, 7, 11], [2, 5, 13], [3, 4, 14], [4, 4, 14], [5, 4, 14], [6, 4, 14], [7, 4, 14], [8, 5, 13]], c: '#fdfcf7' },
+        { s: [[4, 1, 4], [5, 0, 4], [6, 0, 4], [7, 0, 4], [8, 1, 4]], c: '#eee3d4' },
+        { s: [[9, 5, 7], [10, 5, 7], [11, 5, 7], [12, 5, 7], [9, 11, 13], [10, 11, 13], [11, 11, 13], [12, 11, 13]], c: '#9a6a45' }], INK);
+      P(g, 6, 9, 1, 3, '#b4815a'); P(g, 12, 9, 1, 3, '#b4815a');   // the near pair of legs, lighter
+      P(g, 6, 1, 2, 1, '#fdfcf7'); P(g, 9, 1, 2, 1, '#fdfcf7');    // fluff on top
+      P(g, 2, 6, 1, 1, INK);                                       // eye
+      P(g, 0, 7, 2, 1, '#d9b7a8');                                 // muzzle
+      P(g, 1, 3, 2, 1, INK); P(g, 1, 4, 1, 1, '#eee3d4');          // ear
+      P(g, 6, 3, 4, 1, '#ebe7dc'); P(g, 9, 5, 4, 1, '#ebe7dc'); P(g, 5, 6, 3, 1, '#ebe7dc');
+    }
+  };
+  const ICON_KO = { lumber: '나무', grain: '밀', dev: '발전 카드', brick: '벽돌', ore: '철', wool: '양털' };
+  const iconCache = {};
+  function iconCanvas(kind) {
+    if (iconCache[kind]) return iconCache[kind];
+    const c = document.createElement('canvas'); c.width = c.height = 16;
+    const g = c.getContext('2d'); ICON_DRAW[kind](g);
+    return (iconCache[kind] = c);
+  }
+  function iconEl(kind, n, cls) {
+    const w = el('span', 'ct-ic ' + (cls || '') + (n ? '' : ' zero'));
+    const c = document.createElement('canvas'); c.width = c.height = 16; c.className = 'ct-icimg';
+    c.getContext('2d').drawImage(iconCanvas(kind), 0, 0);
+    c.title = ICON_KO[kind]; c.setAttribute('role', 'img'); c.setAttribute('aria-label', ICON_KO[kind]);
+    w.append(c, el('b', '', String(n)));
+    return w;
+  }
+  const avatarCache = new Map();
+  function avatarEl(id, look) {
+    look = look || O.lookOf(id);
+    const key = id + ':' + JSON.stringify(look || 0);
+    let c = avatarCache.get(key);
+    if (!c) { c = document.createElement('canvas'); c.width = O.SW; c.height = O.SH; c.getContext('2d').drawImage(O.avatar(look, 'down'), 0, 0); avatarCache.set(key, c); }
+    const out = document.createElement('canvas'); out.width = O.SW; out.height = O.SH; out.className = 'ct-avatar';
+    out.getContext('2d').drawImage(c, 0, 0);
+    return out;
+  }
   const R = window.CatanRules;
   const root = $('tg'), btn = $('tgBtn');
-  const KIND_OF = { f1r2: 'catan', f1r3: 'draw' };
+  const KIND_OF = { f1r2: 'catan', f1r3: 'draw', room2: 'chess' };
   const INFO = {
-    catan: { title: '카탄', icon: '🏝️', min: 2, max: 6, blurb: '자원을 모아 마을과 도시를 짓고, 먼저 10점을 만들면 이겨요. 2~6명 (5명부터는 큰 섬).' },
+    catan: { title: '카탄', icon: '🏝️', min: 2, max: 6, bots: true, blurb: '자원을 모아 마을과 도시를 짓고, 먼저 10점을 만들면 이겨요. 2~6명 (5명부터는 큰 섬).' },
+    chess: { title: '체스', icon: '♟️', min: 2, max: 2, bots: true, blurb: '한 명씩 번갈아 두는 체스예요. 친구와 1:1로 두거나, 컴퓨터(상·중·하)와 둘 수 있어요.' },
     draw: { title: '그림 퀴즈', icon: '🎨', min: 2, max: 6, blurb: '한 명이 제시어를 그리면 나머지가 맞혀요. 빨리 맞힐수록 점수가 커요. 2~6명.' }
   };
   const GAMES = {};
@@ -86,9 +188,19 @@
     T.members = T.members.filter(m => m.id !== id);
     bump(); if (T.started) g.push();
   }
+  function addBot(level) {
+    if (!isHost() || T.started || !INFO[T.kind].bots) return;
+    if (T.members.length >= INFO[T.kind].max) { toast('자리가 꽉 찼어요'); return; }
+    const used = T.members.map(m => m.name);
+    const nm = '🤖 ' + (BOT_NAMES.find(x => !used.includes('🤖 ' + x)) || ('컴퓨터' + (T.members.length + 1)));
+    T.members.push({ id: 'bot-' + O.newId(), name: nm, bot: true, level: level || 'mid', look: O.randomLook() });
+    bump();
+  }
+  function setBotLevel(id, lv) { if (!isHost() || T.started) return; const m = T.members.find(x => x.id === id); if (m && m.bot) { m.level = lv; bump(); } }
+  function removeBot(id) { if (!isHost() || T.started) return; T.members = T.members.filter(m => !(m.id === id && m.bot)); bump(); }
   function startGame() {
     if (!isHost() || T.started) return;
-    const live = T.members.filter(m => O.here(m.id));
+    const live = T.members.filter(m => m.bot || O.here(m.id));
     if (live.length < INFO[T.kind].min) { toast(`${INFO[T.kind].min}명부터 시작할 수 있어요`); return; }
     T.members = live; T.started = true; T.v++;
     game().start(); sendTbl(); game().push(); render();
@@ -183,6 +295,326 @@
     label();
   }, 1000);
 
+  // the computer players move on their own, quicker timer; everything else stays on the 1 s one
+  setInterval(() => {
+    if (!T || !T.started || !isHost() || !kindHere()) return;
+    const g = game(); if (g && g.fastTick) { try { g.fastTick(now()); } catch (e) { console.error(e); } }
+  }, 200);
+
+  // ================================================================================================
+  //  체스
+  // ================================================================================================
+  const CR = window.ONL_CHESS;
+  const CS = { dom: null, sel: -1, dest: [], promo: null, lastSeq: -1, think: 0, raf: 0 };
+  const PIECE_KO = { p: '폰', n: '나이트', b: '비숍', r: '룩', q: '퀸', k: '킹' };
+  // the pieces, drawn as 16x16 pixel art so they match the rest of the lounge
+  // Each piece is a list of horizontal spans [row, x0, x1]. The outline is worked out from the shape
+  // itself, so every piece gets a clean 1-pixel edge and the silhouettes stay distinct at this size.
+  const PIECE_SPANS = {
+    p: [[3, 6, 9], [4, 5, 10], [5, 5, 10], [6, 6, 9], [7, 6, 9], [8, 5, 10], [9, 5, 10], [10, 4, 11], [11, 4, 11], [12, 3, 12], [13, 2, 13]],
+    r: [[2, 2, 4], [2, 6, 9], [2, 11, 13], [3, 2, 13], [4, 2, 13], [5, 3, 12], [6, 4, 11], [7, 4, 11], [8, 4, 11], [9, 4, 11], [10, 3, 12], [11, 3, 12], [12, 2, 13], [13, 2, 13]],
+    b: [[1, 7, 8], [2, 6, 9], [3, 5, 10], [4, 5, 10], [5, 5, 10], [6, 5, 10], [7, 6, 9], [8, 4, 11], [9, 5, 10], [10, 5, 10], [11, 4, 11], [12, 3, 12], [13, 2, 13]],
+    n: [[1, 9, 11], [2, 8, 12], [3, 6, 12], [4, 4, 12], [5, 3, 12], [6, 2, 12], [7, 2, 12], [8, 3, 12], [9, 4, 11], [10, 5, 11], [11, 4, 11], [12, 3, 12], [13, 2, 13]],
+    q: [[1, 2, 2], [1, 5, 5], [1, 7, 8], [1, 10, 10], [1, 13, 13], [2, 2, 13], [3, 3, 12], [4, 4, 11], [5, 4, 11], [6, 5, 10], [7, 5, 10], [8, 5, 10], [9, 5, 10], [10, 4, 11], [11, 4, 11], [12, 3, 12], [13, 2, 13]],
+    k: [[0, 6, 9], [1, 6, 9], [2, 6, 9], [3, 3, 12], [4, 6, 9], [5, 3, 12], [6, 3, 12], [7, 4, 11], [8, 5, 10], [9, 5, 10], [10, 5, 10], [11, 4, 11], [12, 3, 12], [13, 2, 13]]
+  };
+  // extra marks once the body is drawn: [x, y, w, h, 'edge'|'shade']
+  const PIECE_MARKS = {
+    p: [[6, 6, 1, 2, 'shade'], [6, 4, 2, 1, 'shade']],
+    r: [[7, 5, 2, 1, 'edge'], [4, 6, 1, 4, 'shade'], [3, 3, 3, 1, 'shade']],
+    b: [[8, 3, 1, 3, 'edge'], [6, 4, 1, 3, 'shade'], [5, 9, 2, 1, 'shade']],
+    n: [[8, 5, 1, 1, 'edge'], [2, 7, 2, 1, 'edge'], [4, 6, 1, 2, 'shade'], [10, 3, 1, 4, 'shade'], [11, 5, 1, 3, 'edge']],
+    q: [[5, 3, 1, 1, 'edge'], [10, 3, 1, 1, 'edge'], [4, 5, 1, 5, 'shade'], [4, 2, 2, 1, 'shade']],
+    k: [[4, 8, 1, 4, 'shade'], [4, 6, 2, 1, 'shade'], [7, 1, 1, 2, 'shade'], [4, 3, 1, 1, 'shade'], [11, 3, 1, 1, 'shade']]
+  };
+  function drawPiece(g, t, F, E, S) {
+    const on = {}, key = (x, y) => x + ',' + y;
+    for (const [y, x0, x1] of PIECE_SPANS[t]) for (let x = x0; x <= x1; x++) on[key(x, y)] = 1;
+    for (const k in on) {
+      const [x, y] = k.split(',').map(Number);
+      const edge = !on[key(x - 1, y)] || !on[key(x + 1, y)] || !on[key(x, y - 1)] || !on[key(x, y + 1)];
+      P(g, x, y, 1, 1, edge ? E : F);
+    }
+    for (const [x, y, w, h, kind] of (PIECE_MARKS[t] || [])) P(g, x, y, w, h, kind === 'edge' ? E : S);
+  }
+  const PIECE_DRAW = {
+    p: (g, F, E, S) => drawPiece(g, 'p', F, E, S),
+    r: (g, F, E, S) => drawPiece(g, 'r', F, E, S),
+    b: (g, F, E, S) => drawPiece(g, 'b', F, E, S),
+    n: (g, F, E, S) => drawPiece(g, 'n', F, E, S),
+    q: (g, F, E, S) => drawPiece(g, 'q', F, E, S),
+    k: (g, F, E, S) => drawPiece(g, 'k', F, E, S)
+  };
+  const PIECE_COL = {
+    w: ['#f6f1e3', '#251c2c', '#cdc3ad'],
+    b: ['#3f3a52', '#17151c', '#6f6a86']
+  };
+  const pieceCache = {};
+  function pieceCanvas(ch) {
+    if (pieceCache[ch]) return pieceCache[ch];
+    const c = document.createElement('canvas'); c.width = c.height = 16;
+    const [F, E, S] = PIECE_COL[ch === ch.toUpperCase() ? 'w' : 'b'];
+    PIECE_DRAW[ch.toLowerCase()](c.getContext('2d'), F, E, S);
+    return (pieceCache[ch] = c);
+  }
+  const chGame = () => G && G.g;
+  const chMyColor = () => !G ? null : G.white === me() ? 'w' : G.black === me() ? 'b' : null;
+  const chTurnId = () => !G ? null : (G.g.w ? G.white : G.black);
+  const chMyTurn = () => !!G && !G.g.over && chTurnId() === me();
+  const chIsBot = id => { const m = T && T.members.find(x => x.id === id); return !!(m && m.bot); };
+  const chLevel = id => { const m = T && T.members.find(x => x.id === id); return (m && m.level) || 'mid'; };
+  const chName = id => { const m = T && T.members.find(x => x.id === id); return (m && m.name) || O.nameOf(id) || '친구'; };
+  function chLog(t) { G.log.push(t); if (G.log.length > 60) G.log.shift(); }
+
+  function chStart() {
+    const ms = T.members.slice();
+    const a = ms[0], b = ms[1];
+    const flip = Math.random() < 0.5;
+    G = { kind: 'chess', seq: 1, g: CR.newGame(), white: (flip ? b : a).id, black: (flip ? a : b).id, over: null, log: [], looks: {} };
+    for (const m of ms) G.looks[m.id] = m.look || O.lookOf(m.id) || null;
+    chLog(`⚪ 흰색 ${chName(G.white)} · ⚫ 검은색 ${chName(G.black)}`);
+    chLog('흰색부터 시작해요.');
+    CS.sel = -1; CS.dest = []; CS.think = 0;
+  }
+  function chPush(to) { if (!G) return; const p = { t: 'cs', g: G }; if (to) p.to = to; send(p); chApply(G); }
+  function chDo(pid, from, to, promo) {
+    const g = G.g;
+    if (g.over) return { error: '이미 끝났어요' };
+    if (chTurnId() !== pid) return { error: '지금은 상대 차례예요' };
+    const r = CR.move(g, from, to, promo);
+    if (r.error) return r;
+    G.seq++;
+    const h = g.hist[g.hist.length - 1];
+    chLog(`${g.full}. ${chName(pid)} ${h ? h.s : ''}${g.over ? '' : CR.inCheck(g, g.w) ? ' 체크!' : ''}`);
+    if (g.over) {
+      const W = g.over.why;
+      chLog(W === 'mate' ? `체크메이트! ${chName(g.over.win === 'w' ? G.white : G.black)}님 승리 🏆`
+        : W === 'resign' ? `${chName(g.over.win === 'w' ? G.white : G.black)}님 승리 (기권)`
+        : W === 'stale' ? '스테일메이트 — 무승부예요' : W === '50' ? '50수 규칙 — 무승부예요'
+        : W === 'rep' ? '같은 자리 3번 반복 — 무승부예요' : '말이 모자라 무승부예요');
+    }
+    return r;
+  }
+  function chAct(from, to, promo) {
+    if (!G || G.g.over) return;
+    if (isHost()) { const r = chDo(me(), from, to, promo); if (r.error) toast(r.error); else chPush(); return; }
+    send({ t: 'mv', from_sq: from, to_sq: to, promo });
+  }
+  function chResign() {
+    if (!G || G.g.over || !chMyColor()) return;
+    if (isHost()) { CR.resign(G.g, chMyColor() === 'w'); G.seq++; chLog(`${chName(me())}님이 기권했어요.`); chPush(); }
+    else send({ t: 'rs' });
+  }
+  // the computer thinks on the host's browser
+  function chBotTick(now) {
+    if (!G || G.g.over || !isHost()) return false;
+    const id = chTurnId();
+    if (!chIsBot(id)) return false;
+    const wait = { easy: 700, mid: 600, hard: 450 }[chLevel(id)] || 600;
+    if (!CS.think) { CS.think = now; return false; }
+    if (now - CS.think < wait) return false;
+    CS.think = 0;
+    const mv = CR.best(G.g, chLevel(id));
+    if (!mv) return false;
+    const r = chDo(id, mv.from, mv.to, mv.promo);
+    if (!r.error) chPush();
+    return true;
+  }
+  function chApply(g) {
+    const first = CS.lastSeq < 0;
+    const was = G && G.seq;
+    G = g; CS.sel = -1; CS.dest = [];
+    if (!first && g.seq !== CS.lastSeq) {
+      if (g.g.over) sfx(g.g.over.win && chMyColor() === g.g.over.win ? 'goal' : 'pop', 0.45);
+      else sfx(CR.inCheck(g.g, g.g.w) ? 'ding' : 'pop', 0.35);
+    }
+    CS.lastSeq = g.seq;
+    render();
+  }
+  // ---- board ----
+  function chFlip() { return chMyColor() === 'b'; }
+  function chCells() {
+    const out = [];
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) out.push({ i: CR.sq(r, f), r, f });
+    return out;
+  }
+  function chDrawBoard() {
+    const d = CS.dom; if (!d || !G) return;
+    const cv = d.cv, g = cv.getContext('2d'), fl = chFlip(), B = G.g;
+    cv.width = 144; cv.height = 144;
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = '#6f452c'; g.fillRect(0, 0, 144, 144);
+    const px = (r, f) => [8 + (fl ? 7 - f : f) * 16, 8 + (fl ? 7 - r : r) * 16];
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+      const [x, y] = px(r, f), i = CR.sq(r, f);
+      g.fillStyle = (r + f) % 2 ? '#b98a5e' : '#edd9b0'; g.fillRect(x, y, 16, 16);
+      if (B.last && (B.last.from === i || B.last.to === i)) { g.fillStyle = 'rgba(255,214,90,.5)'; g.fillRect(x, y, 16, 16); }
+    }
+    // the king that is in check
+    if (!B.over && CR.inCheck(B, B.w)) {
+      const k = CR.findKing(B, B.w), [x, y] = px(CR.row(k), CR.file(k));
+      g.fillStyle = 'rgba(230,57,70,.6)'; g.fillRect(x, y, 16, 16);
+    }
+    if (CS.sel >= 0) { const [x, y] = px(CR.row(CS.sel), CR.file(CS.sel)); g.fillStyle = 'rgba(63,181,163,.55)'; g.fillRect(x, y, 16, 16); }
+    for (const m of CS.dest) {
+      const [x, y] = px(CR.row(m.to), CR.file(m.to));
+      g.fillStyle = 'rgba(37,28,44,.45)';
+      if (m.cap) { g.fillRect(x, y, 16, 2); g.fillRect(x, y + 14, 16, 2); g.fillRect(x, y + 2, 2, 12); g.fillRect(x + 14, y + 2, 2, 12); }
+      else { g.fillRect(x + 6, y + 6, 4, 4); g.fillRect(x + 7, y + 5, 2, 6); g.fillRect(x + 5, y + 7, 6, 2); }
+    }
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+      const p = B.b[CR.sq(r, f)]; if (!p) continue;
+      const [x, y] = px(r, f); g.drawImage(pieceCanvas(p), x, y);
+    }
+    // a thin frame instead of tiny letters, which only turn to mush when the board is scaled up
+    g.fillStyle = '#4a2f1d'; g.fillRect(6, 6, 132, 2); g.fillRect(6, 136, 132, 2); g.fillRect(6, 6, 2, 132); g.fillRect(136, 6, 2, 132);
+  }
+  function chTap(ev) {
+    if (!G || G.g.over || !chMyTurn() || CS.promo) return;
+    const rc = CS.dom.cv.getBoundingClientRect(), fl = chFlip();
+    const u = rc.width / 144;
+    let f = Math.floor((ev.clientX - rc.left - 8 * u) / (16 * u)), r = Math.floor((ev.clientY - rc.top - 8 * u) / (16 * u));
+    if (f < 0 || f > 7 || r < 0 || r > 7) return;
+    if (fl) { f = 7 - f; r = 7 - r; }
+    const i = CR.sq(r, f), B = G.g, p = B.b[i], mine = chMyColor() === 'w';
+    const hit = CS.dest.find(m => m.to === i);
+    if (hit) {
+      const promos = CS.dest.filter(m => m.to === i && m.promo);
+      if (promos.length) { CS.promo = { from: CS.sel, to: i }; CS.sel = -1; CS.dest = []; chUpdate(); return; }
+      const from = CS.sel; CS.sel = -1; CS.dest = []; chAct(from, i); chDrawBoard(); return;
+    }
+    if (p && CR.isW(p) === mine) {
+      CS.sel = i; CS.dest = CR.legal(B).filter(m => m.from === i);
+      sfx('pop', 0.25);
+    } else { CS.sel = -1; CS.dest = []; }
+    chDrawBoard(); chStatus();
+  }
+  const CH_START = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+  function chTaken(white) {   // pieces of this colour that are gone
+    const have = {}, B = G.g;
+    for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+      const p = B.b[CR.sq(r, f)]; if (!p) continue;
+      if (CR.isW(p) !== white) continue;
+      const t = p.toLowerCase(); have[t] = (have[t] || 0) + 1;
+    }
+    const out = [];
+    for (const t of ['q', 'r', 'b', 'n', 'p']) for (let k = (have[t] || 0); k < CH_START[t]; k++) out.push(white ? t.toUpperCase() : t);
+    return out;
+  }
+  function chPieceEl(ch, cls) {
+    const c = document.createElement('canvas'); c.width = c.height = 16; c.className = 'ch-pc ' + (cls || '');
+    c.getContext('2d').drawImage(pieceCanvas(ch), 0, 0);
+    c.setAttribute('role', 'img'); c.setAttribute('aria-label', (CR.isW(ch) ? '흰 ' : '검은 ') + PIECE_KO[ch.toLowerCase()]);
+    return c;
+  }
+  function chSide(id, colour) {
+    const box = el('div', 'ch-side' + (chTurnId() === id && !G.g.over ? ' on' : ''));
+    const head = el('div', 'ch-sidehead');
+    head.append(el('i', 'ch-dot ' + colour), avatarEl(id, G.looks && G.looks[id]), el('b', '', chName(id) + (id === me() ? ' (나)' : '')));
+    if (chIsBot(id)) head.appendChild(el('span', 'ct-mini', '🤖 ' + (BOT_KO[chLevel(id)] || '중')));
+    const taken = el('div', 'ch-taken');
+    chTaken(colour !== 'w').forEach(p => taken.appendChild(chPieceEl(p, 'small')));
+    box.append(head, taken);
+    return box;
+  }
+  function chMount(body) {
+    const d = CS.dom = {};
+    d.status = el('p', 'ct-status');
+    d.sides = el('div', 'ch-sides');
+    d.wrap = el('div', 'ch-wrap'); d.cv = el('canvas', 'ch-board'); d.cv.addEventListener('pointerdown', chTap);
+    d.promo = el('div', 'ch-promo'); d.wrap.append(d.cv, d.promo);
+    d.acts = el('div', 'ct-acts'); d.log = el('div', 'ct-log');
+    const left = d.left = el('div', 'ch-left'), right = el('div', 'ct-right');
+    left.append(d.wrap); right.append(d.sides, d.acts, d.log);
+    const cols = el('div', 'ct-cols'); cols.append(left, right);
+    body.append(d.status, cols);
+    d.ro = new ResizeObserver(() => chSize()); d.ro.observe(d.left);
+    d.onwin = () => chSize(); window.addEventListener('resize', d.onwin);
+    chUpdate();
+  }
+  function chSize() {
+    const d = CS.dom; if (!d) return;
+    const availW = (d.left && d.left.clientWidth) || 300;
+    const availH = Math.max(180, window.innerHeight - (window.innerWidth >= 900 ? 190 : 330));
+    const px = Math.max(144, Math.floor(Math.min(availW, availH) / 144) * 144 || Math.min(availW, availH));
+    d.cv.style.width = d.cv.style.height = Math.min(availW, availH, px) + 'px';
+    chDrawBoard();
+  }
+  function chUnmount() {
+    if (CS.dom) { if (CS.dom.ro) CS.dom.ro.disconnect(); if (CS.dom.onwin) window.removeEventListener('resize', CS.dom.onwin); }
+    CS.dom = null; CS.sel = -1; CS.dest = []; CS.promo = null; CS.lastSeq = -1;
+  }
+  function chStatus() {
+    const d = CS.dom; if (!d || !G) return;
+    const B = G.g, mine = chMyColor();
+    let t, cls = '';
+    if (B.over) {
+      const w = B.over.win;
+      t = !w ? '무승부예요' : (w === mine ? '🏆 내가 이겼어요!' : `${chName(w === 'w' ? G.white : G.black)}님 승리`);
+      cls = 'done';
+    } else if (!mine) t = `${chName(chTurnId())}님 차례 (구경 중)`;
+    else if (chMyTurn()) { t = CR.inCheck(B, B.w) ? '체크! 킹을 피하세요' : (CS.sel >= 0 ? '갈 곳을 누르세요' : '내 차례예요 · 말을 누르세요'); cls = 'mine'; }
+    else t = `${chName(chTurnId())}님이 생각 중…`;
+    d.status.textContent = t; d.status.className = 'ct-status ' + cls;
+  }
+  function chUpdate() {
+    const d = CS.dom; if (!d || !G) return;
+    chStatus();
+    d.sides.innerHTML = '';
+    d.sides.append(chSide(G.black, 'b'), chSide(G.white, 'w'));
+    // promotion picker
+    d.promo.innerHTML = ''; d.promo.hidden = !CS.promo;
+    if (CS.promo) {
+      d.promo.appendChild(el('p', '', '무엇으로 승진할까요?'));
+      const row = el('div', 'tg-row');
+      for (const q of ['q', 'r', 'b', 'n']) {
+        const b = el('button', 'btn ch-promob', ''); b.type = 'button';
+        b.append(chPieceEl(chMyColor() === 'w' ? q.toUpperCase() : q), el('span', '', PIECE_KO[q]));
+        b.addEventListener('click', () => { const pm = CS.promo; CS.promo = null; chAct(pm.from, pm.to, q); chUpdate(); });
+        row.appendChild(b);
+      }
+      const cx = el('button', 'btn', '취소'); cx.type = 'button'; cx.addEventListener('click', () => { CS.promo = null; chUpdate(); });
+      row.appendChild(cx); d.promo.appendChild(row);
+    }
+    d.acts.innerHTML = '';
+    if (G.g.over) {
+      if (isHost()) d.acts.appendChild(mkBtn('새 게임 준비하기', 'btn-gold', backToLobby));
+      else d.acts.appendChild(el('p', 'tg-empty', '방장이 새 게임을 준비할 수 있어요'));
+    } else if (chMyColor()) {
+      d.acts.appendChild(mkBtn('기권하기', '', () => confirmBar(root.querySelector('.tg-card'), '정말 기권할까요?', '기권', chResign)));
+      d.acts.appendChild(el('p', 'ct-tip', '말을 누르면 갈 수 있는 곳이 점으로 표시돼요.'));
+    }
+    d.log.innerHTML = ''; G.log.slice(-14).forEach(t => d.log.appendChild(el('p', '', t))); d.log.scrollTop = d.log.scrollHeight;
+    chSize();
+  }
+  GAMES.chess = {
+    start: chStart, push: chPush, mount: chMount, update: chUpdate, unmount: chUnmount,
+    fastTick: chBotTick,
+    tick() { if (G && !G.g.over && !chIsBot(chTurnId()) && isHost()) { /* humans take their time */ } },
+    myTurn: chMyTurn,
+    memberLeft(id, self) {
+      if (!G || G.g.over || self) return;
+      if (id === G.white || id === G.black) { CR.resign(G.g, id === G.white); G.seq++; chLog(`${chName(id)}님이 나가서 게임이 끝났어요.`); }
+    },
+    memberGone(id) { hostLeave(id); },
+    handover() { CS.think = 0; },
+    onMsg(p) {
+      if (p.t === 'cs') { if (p.from !== T.host || !p.g || !p.g.g) return; if (G && p.g.seq < G.seq) return; chApply(p.g); return; }
+      if (p.t === 'mv') {
+        if (!isHost() || !G) return;
+        const r = chDo(p.from, +p.from_sq, +p.to_sq, p.promo);
+        if (r.error) send({ t: 'err', to: p.from, msg: r.error }); else chPush();
+        return;
+      }
+      if (p.t === 'rs') { if (!isHost() || !G || G.g.over) return; const c = p.from === G.white ? 'w' : p.from === G.black ? 'b' : null; if (!c) return; CR.resign(G.g, c === 'w'); G.seq++; chLog(`${chName(p.from)}님이 기권했어요.`); chPush(); }
+    },
+    lobbyExtra(body) {
+      const d = el('details', 'tg-help'); d.appendChild(el('summary', '', '체스 규칙이 가물가물하다면'));
+      ['말을 누르면 갈 수 있는 칸이 점으로 보여요. 점을 누르면 그 칸으로 가요.', '킹이 잡히게 되면 체크, 피할 수 없으면 체크메이트로 끝나요.', '킹과 룩이 아직 안 움직였고 사이가 비어 있으면 캐슬링(킹을 두 칸)이 돼요.', '폰이 끝줄에 닿으면 퀸·룩·비숍·나이트 중 하나로 바꿔요.', '같은 자리가 3번 반복되거나 50수 동안 아무 말도 안 잡히면 무승부예요.'].forEach(t => d.appendChild(el('p', '', '· ' + t)));
+      body.appendChild(d);
+    }
+  };
+
   // ================= shell UI =================
   function label() {
     const kind = kindHere();
@@ -254,9 +686,34 @@
     } else if (key === 'lobby') {
       body.appendChild(el('p', 'tg-blurb', inf.blurb));
       const list = el('div', 'tg-list');
-      T.members.forEach(m => { const r = el('div', 'tg-mem'); r.append(el('span', 'tg-name', m.name), el('span', 'tg-tag', m.id === T.host ? '방장' : m.id === me() ? '나' : '')); list.appendChild(r); });
+      T.members.forEach(m => {
+        const r = el('div', 'tg-mem' + (m.bot ? ' bot' : ''));
+        r.appendChild(avatarEl(m.id, m.look));
+        r.appendChild(el('span', 'tg-name', m.name));
+        if (m.bot) {
+          if (isHost()) {
+            const lv = el('div', 'tg-lv');
+            for (const [k, ko] of [['hard', '상'], ['mid', '중'], ['easy', '하']]) {
+              const c = el('button', 'btn gm-chip', ko); c.type = 'button'; c.setAttribute('aria-pressed', String(m.level === k));
+              c.addEventListener('click', () => setBotLevel(m.id, k)); lv.appendChild(c);
+            }
+            const x = el('button', 'btn tg-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', '컴퓨터 빼기');
+            x.addEventListener('click', () => removeBot(m.id)); lv.appendChild(x);
+            r.appendChild(lv);
+          } else r.appendChild(el('span', 'tg-tag', '컴퓨터 · ' + (BOT_KO[m.level] || '중')));
+        } else r.appendChild(el('span', 'tg-tag', m.id === T.host ? '방장' : m.id === me() ? '나' : ''));
+        list.appendChild(r);
+      });
       for (let i = T.members.length; i < Math.min(inf.max, Math.max(inf.min, T.members.length + 1)); i++) list.appendChild(el('div', 'tg-mem empty', '빈 자리'));
       body.appendChild(list);
+      if (inf.bots && isHost()) {
+        const bRow = el('div', 'tg-row');
+        const add = el('button', 'btn', '🤖 컴퓨터 추가'); add.type = 'button';
+        add.disabled = T.members.length >= inf.max;
+        add.addEventListener('click', () => addBot('mid'));
+        bRow.append(add, el('span', 'ct-tip', '컴퓨터를 넣으면 혼자서도, 사람이 적어도 바로 시작할 수 있어요. 상/중/하로 실력을 고르세요.'));
+        body.appendChild(bRow);
+      }
       const row = el('div', 'tg-row');
       if (!inTable()) { const j = el('button', 'btn btn-gold tg-big', T.members.length >= inf.max ? '자리가 꽉 찼어요' : '참가하기'); j.type = 'button'; j.disabled = T.members.length >= inf.max; j.addEventListener('click', joinTable); row.appendChild(j); }
       else if (isHost()) {
@@ -325,6 +782,11 @@
     G = R.createGame(T.id, { id: ms[0].id, name: ms[0].name }, ms.length > 4, false);
     for (const m of ms.slice(1)) R.addPlayer(G, { id: m.id, name: m.name });
     R.startGame(G);
+    for (const m of T.members) {
+      const p = G.players.find(x => x.id === m.id); if (!p) continue;
+      p.look = m.look || O.lookOf(m.id) || null;
+      if (m.bot) { p.bot = true; p.level = m.level || 'mid'; }
+    }
     G.x = { step: 'settle', last: null, seq: 1, log: [], actAt: Date.now() };
     cLog(`게임 시작! 순서: ${G.players.map(p => p.name).join(' → ')}`);
     cLog('먼저 차례대로 마을 1개와 길 1개를 두 번씩 놓아요.');
@@ -433,6 +895,7 @@
     if (G.phase === 'playing' && G.turnPhase === 'discard') return G.discardingPlayers.map(d => G.players[d.playerIndex].id);
     return [cCur().id];
   }
+  const cAutoMove = pid => { try { return botTurn(pid); } catch (e) { return null; } };
   function cAuto(pid) {
     const g = G, geo = cGeo(), P = g.players.find(p => p.id === pid); if (!P) return;
     const pick = a => a[Math.random() * a.length | 0];
@@ -453,16 +916,191 @@
     else if (g.turnPhase === 'main') { if (g.tradeOffer) g.tradeOffer = null; r = cDo(pid, 'end', []); }
     if (r && !r.error) { cLog(`(${P.name}님 대신 자동으로 진행했어요)`); cPush(); }
   }
+  // ================= 카탄 컴퓨터 =================
+  // The table host runs every computer player. They are ordinary players in the game with bot:true, so
+  // if the host leaves, the next host picks them up and the game carries on.
+  const BOT_KO = { easy: '하', mid: '중', hard: '상' };
+  const BOT_WAIT0 = { easy: 1100, mid: 800, hard: 550 };
+  const BOT_WAIT = new Proxy(BOT_WAIT0, { get: (t, k) => (t[k] || 800) / (window.__botFast || 1) });
+  const BOT_NAMES = ['도담', '보리', '초롱', '하람', '소리'];
+  let botAt = 0;
+  const isBot = pid => { const p = G && G.players && G.players.find(x => x.id === pid); return !!(p && p.bot); };
+  const botLevel = pid => { const p = G.players.find(x => x.id === pid); return p && p.level || 'mid'; };
+  const pick = a => a[Math.random() * a.length | 0];
+  const need = (P, cost) => RES.reduce((n, k) => n + Math.max(0, (cost[k] || 0) - P.resources[k]), 0);
+  const canAfford = (P, cost) => need(P, cost) === 0;
+  // how good a corner is: the numbers around it, plus a bonus for covering different resources
+  function vScore(vkey, lvl) {
+    const hexes = R.getVertexAdjacentHexes(G, vkey) || [];
+    let s = 0; const kinds = new Set();
+    for (const h of hexes) { s += PIPS[h.number] || 0; if (h.terrain && h.terrain !== 'desert') kinds.add(h.terrain); }
+    if (lvl === 'easy') return s;
+    let bonus = kinds.size * 1.3;
+    if (lvl === 'hard') { for (const h of hexes) if (h.terrain === 'mountains' || h.terrain === 'fields') bonus += (PIPS[h.number] || 0) * 0.25; }
+    return s + bonus;
+  }
+  const bestOf = (list, scoreFn, lvl) => {
+    if (!list.length) return null;
+    const scored = list.map(v => ({ v, s: scoreFn(v) })).sort((a, b) => b.s - a.s);
+    if (lvl === 'easy') return pick(scored).v;
+    if (lvl === 'mid') return pick(scored.slice(0, Math.max(1, Math.min(4, scored.length)))).v;
+    return scored[0].v;
+  };
+  const myVertices = pi => { const out = []; for (const k in G.vertices) { const b = G.vertices[k]; if (b && b.building && b.owner === pi) out.push(Object.assign({ key: k }, b)); } return out; };
+  // a road is worth building when it reaches a corner we could settle on later
+  function roadValue(ekey, pid, lvl) {
+    const geo = cGeo(), e = geo.E.find(x => x.keys.includes(ekey)); if (!e) return 0;
+    let best = 0;
+    for (const [vx, vy] of [[e.x1, e.y1], [e.x2, e.y2]]) {
+      const v = geo.V.find(p => Math.abs(p.x - vx) < 0.01 && Math.abs(p.y - vy) < 0.01); if (!v) continue;
+      if (vBuild(v)) continue;
+      const far = R.canPlaceSettlement(G, pid, v.keys[0], false);
+      best = Math.max(best, vScore(v.keys[0], lvl) * (far.valid ? 1 : 0.55));
+    }
+    return best;
+  }
+  function botDiscard(pid) {
+    const P = G.players.find(p => p.id === pid), d = G.discardingPlayers.find(x => G.players[x.playerIndex].id === pid);
+    if (!d) return null;
+    const keep = { ore: 3, grain: 3, brick: 1, lumber: 1, wool: 1 }, pool = [];
+    for (const k of RES) for (let n = 0; n < P.resources[k]; n++) pool.push(k);
+    pool.sort((a, b) => (P.resources[b] - (keep[b] || 0)) - (P.resources[a] - (keep[a] || 0)));
+    const o = {}; pool.slice(0, d.cardsToDiscard).forEach(k => { o[k] = (o[k] || 0) + 1; });
+    return cDo(pid, 'discard', [o]);
+  }
+  function botRobber(pid, lvl) {
+    const pi = G.players.findIndex(p => p.id === pid);
+    const keys = Object.keys(G.hexes).filter(k => k !== G.robber);
+    const hurt = hk => {
+      if (lvl === 'easy') return Math.random();
+      const on = R.getPlayersOnHex(G, hk, -1) || [];
+      let s = 0;
+      for (const idx of on) {
+        if (idx === pi) return -100;   // never rob myself
+        s += (PIPS[G.hexes[hk].number] || 0) + (lvl === 'hard' ? G.players[idx].victoryPoints * 1.5 : 0);
+      }
+      return s;
+    };
+    const hk = bestOf(keys, hurt, lvl === 'easy' ? 'easy' : 'hard');
+    const cands = R.getPlayersOnHex(G, hk, pi).map(k => G.players[k]).filter(p => cardCount(p) > 0);
+    const victim = cands.length ? (lvl === 'hard' ? cands.sort((a, b) => b.victoryPoints - a.victoryPoints)[0] : pick(cands)) : null;
+    return cDo(pid, 'robber', [hk, victim ? victim.id : null]);
+  }
+  // trade with the bank only when it finishes something we are saving for
+  function botBankTrade(pid, lvl, want) {
+    if (lvl === 'easy') return null;
+    const g = G, pi = g.players.findIndex(p => p.id === pid), P = g.players[pi];
+    const short = RES.filter(k => (want[k] || 0) > P.resources[k]);
+    if (short.length !== 1) return null;
+    const get = short[0];
+    for (const give of RES) {
+      if (give === get) continue;
+      const ratio = R.getTradeRatio(g, pi, give);
+      if (P.resources[give] - ratio >= (want[give] || 0)) return cDo(pid, 'bank', [give, get]);
+    }
+    return null;
+  }
+  function botPlayDev(pid, lvl) {
+    const g = G, pi = g.players.findIndex(p => p.id === pid), P = g.players[pi];
+    if (lvl === 'easy' || g.devCardPlayedThisTurn) return null;
+    const have = c => P.developmentCards.includes(c);
+    const robberOnMe = R.getPlayersOnHex(g, g.robber, -1) || [];
+    if (have('knight') && (robberOnMe.includes(pi) || (lvl === 'hard' && P.knightsPlayed >= 2))) return cDo(pid, 'dev', ['knight']);
+    if (have('monopoly')) {
+      const best = RES.map(k => ({ k, n: g.players.reduce((a, q, qi) => a + (qi === pi ? 0 : q.resources[k]), 0) })).sort((a, b) => b.n - a.n)[0];
+      if (best.n >= (lvl === 'hard' ? 4 : 6)) return cDo(pid, 'dev', ['monopoly', best.k]);
+    }
+    if (have('roadBuilding') && P.roads >= 2) return cDo(pid, 'dev', ['roadBuilding']);
+    if (have('yearOfPlenty')) return cDo(pid, 'dev', ['yearOfPlenty']);
+    return null;
+  }
+  function botTurn(pid) {
+    const g = G, lvl = botLevel(pid), pi = g.players.findIndex(p => p.id === pid), P = g.players[pi], BC = R.BUILDING_COSTS;
+    const geo = cGeo();
+    if (g.phase === 'setup') {
+      if (g.x.step === 'settle') {
+        const spots = geo.V.filter(v => R.canPlaceSettlement(g, pid, v.keys[0], true).valid).map(v => v.keys[0]);
+        return spots.length ? cDo(pid, 'settle', [bestOf(spots, k => vScore(k, lvl), lvl)]) : null;
+      }
+      const roads = geo.E.filter(e => R.canPlaceRoad(g, pid, e.keys[0], true, g.x.last).valid).map(e => e.keys[0]);
+      return roads.length ? cDo(pid, 'road', [bestOf(roads, k => roadValue(k, pid, lvl), lvl)]) : null;
+    }
+    if (g.turnPhase === 'discard') return botDiscard(pid);
+    if (g.currentPlayerIndex !== pi) return null;
+    if (g.turnPhase === 'robber') return botRobber(pid, lvl);
+    if (g.yearOfPlentyPicks > 0) { const want = RES.slice().sort((a, b) => P.resources[a] - P.resources[b])[0]; return cDo(pid, 'yop', [want]); }
+    if (g.turnPhase === 'roll') { const r = botPlayDev(pid, lvl); return r && !r.error ? r : cDo(pid, 'roll', []); }
+    if (g.turnPhase !== 'main') return null;
+    if (g.freeRoads > 0) {
+      const roads = geo.E.filter(e => R.canPlaceRoad(g, pid, e.keys[0], false, null).valid).map(e => e.keys[0]);
+      return roads.length ? cDo(pid, 'road', [bestOf(roads, k => roadValue(k, pid, lvl), lvl)]) : cDo(pid, 'end', []);
+    }
+    let r = botPlayDev(pid, lvl); if (r && !r.error) return r;
+    // 1) a city on my best settlement
+    const mine = myVertices(pi).filter(b => b.building === 'settlement');
+    if (mine.length && P.cities > 0) {
+      if (canAfford(P, BC.city)) return cDo(pid, 'city', [bestOf(mine.map(b => b.key), k => vScore(k, lvl), lvl)]);
+      if (lvl !== 'easy') { const t = botBankTrade(pid, lvl, BC.city); if (t && !t.error) return t; }
+    }
+    // 2) a new settlement where I can reach
+    const spots = geo.V.filter(v => R.canPlaceSettlement(g, pid, v.keys[0], false).valid).map(v => v.keys[0]);
+    if (spots.length && P.settlements > 0) {
+      if (canAfford(P, BC.settlement)) return cDo(pid, 'settle', [bestOf(spots, k => vScore(k, lvl), lvl)]);
+      const t = botBankTrade(pid, lvl, BC.settlement); if (t && !t.error) return t;
+    }
+    // 3) a road, but only to open up a new corner — roads built for their own sake just use up pieces
+    const roads = geo.E.filter(e => R.canPlaceRoad(g, pid, e.keys[0], false, null).valid).map(e => e.keys[0]);
+    const needRoad = roads.length && P.roads > 0 && P.settlements > 0 && (lvl === 'easy' ? Math.random() < 0.5 : spots.length === 0);
+    if (needRoad) {
+      if (canAfford(P, BC.road)) return cDo(pid, 'road', [bestOf(roads, k => roadValue(k, pid, lvl), lvl)]);
+      const t = botBankTrade(pid, lvl, BC.road); if (t && !t.error) return t;
+    }
+    // 4) a development card with what is left over
+    if (g.devCardDeck.length && canAfford(P, BC.developmentCard) && (lvl === 'hard' || Math.random() < 0.5)) return cDo(pid, 'buyDev', []);
+    // 5) nothing to do: trade spare cards toward whatever we are saving for next
+    if (lvl !== 'easy') {
+      const goal = (mine.length && P.cities > 0) ? BC.city : spots.length ? BC.settlement : BC.road;
+      const t = botBankTrade(pid, lvl, goal); if (t && !t.error) return t;
+    }
+    return cDo(pid, 'end', []);
+  }
+  // answer a human's trade offer
+  function botTrade(pid) {
+    const g = G, tr = g.tradeOffer, lvl = botLevel(pid), pi = g.players.findIndex(p => p.id === pid), P = g.players[pi];
+    if (!tr || tr.from === pi || tr.responses[pid]) return null;
+    if (RES.some(k => P.resources[k] < (tr.request[k] || 0))) return cDo(pid, 'respond', [false]);
+    if (lvl === 'easy') return cDo(pid, 'respond', [Math.random() < 0.35]);
+    const gain = RES.reduce((a, k) => a + (tr.offer[k] || 0) * (P.resources[k] < 2 ? 2 : 1), 0);
+    const loss = RES.reduce((a, k) => a + (tr.request[k] || 0) * (P.resources[k] <= (tr.request[k] || 0) ? 2.4 : 1), 0);
+    const leader = g.players[tr.from].victoryPoints >= 7 && lvl === 'hard';
+    return cDo(pid, 'respond', [!leader && gain >= loss]);
+  }
+  function botStep(now) {
+    if (!G || G.phase === 'finished' || now - botAt < 300) return false;
+    const waiting = cWaiting().filter(isBot);
+    if (G.tradeOffer) for (const p of G.players) if (p.bot && !G.tradeOffer.responses[p.id] && G.tradeOffer.from !== G.players.indexOf(p)) {
+      if (now - botAt < BOT_WAIT[p.level] ) return false;
+      botAt = now; const r = botTrade(p.id); if (r && !r.error) { cPush(); return true; }
+    }
+    if (!waiting.length) return false;
+    const pid = waiting[0];
+    if (now - botAt < BOT_WAIT[botLevel(pid)]) return false;
+    botAt = now;
+    const r = botTurn(pid);
+    if (r && r.error) { const f = cAutoMove(pid); if (!f) cDo(pid, 'end', []); }   // never let a computer jam the game
+    cPush(); return true;
+  }
   function cTick() {
     if (!G || G.phase === 'finished') return;
+    if (botStep(performance.now())) return;
     const t = Date.now();
     for (const id of cWaiting()) {
-      if (id === me() || O.here(id)) { delete C.absent[id]; continue; }
+      if (id === me() || O.here(id) || isBot(id)) { delete C.absent[id]; continue; }
       if (!C.absent[id]) C.absent[id] = t;
       else if (t - C.absent[id] > 6000) { C.absent[id] = t - 3500; cAuto(id); return; }
     }
     // a trade offer nobody in the room can answer
-    if (G.tradeOffer && !G.players.some((p, i) => i !== G.tradeOffer.from && O.here(p.id) && G.tradeOffer.responses[p.id] !== 'decline')) { G.tradeOffer = null; G.x.seq++; cPush(); }
+    if (G.tradeOffer && !G.players.some((p, i) => i !== G.tradeOffer.from && (O.here(p.id) || p.bot) && G.tradeOffer.responses[p.id] !== 'decline')) { G.tradeOffer = null; G.x.seq++; cPush(); }
   }
 
   // ---- everyone: show the state ----
@@ -502,7 +1140,7 @@
     // as big as the space allows, in width and in height, so a wide screen gets a big board
     // and a phone never has to scroll past it
     const box = cv.parentNode, availW = (box && box.clientWidth) || cv.clientWidth || 300;
-    const availH = Math.max(200, window.innerHeight - (window.innerWidth >= 900 ? 170 : 330));
+    const availH = Math.max(200, window.innerHeight - (window.innerWidth >= 900 ? 240 : 400));
     const S = Math.min(availW / bw, availH / bh), wCss = Math.round(S * bw), hCss = Math.round(S * bh);
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     if (cv.width !== Math.round(wCss * dpr) || cv.height !== Math.round(hCss * dpr)) { cv.width = Math.round(wCss * dpr); cv.height = Math.round(hCss * dpr); cv.style.width = wCss + 'px'; cv.style.height = hCss + 'px'; }
@@ -630,16 +1268,24 @@
     const d = C.dom; if (!d || !G) return;
     const g = G, i = cIdx(), mine = cMine(), meP = i >= 0 ? g.players[i] : null, playing = g.phase === 'playing';
     // players
+    // one card per player: their own little character in the middle, what they are holding on either side
     d.players.innerHTML = '';
     g.players.forEach((p, pi) => {
-      const c = el('div', 'ct-p' + (pi === g.currentPlayerIndex && g.phase !== 'finished' ? ' on' : '') + (O.here(p.id) ? '' : ' away'));
-      const dot = el('i', 'ct-dot'); dot.style.background = R.PLAYER_COLORS[pi];
+      const c = el('div', 'ct-p' + (pi === g.currentPlayerIndex && g.phase !== 'finished' ? ' on' : '') + (O.here(p.id) || p.bot ? '' : ' away'));
+      const head = el('div', 'ct-phead'), dot = el('i', 'ct-dot'); dot.style.background = R.PLAYER_COLORS[pi];
       const vp = p.victoryPoints + (pi === i ? (p.hiddenVictoryPoints || 0) : 0);
-      c.append(dot, el('b', '', p.name + (p.id === me() ? ' (나)' : '')), el('span', 'ct-vp', `★${vp}`), el('span', '', `카드 ${cardCount(p)}`), el('span', '', `발전 ${p.developmentCards.length + p.newDevCards.length}`));
-      if (p.knightsPlayed) c.appendChild(el('span', '', `기사 ${p.knightsPlayed}`));
-      if (p.hasLongestRoad) c.appendChild(el('span', 'ct-badge', '최장 도로 +2'));
-      if (p.hasLargestArmy) c.appendChild(el('span', 'ct-badge', '최대 기사단 +2'));
-      if (!O.here(p.id)) c.appendChild(el('span', 'ct-off', '자리 비움'));
+      head.append(dot, el('b', 'ct-pname', p.name + (p.id === me() ? ' (나)' : '')), el('span', 'ct-vp', `★${vp}`));
+      if (p.knightsPlayed) head.appendChild(el('span', 'ct-mini', `🛡${p.knightsPlayed}`));
+      if (p.hasLongestRoad) head.appendChild(el('span', 'ct-badge', '최장 도로 +2'));
+      if (p.hasLargestArmy) head.appendChild(el('span', 'ct-badge', '최대 기사단 +2'));
+      if (p.bot) head.appendChild(el('span', 'ct-mini', '🤖 ' + (BOT_KO[p.level] || '컴퓨터')));
+      else if (!O.here(p.id)) head.appendChild(el('span', 'ct-off', '자리 비움'));
+      const body = el('div', 'ct-pbody'), L = el('div', 'ct-icside'), Rt = el('div', 'ct-icside');
+      const devs = p.developmentCards.length + p.newDevCards.length;
+      L.append(iconEl('lumber', p.resources.lumber), iconEl('grain', p.resources.grain), iconEl('dev', devs, 'dev'));
+      Rt.append(iconEl('brick', p.resources.brick), iconEl('ore', p.resources.ore), iconEl('wool', p.resources.wool));
+      const av = el('div', 'ct-avwrap'); av.appendChild(avatarEl(p.id, p.look));
+      body.append(L, av, Rt); c.append(head, body);
       d.players.appendChild(c);
     });
     cStatus();
@@ -736,7 +1382,7 @@
     cDraw();
   }
   GAMES.catan = {
-    start: cStart, push: cPush, tick: cTick, mount: cMount, update: cUpdate, unmount: cUnmount, keepLeavers: true,
+    start: cStart, push: cPush, tick: cTick, fastTick: botStep, mount: cMount, update: cUpdate, unmount: cUnmount, keepLeavers: true,
     handover() { C.absent = {}; },
     memberLeft(id) { const p = G && G.players.find(x => x.id === id); if (p) cLog(`${p.name}님이 나갔어요. 그 차례는 자동으로 넘어가요.`); },
     memberGone() {},   // stays in the game; cTick plays for them until they come back
@@ -1069,7 +1715,7 @@
   };
   // test hook (only with ?debug in the address)
   if (/[?&]debug\b/.test(location.search)) window.__tg = {
-    T: () => T, G: () => G, C, D, H, createTable, joinTable, startGame, leaveTable, cAct, cAuto, cValid, WORDS,
+    T: () => T, G: () => G, C, D, H, createTable, joinTable, startGame, leaveTable, cAct, cAuto, cValid, WORDS, addBot, setBotLevel, removeBot, botTurn, botStep, chAct, chDo, chResign,
     // a simple robot player for automated tests
     bot() {
       if (!G || !T || T.kind !== 'catan' || G.phase === 'finished' || !cWaiting().includes(me()) || now() - C.busy < 500) return;
