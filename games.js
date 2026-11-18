@@ -1511,6 +1511,8 @@
       const vp = p.victoryPoints + (pi === i ? (p.hiddenVictoryPoints || 0) : 0);
       head.append(dot, el('b', 'ct-pname', p.name + (p.id === me() ? ' (나)' : '')), el('span', 'ct-vp', `★${vp}`));
       if (p.knightsPlayed) head.appendChild(el('span', 'ct-mini', `🛡${p.knightsPlayed}`));
+      // 이어진 길의 길이(최장 도로 기준). 길 개수가 아니라 끊기지 않고 이어진 칸 수예요.
+      if (p.roadLength) head.appendChild(el('span', 'ct-mini' + (p.roadLength >= 5 ? ' hot' : ''), `🛣️${p.roadLength}`));
       if (p.hasLongestRoad) head.appendChild(el('span', 'ct-badge', '최장 도로 +2'));
       if (p.hasLargestArmy) head.appendChild(el('span', 'ct-badge', '최대 기사단 +2'));
       if (p.bot) head.appendChild(el('span', 'ct-mini', '🤖 ' + (BOT_KO[p.level] || '컴퓨터')));
@@ -1670,7 +1672,7 @@
     },
     lobbyExtra(body) {
       const d = el('details', 'tg-help'); d.appendChild(el('summary', '', '카탄이 처음이라면? (30초 규칙)'));
-      ['주사위 숫자와 같은 땅 옆에 내 마을·도시가 있으면 그 자원을 받아요 (도시는 2장).', '자원으로 길 → 마을 → 도시를 짓고, 발전 카드를 사요.', '마을 1점, 도시 2점, 최장 도로(5칸 이상) 2점, 최대 기사단(기사 3장 이상) 2점.', '7이 나오면 카드 8장 이상은 절반을 버리고, 도둑을 옮겨 카드 1장을 뺏어요.', '자원은 은행(4:1), 항구(3:1·2:1), 친구와 자유롭게 바꿀 수 있어요.', '먼저 10점을 만들면 승리!'].forEach(t => d.appendChild(el('p', '', '· ' + t)));
+      ['주사위 숫자와 같은 땅 옆에 내 마을·도시가 있으면 그 자원을 받아요 (도시는 2장).', '자원으로 길 → 마을 → 도시를 짓고, 발전 카드를 사요.', '마을 1점, 도시 2점, 최대 기사단(기사 3장 이상) 2점.', '최장 도로 2점: 🛣️ 숫자는 「끊기지 않고 이어진」 길이에요. 길을 많이 깔아도 따로 떨어져 있으면 세지 않아요. 5칸 이상이면서 가장 길어야 받고, 동점이면 먼저 받은 사람이 계속 가져요. 남의 마을이 길 중간을 막으면 거기서 끊겨요.', '7이 나오면 카드 8장 이상은 절반을 버리고, 도둑을 옮겨 카드 1장을 뺏어요.', '자원은 은행(4:1), 항구(3:1·2:1), 친구와 자유롭게 바꿀 수 있어요.', '먼저 10점을 만들면 승리!'].forEach(t => d.appendChild(el('p', '', '· ' + t)));
       body.appendChild(d);
     }
   };

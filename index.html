@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#2b3047">
 <title>ON-Lounge</title>
+<meta name="description" content="픽셀 캐릭터로 함께 모이는 온라인 라운지">
+<!-- 홈 화면 앱(PWA): 주소창 없이 아이콘으로 바로 실행돼요 -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ON-Lounge">
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
 /* Pixelify Sans는 2와 5가 거의 똑같이 생겨서(둘 다 S처럼 보임) 숫자를 맡기지 않아요.
@@ -47,6 +56,21 @@ h1 { margin: 0; font-family: var(--font-title); font-weight: 700; font-size: 26p
 .live { font-family: var(--font-pixel); font-size: 11px; color: var(--on-bg); display: inline-flex; align-items: center; gap: 6px; }
 .live i { width: 8px; height: 8px; background: #7bd389; display: inline-block; box-shadow: 0 0 0 2px var(--ink); }
 .tabs { display: flex; gap: 6px; }
+/* 📱 앱 설치 버튼 + 기기별 안내창 */
+.inst-btn { background: var(--gold); }
+.inst-ov { position: fixed; inset: 0; z-index: 60; background: rgba(37,28,44,.74); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.inst-card { width: 100%; max-width: 430px; max-height: 86vh; overflow: auto; background: var(--cream); color: var(--text); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 6px 0 var(--ink); padding: 18px; }
+.inst-card h3 { margin: 0; font-size: 19px; }
+.inst-sub { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.inst-steps { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 11px; }
+.inst-steps li { display: flex; gap: 10px; align-items: flex-start; line-height: 1.45; }
+.inst-no { flex: none; width: 23px; height: 23px; margin-top: 1px; border-radius: 999px; background: var(--ink); color: var(--cream); font-size: 13px; font-weight: 700; display: grid; place-items: center; }
+.inst-key { display: inline-block; background: var(--cream-2); border: 2px solid var(--ink); border-radius: 6px; padding: 0 6px; font-weight: 700; white-space: nowrap; }
+.inst-note { margin: 13px 0 0; padding: 9px 11px; background: var(--cream-2); border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.inst-row { display: flex; gap: 8px; margin-top: 16px; }
+.inst-row .btn { flex: 1; }
+.inst-ghost { background: transparent; box-shadow: none; border-color: transparent; color: var(--muted); font-weight: 600; }
+@media (max-width: 899px) { .inst-btn { padding: 6px 9px; } }
 button { font: inherit; color: var(--text); cursor: pointer; }
 .btn { white-space: nowrap; background: var(--cream); border: 2px solid var(--ink); border-radius: 6px; padding: 6px 12px; box-shadow: 0 3px 0 var(--ink); font-weight: 600; transition: transform .06s; }
 .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
@@ -601,6 +625,7 @@ details.paste textarea { margin-block: 6px; }
       <button type="button" class="btn" id="tab-char" data-tab="char" aria-pressed="false">캐릭터</button>
       <button type="button" class="btn" id="tab-chat" data-tab="chat" aria-pressed="false">대화</button>
       <button type="button" class="btn" id="tab-admin" data-tab="admin" aria-pressed="false">관리</button>
+      <button type="button" class="btn inst-btn" id="instBtn" hidden>📱 설치</button>
       <button type="button" class="btn exit-btn" id="exitBtn" aria-label="라운지 종료">종료</button>
     </nav>
   </header>
@@ -813,5 +838,159 @@ details.paste textarea { margin-block: 6px; }
 <script src="wilderness.js"></script>
 <script src="app.js"></script>
 <script src="games.js"></script>
+<script>
+  // 홈 화면 앱 등록. 실패해도 사이트는 평소처럼 동작해요.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
+<script>
+  // 📱 앱 설치 버튼. 기기/브라우저마다 설치 방법이 달라서 각각 맞는 안내를 보여줘요.
+  (function () {
+    var btn = document.getElementById('instBtn');
+    if (!btn) return;
+
+    var ua = navigator.userAgent;
+    var touchMac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1; // 아이패드
+    var isIOS = /iPad|iPhone|iPod/.test(ua) || touchMac;
+    var isMac = /Macintosh/.test(ua) && !touchMac;
+    var isAndroid = /Android/.test(ua);
+    var isSamsung = /SamsungBrowser/.test(ua);
+    var isFirefox = /Firefox|FxiOS/.test(ua);
+    var isEdge = /Edg\//.test(ua);
+    var isChromium = /Chrome|CriOS|Chromium/.test(ua) || isEdge || isSamsung;
+    var isSafari = !isChromium && !isFirefox && /Safari/.test(ua);
+
+    // 이미 앱으로 실행 중이면 버튼이 필요 없어요.
+    var installed = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    if (installed) return;
+
+    var OFF = 'onl_install_hide';
+    try { if (localStorage.getItem(OFF) === '1') return; } catch (e) {}
+
+    var deferred = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault(); deferred = e; reveal();
+    });
+    window.addEventListener('appinstalled', function () {
+      btn.hidden = true; close();
+      try { localStorage.setItem(OFF, '1'); } catch (e) {}
+    });
+
+    // 로그인/캐릭터 만들기 화면이 떠 있는 동안에는 버튼을 숨겨요. 그 화면이 헤더를 덮거든요.
+    var ready = false;
+    function busy() {
+      var ids = ['join', 'creator'];
+      for (var i = 0; i < ids.length; i++) {
+        var el = document.getElementById(ids[i]);
+        if (el && !el.hidden) return true;
+      }
+      return false;
+    }
+    function reveal() { if (ready && !busy()) btn.hidden = false; else btn.hidden = true; }
+
+    // 자동 설치가 안 되는 브라우저(사파리 등)에서도 안내는 볼 수 있게 조금 뒤부터 띄워요.
+    setTimeout(function () { ready = true; reveal(); }, 2500);
+
+    if (window.MutationObserver) {
+      var mo = new MutationObserver(reveal);
+      ['join', 'creator'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) mo.observe(el, { attributes: true, attributeFilter: ['hidden'] });
+      });
+    }
+
+    var ov = null;
+    function close() { if (ov) { ov.remove(); ov = null; } }
+
+    function guide() {
+      if (isIOS && !isSafari) return {
+        t: '사파리로 열어 주세요',
+        s: '아이폰·아이패드는 사파리에서만 확실하게 설치돼요.',
+        steps: ['주소를 복사해요', '<b>사파리</b>를 열고 주소를 붙여넣어 접속해요', '다시 <span class="inst-key">📱 설치</span> 버튼을 눌러 주세요']
+      };
+      if (isIOS) return {
+        t: '아이폰 홈 화면에 추가하기',
+        s: '2~3초면 끝나요.',
+        steps: ['화면 아래쪽 <span class="inst-key">공유 ⬆️</span> 버튼을 눌러요', '메뉴를 내려서 <span class="inst-key">홈 화면에 추가</span>를 눌러요', '오른쪽 위 <span class="inst-key">추가</span>를 누르면 끝!'],
+        note: '설치 후 앱에서 <b>로그인을 한 번만</b> 다시 해주세요. 사파리와 저장 공간이 분리돼 있어서예요.'
+      };
+      if (isMac && isSafari) return {
+        t: '맥북 독에 추가하기',
+        s: '맥OS 소노마(14) 이상에서 돼요.',
+        steps: ['주소창 오른쪽 <span class="inst-key">공유 ⬆️</span> 버튼을 눌러요', '<span class="inst-key">독에 추가</span>를 눌러요', '<span class="inst-key">추가</span>를 누르면 끝!'],
+        note: '맥OS가 소노마보다 낮으면 <b>크롬</b>이나 <b>엣지</b>로 접속해서 설치해 주세요.'
+      };
+      if (isFirefox) return {
+        t: '크롬이나 엣지를 써주세요',
+        s: '파이어폭스는 앱 설치 기능이 없어요.',
+        steps: ['주소를 복사해요', '<b>크롬</b>이나 <b>엣지</b>로 접속해요', '다시 <span class="inst-key">📱 설치</span> 버튼을 눌러 주세요'],
+        note: '설치를 안 해도 지금처럼 웹에서 그대로 쓸 수 있어요.'
+      };
+      if (isSamsung) return {
+        t: '갤럭시 홈 화면에 추가하기',
+        s: '삼성 인터넷 브라우저 기준이에요.',
+        steps: ['아래쪽 <span class="inst-key">☰ 메뉴</span>를 눌러요', '<span class="inst-key">현재 페이지 추가</span>를 눌러요', '<span class="inst-key">홈 화면</span>을 고르면 끝!'],
+        note: '크롬으로 접속하면 설치 버튼 한 번으로 더 간단해요.'
+      };
+      if (isAndroid) return {
+        t: '갤럭시·안드로이드에 설치하기',
+        s: '크롬 기준이에요.',
+        steps: ['오른쪽 위 <span class="inst-key">⋮</span>를 눌러요', '<span class="inst-key">앱 설치</span> 또는 <span class="inst-key">홈 화면에 추가</span>를 눌러요', '<span class="inst-key">설치</span>를 누르면 끝!']
+      };
+      return {
+        t: '노트북에 설치하기',
+        s: '크롬·엣지 기준이에요.',
+        steps: ['주소창 오른쪽 끝의 <span class="inst-key">⊕ 설치</span> 아이콘을 눌러요', '없으면 오른쪽 위 <span class="inst-key">⋮</span> → <span class="inst-key">앱</span> → <span class="inst-key">이 사이트를 앱으로 설치</span>', '<span class="inst-key">설치</span>를 누르면 끝!'],
+        note: '설치하면 주소창 없는 <b>독립 창</b>으로 열리고, 작업표시줄·독에 아이콘이 생겨요.'
+      };
+    }
+
+    function openGuide() {
+      close();
+      var g = guide();
+      ov = document.createElement('div');
+      ov.className = 'inst-ov';
+      var lis = g.steps.map(function (x, i) {
+        return '<li><span class="inst-no">' + (i + 1) + '</span><span>' + x + '</span></li>';
+      }).join('');
+      ov.innerHTML =
+        '<div class="inst-card" role="dialog" aria-modal="true" aria-label="앱 설치 안내">' +
+          '<h3>📱 ' + g.t + '</h3>' +
+          '<p class="inst-sub">' + g.s + '</p>' +
+          '<ol class="inst-steps">' + lis + '</ol>' +
+          (g.note ? '<p class="inst-note">' + g.note + '</p>' : '') +
+          '<div class="inst-row">' +
+            '<button type="button" class="btn" data-x="ok">알겠어요</button>' +
+            '<button type="button" class="btn inst-ghost" data-x="never">다시 안 볼래요</button>' +
+          '</div>' +
+        '</div>';
+      ov.addEventListener('click', function (e) {
+        var x = e.target.getAttribute && e.target.getAttribute('data-x');
+        if (e.target === ov || x === 'ok') return close();
+        if (x === 'never') {
+          try { localStorage.setItem(OFF, '1'); } catch (err) {}
+          btn.hidden = true; close();
+        }
+      });
+      document.body.appendChild(ov);
+    }
+
+    btn.addEventListener('click', function () {
+      if (deferred) {
+        var d = deferred; deferred = null;
+        d.prompt();
+        d.userChoice.then(function (r) {
+          if (r && r.outcome === 'accepted') btn.hidden = true;
+          else deferred = d;           // 취소했으면 다음에 다시 시도할 수 있게
+        }).catch(function () { deferred = d; });
+        return;
+      }
+      openGuide();
+    });
+
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  })();
+</script>
 </body>
 </html>
