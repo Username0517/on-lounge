@@ -7,7 +7,9 @@
 <title>ON-Lounge</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-@font-face { font-family: "Pixelify Sans"; font-weight: 700; font-display: swap; src: url("pixelify-sans-latin-700-normal.woff2") format("woff2"); }
+/* Pixelify Sans는 2와 5가 거의 똑같이 생겨서(둘 다 S처럼 보임) 숫자를 맡기지 않아요.
+   0-9(U+30~U+39)를 빼두면 숫자는 자동으로 다음 글꼴인 Silkscreen이 그립니다. */
+@font-face { font-family: "Pixelify Sans"; font-weight: 700; font-display: swap; src: url("pixelify-sans-latin-700-normal.woff2") format("woff2"); unicode-range: U+0-2F, U+3A-10FFFF; }
 @font-face { font-family: "Silkscreen"; font-weight: 400; font-display: swap; src: url("silkscreen-latin-400-normal.woff2") format("woff2"); }
 
 /* Layout: phone = room on top, controls, optional bottom sheet that shrinks the room (never covers it).
@@ -194,6 +196,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .ct-phead { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .ct-pname { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ct-mini { font-size: 10px; color: var(--muted); }
+.ct-mini.hot { color: #cf2f24; font-weight: 700; }
 /* the player's own character with what they hold on either side */
 .ct-pbody { display: flex; align-items: center; gap: 4px; }
 .ct-icside { display: flex; flex-direction: column; gap: 2px; }

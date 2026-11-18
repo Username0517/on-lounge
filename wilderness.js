@@ -307,13 +307,13 @@ window.ONL_WILD = (function () {
       const x = 6 + i * 11, on = i < hearts, c = on ? '#e0514a' : 'rgba(0,0,0,.25)';
       P(g, x + 1, 7, 2, 1, c); P(g, x + 4, 7, 2, 1, c); P(g, x, 8, 7, 2, c); P(g, x + 1, 10, 5, 1, c); P(g, x + 2, 11, 3, 1, c); P(g, x + 3, 12, 1, 1, c);
     }
-    g.font = '700 13px "Pixelify Sans", monospace'; g.textAlign = 'right'; g.textBaseline = 'top';
+    g.font = '700 13px "Pixelify Sans", "Silkscreen", monospace'; g.textAlign = 'right'; g.textBaseline = 'top';
     g.fillStyle = 'rgba(37,28,44,.75)'; g.fillRect(W - 74, 4, 70, 32);
     g.fillStyle = '#fff8ea'; g.fillText(highest + ' m', W - 8, 7);
-    g.font = '600 10px "Pixelify Sans", monospace'; g.fillStyle = '#e8d9b8';
+    g.font = '600 10px "Pixelify Sans", "Silkscreen", monospace'; g.fillStyle = '#e8d9b8';
     g.fillText('최고 ' + Math.max(myBest, highest) + ' m', W - 8, 22);
     if (now - msgAt < 3200) {
-      g.textAlign = 'center'; g.font = '700 11px "Pixelify Sans", monospace';
+      g.textAlign = 'center'; g.font = '700 11px "Pixelify Sans", "Silkscreen", monospace';
       const a = clamp((3200 - (now - msgAt)) / 600, 0, 1);
       g.globalAlpha = a; g.fillStyle = 'rgba(37,28,44,.72)'; g.fillRect(20, H - 34, W - 40, 18);
       g.fillStyle = '#fff8ea'; g.fillText(msg, W / 2, H - 30); g.globalAlpha = 1;
@@ -321,8 +321,8 @@ window.ONL_WILD = (function () {
     if (overAt) {
       g.fillStyle = 'rgba(20,16,28,.72)'; g.fillRect(0, 0, W, H);
       g.textAlign = 'center'; g.fillStyle = '#fff8ea';
-      g.font = '800 20px "Pixelify Sans", monospace'; g.fillText(highest + ' m', W / 2, H / 2 - 40);
-      g.font = '700 12px "Pixelify Sans", monospace';
+      g.font = '800 20px "Pixelify Sans", "Silkscreen", monospace'; g.fillText(highest + ' m', W / 2, H / 2 - 40);
+      g.font = '700 12px "Pixelify Sans", "Silkscreen", monospace';
       g.fillText('광야의 길이 여기서 멈췄어요', W / 2, H / 2 - 12);
       g.fillText(saving ? '기록을 남기는 중…' : (highest >= myBest ? '내 최고 기록이에요!' : '내 최고 ' + myBest + ' m'), W / 2, H / 2 + 6);
     }
