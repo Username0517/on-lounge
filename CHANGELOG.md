@@ -1,5 +1,16 @@
 # Changelog
 
+## Sound warnings, dress-shoe steps, story music and "…" bubbles
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `mansion.js`. No SQL.
+
+- The plaza's forest exit opens `openForestWarn()` first (sound warning, solo path) instead of walking straight in. The mansion door's story buttons show a horror/jump-scare/sound warning before `openStory()`.
+- Rain is about half as loud. Footsteps (lounge `footstep()` and story `SFX.step`) are a heel click plus a sole slap 75 ms later, one step per 380 ms. The safe dial uses a separate `tick` sound.
+- `mansion.js` `bgm()`: a drone (55 Hz with a tritone), filtered wind, and a detuned music box every 6–15 s. It starts with the story, stops on close or when sound is turned off, and drops to a quarter of its volume while `chaseMusic` plays.
+- Story mode draws a "…" bubble over every object with a `use` (door bars only on the cell doors) and every NPC who is not following you, within 78px. The one you are facing turns yellow. Bubbles are drawn under the darkness, so unlit rooms still hide them.
+
 ## Rain, footsteps, walking the forest alone
 
 Audience: the developer and the developer's AI agent.

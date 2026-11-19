@@ -1223,6 +1223,7 @@
     if (sp.id === 'toHall') return () => goScene(HALL_OF[sceneId] || 'hall', sceneId);
     if (sp.id === 'toSanctuary') return () => goScene('sanctuary', 'door');
     if (sp.room) return () => goScene(sp.room, 'door');
+    if (sp.id === 'toForest' && sceneId === 'plaza') return () => openForestWarn();
     if (sp.go) return () => goScene(sp.go[0], sp.go[1]);
     if (sp.locked) return () => toast(pick(LOCKED_MSG));
     const RUN = {
@@ -2590,16 +2591,19 @@
   function thunder(a, t, near) {
     const src = a.createBufferSource(); src.buffer = rainBuf || noiseBuf; src.loop = true;
     const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(near ? 900 : 380, t); lp.frequency.exponentialRampToValueAtTime(110, t + 2.4);
-    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(near ? 0.9 : 0.45, t + (near ? 0.05 : 0.35)); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(near ? 0.6 : 0.3, t + (near ? 0.05 : 0.35)); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
     src.connect(lp); lp.connect(g); g.connect(a.__out); src.start(t, Math.random()); src.stop(t + 3.3);
     if (near) noise(a, t, 0.35, 0.25, 'bandpass', 1400, 0.8);
   }
+  // a dress shoe on stone: 또 (the heel strikes, a hard bright click with a short ring) … 각 (the sole slaps down)
   function footstep(a, vol, alt, wet) {
-    const t = a.currentTime + 0.01, k = alt ? 1.07 : 0.94;
-    tone(a, t, 1250 * k, 0.05, 'triangle', 0.16 * vol, { slide: 480 * k, lp: 3400 });   // 또
-    tone(a, t + 0.012, 260 * k, 0.07, 'sine', 0.2 * vol, { slide: 140 });             // …각 (the body of the heel)
-    noise(a, t, 0.03, 0.12 * vol, 'bandpass', 2600 * k, 2.5);
-    if (wet) noise(a, t + 0.02, 0.09, 0.05 * vol, 'highpass', 2800);                    // a little splash
+    const t = a.currentTime + 0.01, k = alt ? 1.04 : 0.96;
+    noise(a, t, 0.018, 0.3 * vol, 'bandpass', 3600 * k, 4);
+    tone(a, t, 2300 * k, 0.04, 'sine', 0.07 * vol, { slide: 1900 * k });
+    tone(a, t, 560 * k, 0.05, 'triangle', 0.14 * vol, { slide: 320 * k });
+    noise(a, t + 0.075, 0.022, 0.13 * vol, 'bandpass', 2500 * k, 3);
+    tone(a, t + 0.075, 400 * k, 0.035, 'triangle', 0.06 * vol, { slide: 270 * k });
+    if (wet) noise(a, t + 0.08, 0.07, 0.025 * vol, 'highpass', 3000);
   }
   function drawRain(b, now) {
     const lv = sceneId === 'forest1' ? 0.45 + 0.45 * clamp(1 - player.y / FOREST1_H, 0, 1) : 1;
@@ -2624,14 +2628,14 @@
     if (!lv && !rain) return;
     const a = ac(); if (!a) return;
     const r = rainBed(a), t = a.currentTime;
-    r.g.gain.setTargetAtTime(Math.max(0.0001, lv * 0.32), t, 0.6);
-    r.gl.gain.setTargetAtTime(Math.max(0.0001, lv * 0.35), t, 0.6);
+    r.g.gain.setTargetAtTime(Math.max(0.0001, lv * 0.15), t, 0.6);
+    r.gl.gain.setTargetAtTime(Math.max(0.0001, lv * 0.17), t, 0.6);
     r.lp.frequency.setTargetAtTime(lv < 0.4 ? 2200 : 6500, t, 0.5);   // muffled when you are indoors
     if (!lv) return;
     // drops tapping on leaves and puddles
-    if (Math.random() < 0.35 * lv) noise(a, t + Math.random() * 0.05, 0.012 + Math.random() * 0.02, (0.02 + Math.random() * 0.05) * lv, 'bandpass', 1800 + Math.random() * 4500, 6);
+    if (Math.random() < 0.3 * lv) noise(a, t + Math.random() * 0.05, 0.012 + Math.random() * 0.02, (0.012 + Math.random() * 0.03) * lv, 'bandpass', 1800 + Math.random() * 4500, 6);
     // thunder: right after the mansion's lightning, or now and then far away in the deep forest
-    if (sceneId === 'mansion' && mnFlashAt && mnFlashAt !== lastFlash) { lastFlash = mnFlashAt; thunder(a, t + 0.5 + Math.random() * 0.6, Math.random() < 0.5); }
+    if (sceneId === 'mansion' && mnFlashAt && mnFlashAt !== lastFlash) { lastFlash = mnFlashAt; thunder(a, t + 0.5 + Math.random() * 0.6, Math.random() < 0.4); }
     if (sceneId === 'forest2') { if (!f2Thunder) f2Thunder = now + 9000 + Math.random() * 12000; if (now > f2Thunder) { f2Thunder = now + 22000 + Math.random() * 20000; thunder(a, t, false); } }
     // footsteps: mine always, other people's (mansion yard) quieter with distance
     if (window.ONL_MANSION && ONL_MANSION.isOpen() || document.querySelector('.hn-wrap')) return;
@@ -2639,7 +2643,7 @@
       if (!c.moving || c.seat) continue;
       const dist = c.isPlayer ? 0 : Math.hypot(c.x - player.x, c.y - player.y); if (dist > 150) continue;
       const last = stepTick.get(c) || { at: 0, alt: false };
-      if (now - last.at < 290) continue;
+      if (now - last.at < 380) continue;
       last.at = now; last.alt = !last.alt; stepTick.set(c, last);
       footstep(a, c.isPlayer ? 1 : 0.55 * (1 - dist / 150), last.alt, sceneId !== 'mansion' || c.y > 200);
     }
@@ -4189,6 +4193,19 @@
     $('modal').hidden = false;
   }
   // ---- 숲속 저택 정문 ----
+  function openForestWarn() {
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🌲 검은 숲길 입구';
+    body.appendChild(el('p', 'moses-line', '숲 쪽에서 축축한 바람이 불어와요. 하늘이 금방이라도 비를 쏟을 것 같아요.'));
+    const ul = el('div', 'small'); ul.style.cssText = 'text-align:left;line-height:1.7;margin:8px 0';
+    ul.innerHTML = '🔊 <b>이 앞부터는 소리가 나와요.</b> 빗소리·천둥·발소리 같은 효과음이 갑자기 들릴 수 있어요. 이어폰을 꼈다면 소리 크기를 먼저 확인해 주세요. (화면 아래 🔊 버튼으로 끌 수 있어요)<br>🚶 숲길은 <b>혼자 걷는 길</b>이에요. 함께 온 사람들은 보이지 않고 대화도 안 돼요. 숲 끝 저택에서 다시 만나요.<br>👻 무서운 분위기의 장소예요.';
+    body.appendChild(ul);
+    const col = el('div', 'mn-choices'); body.appendChild(col);
+    const btn = (text, cls, fn) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; b.addEventListener('click', fn); col.appendChild(b); return b; };
+    btn('🌲 숲으로 들어가기', 'btn-gold', () => { closeModal(); ac(); goScene('forest1', 'plaza'); });
+    btn('돌아서기', '', () => closeModal());
+    $('modal').hidden = false;
+  }
   function openMansionDoor() {
     const M = window.ONL_MANSION;
     const body = $('modalBody'); body.innerHTML = '';
@@ -4196,16 +4213,26 @@
     body.appendChild(el('p', 'moses-line', '삐걱… 문틈으로 차가운 바람이 새어 나와요. 안쪽 어딘가에서 무언가 끌리는 소리가 들린 것 같아요.'));
     const col = el('div', 'mn-choices'); body.appendChild(col);
     const btn = (text, cls, fn) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; b.addEventListener('click', fn); col.appendChild(b); return b; };
+    const onQuit = () => { if (sceneId === 'mansion') toast('저택 밖으로 나왔어요'); };
+    // a warning first: jump scares, chases, sound
+    const warnThen = go => {
+      body.innerHTML = ''; $('modalTitle').textContent = '⚠️ 들어가기 전에';
+      const w = el('div', 'small'); w.style.cssText = 'text-align:left;line-height:1.75;margin:4px 0 10px';
+      w.innerHTML = '이야기 모드는 <b>공포 게임</b>이에요.<br>👹 괴물이 <b>갑자기 튀어나오고</b> 쫓아오는 장면이 있어요.<br>🔊 갑자기 큰 소리(비명·쾅 소리)와 음산한 배경음악이 나와요. 소리 크기를 확인해 주세요.<br>🩸 어둡고 빨간 화면 연출이 있어요.<br>무서운 걸 잘 못 본다면 친구들과 함께하는 술래잡기를 추천해요. 언제든 오른쪽 위 「나가기」 버튼으로 나올 수 있어요.';
+      body.appendChild(w);
+      const c2 = el('div', 'mn-choices'); body.appendChild(c2);
+      const b1 = el('button', 'btn btn-gold', '알겠어요, 들어갈게요'); b1.type = 'button'; b1.addEventListener('click', () => { closeModal(); go(); }); c2.appendChild(b1);
+      const b2 = el('button', 'btn', '그만둘래요'); b2.type = 'button'; b2.addEventListener('click', () => closeModal()); c2.appendChild(b2);
+    };
     const story = () => {
       if (!M) { toast('저택을 불러오지 못했어요. 새로고침해 주세요.'); return; }
-      closeModal();
       log('', '🕯️ 혼자 저택 안으로 들어갑니다…', 'sys game');
-      M.openStory({ onQuit: () => { if (sceneId === 'mansion') toast('저택 밖으로 나왔어요'); } });
+      M.openStory({ onQuit });
     };
     if (M && M.hasSave()) {
-      btn('🕯️ 이야기 이어하기', 'btn-gold', () => { closeModal(); M.openStory({ resume: true, onQuit: () => { if (sceneId === 'mansion') toast('저택 밖으로 나왔어요'); } }); });
-      btn('🕯️ 이야기 처음부터', '', () => { if (M) M.clearSave(); story(); });
-    } else btn('🕯️ 혼자 들어가기 · 이야기 모드', 'btn-gold', story);
+      btn('🕯️ 이야기 이어하기', 'btn-gold', () => warnThen(() => M.openStory({ resume: true, onQuit })));
+      btn('🕯️ 이야기 처음부터', '', () => warnThen(() => { M.clearSave(); story(); }));
+    } else btn('🕯️ 혼자 들어가기 · 이야기 모드', 'btn-gold', () => warnThen(story));
     btn('👥 다 함께 술래잡기 · 3~6명', '', () => { closeModal(); tgOpen('hunt'); });
     btn('돌아서기', '', () => { closeModal(); toast(pick(['등 뒤에서 문이 천천히 닫혀요…', '창문 너머로 무언가 움직인 것 같아요.', '오늘은 그냥 돌아가기로 했어요.'])); });
     body.appendChild(el('p', 'small', '이야기 모드는 혼자 하는 공포 탈출 게임이에요 (진행은 이 기기에 저장돼요). 술래잡기는 괴물과 생존자로 나뉘어 함께 해요. 소리를 켜면 더 무서워요!'));
@@ -4240,6 +4267,6 @@
     bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
   };
   if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('700 20px "Pixelify Sans"'), document.fonts.load('400 20px "Silkscreen"')]).then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, openForestWarn, openMansionDoor, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();

@@ -98,7 +98,9 @@ window.ONL_MANSION = (function () {
     src.connect(f); f.connect(gn); gn.connect(AU.master); src.start(t0); src.stop(t0 + dur + 0.05);
   }
   const SFX = {
-    step: () => noise(0.05, 0.05, 300, 2),
+    // a dress shoe on old floorboards: 또 (heel) … 각 (sole)
+    step: () => { const k = (AU.alt = !AU.alt) ? 1.04 : 0.96; noise(0.02, 0.3, 3300 * k, 4); tone(2100 * k, 0.04, 'sine', 0.08, 1750 * k); tone(480 * k, 0.06, 'triangle', 0.2, 260 * k); noise(0.025, 0.14, 2300 * k, 3, 0.075); tone(360 * k, 0.04, 'triangle', 0.08, 240 * k, 0.075); },
+    tick: () => { noise(0.012, 0.2, 4200, 5); tone(1800, 0.02, 'square', 0.03); },
     door: () => { noise(0.35, 0.12, 500, 3); tone(180, 0.35, 'sawtooth', 0.03, 120); },
     creak: () => { tone(320, 0.6, 'sawtooth', 0.025, 210); tone(410, 0.5, 'triangle', 0.02, 260, 0.1); },
     locked: () => { noise(0.08, 0.15, 1800, 4); noise(0.08, 0.12, 1500, 4, 0.1); },
@@ -121,7 +123,7 @@ window.ONL_MANSION = (function () {
   // the chase: a low drone with a pulse that speeds up when it is close
   function chaseMusic(on) {
     const c = on ? ac() : AU.ctx;
-    if (!on) { if (AU.chase) { try { AU.chase.g.gain.setTargetAtTime(0.0001, AU.ctx.currentTime, 0.3); const ch = AU.chase; setTimeout(() => { try { ch.o1.stop(); ch.o2.stop(); } catch (e) {} }, 1500); } catch (e) {} AU.chase = null; } return; }
+    if (!on) { if (AU.bgm && AU.ctx) AU.bgm.g.gain.setTargetAtTime(0.16, AU.ctx.currentTime, 1.5); if (AU.chase) { try { AU.chase.g.gain.setTargetAtTime(0.0001, AU.ctx.currentTime, 0.3); const ch = AU.chase; setTimeout(() => { try { ch.o1.stop(); ch.o2.stop(); } catch (e) {} }, 1500); } catch (e) {} AU.chase = null; } return; }
     if (!c || AU.chase) return;
     const g = c.createGain(); g.gain.value = 0.0001; g.connect(AU.master);
     const o1 = c.createOscillator(), o2 = c.createOscillator(); o1.type = 'sawtooth'; o2.type = 'sawtooth'; o1.frequency.value = 55; o2.frequency.value = 58.3;
@@ -129,10 +131,58 @@ window.ONL_MANSION = (function () {
     o1.connect(f); o2.connect(f); f.connect(g); o1.start(); o2.start();
     g.gain.setTargetAtTime(0.09, c.currentTime, 0.4);
     AU.chase = { g, o1, o2 };
+    if (AU.bgm) AU.bgm.g.gain.setTargetAtTime(0.04, c.currentTime, 0.4);
+  }
+  // the house itself: a low uneasy drone, wind through the cracks, and a broken music box now and then.
+  // It sinks under the chase music while something is after you.
+  function bgm(on) {
+    if (!on) {
+      if (AU.bgm) { const b = AU.bgm; AU.bgm = null; clearTimeout(b.timer); try { b.g.gain.setTargetAtTime(0.0001, AU.ctx.currentTime, 0.5); } catch (e) {} setTimeout(() => { for (const n of b.nodes) try { n.stop(); } catch (e) {} }, 2500); }
+      return;
+    }
+    const c = ac(); if (!c || AU.bgm) return;
+    const g = c.createGain(); g.gain.value = 0.0001; g.connect(AU.master);
+    const nodes = [], t = c.currentTime;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.connect(g);
+    for (const [f, ty, v] of [[55, 'triangle', 0.32], [55.4, 'sine', 0.22], [77.8, 'sine', 0.12], [110.6, 'triangle', 0.05]]) {   // A and a sour tritone
+      const o = c.createOscillator(), og = c.createGain(); o.type = ty; o.frequency.value = f; og.gain.value = v;
+      const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = 0.05 + Math.random() * 0.08; lg.gain.value = v * 0.6; lfo.connect(lg); lg.connect(og.gain);
+      o.connect(og); og.connect(lp); o.start(t); lfo.start(t); nodes.push(o, lfo);
+    }
+    // wind
+    const len = c.sampleRate * 4, buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0); let br = 0;
+    for (let i = 0; i < len; i++) { br = (br + (Math.random() * 2 - 1) * 0.02) * 0.998; d[i] = br * 6; }
+    const ws = c.createBufferSource(); ws.buffer = buf; ws.loop = true;
+    const wf = c.createBiquadFilter(); wf.type = 'bandpass'; wf.frequency.value = 500; wf.Q.value = 0.8;
+    const wl = c.createOscillator(), wlg = c.createGain(); wl.frequency.value = 0.07; wlg.gain.value = 260; wl.connect(wlg); wlg.connect(wf.frequency);
+    const wg = c.createGain(); wg.gain.value = 0.5; ws.connect(wf); wf.connect(wg); wg.connect(g); ws.start(t); wl.start(t); nodes.push(ws, wl);
+    g.gain.setTargetAtTime(0.16, t, 2.5);
+    const B = AU.bgm = { g, nodes, timer: 0 };
+    // the music box: a few slow notes from a minor scale with a flat second, slightly out of tune, with an echo
+    const SC = [880, 932.3, 1046.5, 1174.7, 1244.5, 1396.9, 1318.5, 1760];
+    const box = () => {
+      if (AU.bgm !== B) return;
+      const cc = AU.ctx; if (cc && !AU.chase) {
+        const n = 2 + Math.floor(Math.random() * 3); let at = cc.currentTime + 0.05;
+        for (let i = 0; i < n; i++) {
+          const f = SC[Math.floor(Math.random() * SC.length)] * (1 + (Math.random() - 0.5) * 0.012);
+          for (const [dl, vv] of [[0, 0.05], [0.33, 0.02], [0.66, 0.008]]) {
+            const o = cc.createOscillator(), og = cc.createGain(); o.type = 'sine'; o.frequency.value = f;
+            og.gain.setValueAtTime(0.0001, at + dl); og.gain.exponentialRampToValueAtTime(vv, at + dl + 0.005); og.gain.exponentialRampToValueAtTime(0.0001, at + dl + 1.8);
+            o.connect(og); og.connect(AU.master); o.start(at + dl); o.stop(at + dl + 1.9);
+          }
+          at += 0.45 + Math.random() * 0.5;
+        }
+        if (Math.random() < 0.18) tone(41, 1.6, 'sine', 0.12, 36, 0.3);   // a deep thud somewhere upstairs
+      }
+      B.timer = setTimeout(box, 6000 + Math.random() * 9000);
+    };
+    B.timer = setTimeout(box, 3500);
   }
   function setSound(on) {
     AU.on = on; try { localStorage.setItem('onl_mn_sound', on ? '1' : '0'); } catch (e) {}
-    if (!on) { chaseMusic(false); if (AU.ctx) AU.ctx.suspend().catch(() => {}); }
+    if (!on) { chaseMusic(false); bgm(false); if (AU.ctx) AU.ctx.suspend().catch(() => {}); }
+    else if (open_) setTimeout(() => bgm(true), 50);
     else ac();
   }
 
@@ -732,7 +782,7 @@ window.ONL_MANSION = (function () {
       if (blockedAt(nx, ny)) { if (b.door && t - bumpAt > 900) { bumpAt = t; tryDoorLetter(b.door); } pl.moving = false; return; }
     }
     pl.x = nx; pl.y = ny;
-    if (t - stepAt > 300) { stepAt = t; sfx('step'); }
+    if (t - stepAt > 380) { stepAt = t; sfx('step'); }
     pl.trail.unshift([pl.x, pl.y, pl.dir]); if (pl.trail.length > 90) pl.trail.length = 90;
     // walked into a doorway?
     const tx = Math.floor(pl.x / TS), ty = Math.floor((pl.y - 3) / TS), ch = tileAt(room, tx, ty);
@@ -913,6 +963,7 @@ window.ONL_MANSION = (function () {
         drawMon(g, mon.kind, mon.x, mon.y, mon.dir, t, { alpha: a, moving: mon.moving, rage: !mon.gone && Math.hypot(mon.x - pl.x, mon.y - pl.y) < 50 });
       }
     }
+    if (!pl.hidden && !dlg.on) drawBubbles(t);
     // the dark, with your torch and any candles
     g.setTransform(1, 0, 0, 1, 0, 0);
     const lit = has('flashlight');
@@ -927,6 +978,34 @@ window.ONL_MANSION = (function () {
     if (pl.hidden) { g.fillStyle = 'rgba(0,0,0,.72)'; g.fillRect(0, 0, VW, VH); g.fillStyle = 'rgba(0,0,0,.9)'; g.fillRect(0, 0, VW, 40); g.fillRect(0, VH - 40, VW, 40); g.fillStyle = 'rgba(255,240,200,.12)'; g.fillRect(VW / 2 - 1, 40, 2, VH - 80); }
     if (fadeA > 0) { g.fillStyle = `rgba(0,0,0,${fadeA})`; g.fillRect(0, 0, VW, VH); }
     shake = Math.max(0, shake - 0.6); redFlash = Math.max(0, redFlash - 0.01);
+  }
+  // "…" bubbles over everything you can look at, like in the lounge; the one you are facing turns yellow
+  function facingTarget() {
+    const [fx, fy] = facingPoint();
+    for (const [name, n] of Object.entries(ST.npc)) if (n.room === roomId && !n.gone && Math.hypot(n.x - fx, n.y - 4 - fy) < 13) return n;
+    for (const o of objs) {
+      if (!o.use) continue;
+      const r = objRect(o), d = T[o.t];
+      const rr = d.wall ? { x: r.x, y: r.y, w: r.w, h: r.h + 6 } : { x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 };
+      if (fx >= rr.x && fx <= rr.x + rr.w && fy >= rr.y && fy <= rr.y + rr.h) return o;
+    }
+    return null;
+  }
+  function bubble(x, y, hot, t) {
+    x = Math.round(x); y = Math.round(y - 9 + (Math.floor(t / 400) % 2));
+    const fill = hot ? '#ffd23f' : '#f4efe4';
+    P(g, x - 5, y, 11, 7, '#1a1420'); P(g, x - 4, y + 1, 9, 5, fill); P(g, x - 1, y + 7, 2, 1, '#1a1420'); P(g, x - 1, y + 6, 2, 1, fill);
+    for (const k of [-2, 0, 2]) P(g, x + k, y + 3, 1, 1, '#2a2230');
+  }
+  function drawBubbles(t) {
+    const hot = facingTarget(), R = 78;
+    for (const o of objs) {
+      if (!o.use || (o.t === 'bars' && !o.door)) continue;
+      const r = objRect(o), cx = r.x + r.w / 2;
+      if (Math.hypot(cx - pl.x, r.y + r.h / 2 - pl.y) > R) continue;
+      bubble(cx, r.y, o === hot, t);
+    }
+    for (const n of Object.values(ST.npc)) if (n.room === roomId && !n.gone && !n.follow && Math.hypot(n.x - pl.x, n.y - pl.y) < R) bubble(n.x, n.y - 22, n === hot, t);
   }
   function frame(t) {
     raf = requestAnimationFrame(frame);
@@ -1040,8 +1119,8 @@ window.ONL_MANSION = (function () {
       v.forEach((_, i) => {
         const col = el('div', 'hr-dialcol');
         const up = el('button', 'btn', '▲'), num = el('b', 'hr-num', '0'), dn = el('button', 'btn', '▼'); up.type = dn.type = 'button';
-        up.addEventListener('click', () => { v[i] = (v[i] + 1) % 10; num.textContent = v[i]; sfx('step'); });
-        dn.addEventListener('click', () => { v[i] = (v[i] + 9) % 10; num.textContent = v[i]; sfx('step'); });
+        up.addEventListener('click', () => { v[i] = (v[i] + 1) % 10; num.textContent = v[i]; sfx('tick'); });
+        dn.addEventListener('click', () => { v[i] = (v[i] + 9) % 10; num.textContent = v[i]; sfx('tick'); });
         col.append(up, num, dn); row.appendChild(col);
       });
       const r2 = el('div', 'hr-row');
@@ -1461,6 +1540,7 @@ window.ONL_MANSION = (function () {
     window.addEventListener('keydown', onKey, true); window.addEventListener('keyup', onKey, true); window.addEventListener('resize', fit);
     cancelAnimationFrame(raf); lastT = now(); raf = requestAnimationFrame(frame);
     requestAnimationFrame(fit); setTimeout(fit, 120);
+    bgm(true);
     if (!ST.F.intro) intro();
     else note(`${ROOMS[ST.room].name} · 이어서 시작해요`);
   }
@@ -1468,7 +1548,7 @@ window.ONL_MANSION = (function () {
     if (!open_) return;
     if (ST && !ST.ended && !(mon && !mon.gone) && checkpoint) { try { const c = JSON.parse(JSON.stringify(checkpoint)); c.t = ST.t + (now() - playStart) / 1000; if (ST.F.intro) localStorage.setItem(SAVE_KEY, JSON.stringify(c)); } catch (e) {} }
     else if (ST && mon && checkpoint) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(checkpoint)); } catch (e) {} }
-    open_ = false; cancelAnimationFrame(raf); raf = 0; chaseMusic(false); mon = null;
+    open_ = false; cancelAnimationFrame(raf); raf = 0; chaseMusic(false); mon = null; bgm(false);
     window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true); window.removeEventListener('resize', fit);
     clearInterval(dlg.timer); dlg.on = false;
     if (root) { root.hidden = true; root.innerHTML = ''; }
