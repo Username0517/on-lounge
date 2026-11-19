@@ -1567,7 +1567,7 @@
   // sender's id and name, so nothing a client sends over a channel can pose as another member.
   function joinChatDb() {
     if (net.chatDb) { const old = net.chatDb; net.chatDb = null; try { sb.removeChannel(old); } catch (e) {} }
-    if (BP.legacy) return;   // BACKPORT: the old database has no chat feed
+    if (BP.legacy || SOLO[sceneId]) return;   // BACKPORT: the old database has no chat feed
     const id = sceneId;
     net.chatDb = sb.channel('db-chat:' + id)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: 'scene=eq.' + id }, ({ new: m }) => {
@@ -1575,7 +1575,16 @@
       })
       .subscribe();
   }
-  function sceneTopic() { return 'lounge:' + (sceneId === 'soccer' && match ? 'soccer-' + match.id : sceneId); }
+  // The forest paths are walked alone: each person gets a private copy of the room (their own channel), no shared chat.
+  // Everyone meets again at the mansion.
+  const SOLO = { forest1: 1, forest2: 1 };
+  function sceneTopic() { return 'lounge:' + (sceneId === 'soccer' && match ? 'soccer-' + match.id : SOLO[sceneId] ? sceneId + '-' + net.uid : sceneId); }
+  function chatLock() {
+    const inp = $('chatInput'); if (!inp) return;
+    const solo = !!SOLO[sceneId];
+    inp.disabled = player.dnd || solo;
+    inp.placeholder = player.dnd ? 'OFF-Lounge 모드에서는 채팅할 수 없어요' : solo ? '숲속에서는 목소리가 빗소리에 묻혀요… (저택에서 다시 대화할 수 있어요)' : '할 말을 입력하세요';
+  }
   // keep = true: same room, fresh connection (after a drop). People already here stay on screen and in their games.
   function joinSceneChannel(keep) {
     if (!keep) joinChatDb();
@@ -1638,6 +1647,7 @@
   }
   async function loadHistory() {
     const forScene = sceneId;
+    if (SOLO[forScene]) return;
     const since = new Date(`${chinaYmd()}T00:00:00+08:00`).toISOString();   // today 00:00 China time
     const { data } = await sb.from('messages').select('name, body, user_id, created_at').eq('scene', forScene).gte('created_at', since).order('created_at', { ascending: false }).limit(40);
     if (forScene !== sceneId) return;
@@ -1705,7 +1715,7 @@
   $('chatForm').addEventListener('submit', e => {
     e.preventDefault();
     const inp = $('chatInput'), text = inp.value.trim().slice(0, 200);
-    if (!text || player.dnd) return;
+    if (!text || player.dnd || SOLO[sceneId]) return;
     say(player, text); inp.value = '';
     if (LIVE) {
       // the server sets user_id and name; everyone else sees this line when the row is inserted
@@ -1965,6 +1975,8 @@
     }
     drawMachineFx(now); drawEqFx(now);
     if (scene.fx) scene.fx(b, now);
+    if (RAINY[sceneId]) drawRain(b, now);
+    try { ambTick(now); } catch (e) {}
     if (scene.weather) { drawWeatherFx(now); drawWeatherBoard(now); }
     if (!scene.lights) return;
     b.save(); b.globalCompositeOperation = 'lighter';
@@ -2543,6 +2555,93 @@
       case 'sip': tone(a, t, 520, 0.09, 'sine', v(0.06), { slide: 760 }); break;
       case 'cough': noise(a, t, 0.1, v(0.13), 'bandpass', 620, 1.2); tone(a, t, 180, 0.09, 'sawtooth', v(0.05), { slide: 110 }); noise(a, t + 0.16, 0.08, v(0.09), 'bandpass', 520, 1.2); break;
       case 'pop': tone(a, t, mtof(76), 0.12, 'sine', v(0.08)); tone(a, t + 0.07, mtof(83), 0.16, 'sine', v(0.07)); break;
+    }
+  }
+  // ================= outside: rain and footsteps (forest paths and the mansion yard) =================
+  // A looped noise bed through two filters makes the rain (hiss + low rumble), random tiny clicks are drops on leaves,
+  // thunder follows the mansion's lightning, and every step on these scenes is a hard little heel "tock".
+  const RAINY = { forest1: 1, forest2: 1, mansion: 1 };
+  let rain = null, rainBuf = null, stepTick = new WeakMap(), lastFlash = 0, f2Thunder = 0;
+  function rainLevel() {
+    if (!RAINY[sceneId] || document.hidden) return 0;
+    let lv = sceneId === 'forest1' ? 0.45 + 0.4 * clamp(1 - player.y / FOREST1_H, 0, 1) : sceneId === 'forest2' ? 0.9 : 1;
+    if (window.ONL_MANSION && ONL_MANSION.isOpen()) lv *= 0.28;          // inside the house: rain on the windows
+    else if (document.querySelector('.hn-wrap')) lv *= 0.35;          // hunt: also indoors
+    return lv;
+  }
+  function rainBed(a) {
+    if (rain) return rain;
+    if (!rainBuf) {
+      rainBuf = a.createBuffer(1, a.sampleRate * 3, a.sampleRate); const d = rainBuf.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0;   // pink-ish noise sounds like rain; white noise sounds like a radio
+      for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; b0 = 0.99765 * b0 + w * 0.099; b1 = 0.963 * b1 + w * 0.2965; b2 = 0.57 * b2 + w * 1.0527; d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.22; }
+    }
+    const src = a.createBufferSource(); src.buffer = rainBuf; src.loop = true;
+    const hp = a.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 450;
+    const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 6500;
+    const low = a.createBiquadFilter(); low.type = 'lowpass'; low.frequency.value = 260;
+    const g = a.createGain(), gl = a.createGain(); g.gain.value = 0.0001; gl.gain.value = 0.0001;
+    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(a.__out);
+    src.connect(low); low.connect(gl); gl.connect(a.__out);
+    src.start();
+    rain = { g, gl, lp };
+    return rain;
+  }
+  function thunder(a, t, near) {
+    const src = a.createBufferSource(); src.buffer = rainBuf || noiseBuf; src.loop = true;
+    const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(near ? 900 : 380, t); lp.frequency.exponentialRampToValueAtTime(110, t + 2.4);
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(near ? 0.9 : 0.45, t + (near ? 0.05 : 0.35)); g.gain.exponentialRampToValueAtTime(0.0001, t + 3.2);
+    src.connect(lp); lp.connect(g); g.connect(a.__out); src.start(t, Math.random()); src.stop(t + 3.3);
+    if (near) noise(a, t, 0.35, 0.25, 'bandpass', 1400, 0.8);
+  }
+  function footstep(a, vol, alt, wet) {
+    const t = a.currentTime + 0.01, k = alt ? 1.07 : 0.94;
+    tone(a, t, 1250 * k, 0.05, 'triangle', 0.16 * vol, { slide: 480 * k, lp: 3400 });   // 또
+    tone(a, t + 0.012, 260 * k, 0.07, 'sine', 0.2 * vol, { slide: 140 });             // …각 (the body of the heel)
+    noise(a, t, 0.03, 0.12 * vol, 'bandpass', 2600 * k, 2.5);
+    if (wet) noise(a, t + 0.02, 0.09, 0.05 * vol, 'highpass', 2800);                    // a little splash
+  }
+  function drawRain(b, now) {
+    const lv = sceneId === 'forest1' ? 0.45 + 0.45 * clamp(1 - player.y / FOREST1_H, 0, 1) : 1;
+    const n = Math.round(W * H / 170 * lv), span = H + 30;
+    b.fillStyle = sceneId === 'mansion' ? 'rgba(180,195,230,0.5)' : sceneId === 'forest1' && player.y > FOREST1_H * 0.6 ? 'rgba(190,205,230,0.42)' : 'rgba(160,178,210,0.36)';
+    for (let i = 0; i < n; i++) {
+      const sp = 0.30 + (i % 7) * 0.025, y = (i * 97.13 + now * sp) % span - 20, x = ((i * 53.71) % (W + 40)) - 10 - y * 0.18 + (now * sp * 0.18) % 1;
+      b.fillRect(x | 0, y | 0, 1, 4 + (i % 3));
+    }
+    // splashes
+    b.fillStyle = 'rgba(200,215,240,0.5)';
+    for (let i = 0; i < n / 6; i++) {
+      const ph = (now / 420 + i * 0.37) % 1, k = Math.floor(now / 420 + i * 0.37) * 131 + i * 977;
+      if (ph > 0.3) continue;
+      const x = (k * 13.7) % W, y = (k * 7.31) % H, r = ph < 0.15 ? 1 : 2;
+      b.fillRect(x - r | 0, y | 0, 1, 1); b.fillRect(x + r | 0, y | 0, 1, 1);
+    }
+  }
+  document.addEventListener('visibilitychange', () => { if (document.hidden && rain && actx) { rain.g.gain.setTargetAtTime(0.0001, actx.currentTime, 0.05); rain.gl.gain.setTargetAtTime(0.0001, actx.currentTime, 0.05); } });
+  function ambTick(now) {
+    const lv = sfxOn ? rainLevel() : 0;
+    if (!lv && !rain) return;
+    const a = ac(); if (!a) return;
+    const r = rainBed(a), t = a.currentTime;
+    r.g.gain.setTargetAtTime(Math.max(0.0001, lv * 0.32), t, 0.6);
+    r.gl.gain.setTargetAtTime(Math.max(0.0001, lv * 0.35), t, 0.6);
+    r.lp.frequency.setTargetAtTime(lv < 0.4 ? 2200 : 6500, t, 0.5);   // muffled when you are indoors
+    if (!lv) return;
+    // drops tapping on leaves and puddles
+    if (Math.random() < 0.35 * lv) noise(a, t + Math.random() * 0.05, 0.012 + Math.random() * 0.02, (0.02 + Math.random() * 0.05) * lv, 'bandpass', 1800 + Math.random() * 4500, 6);
+    // thunder: right after the mansion's lightning, or now and then far away in the deep forest
+    if (sceneId === 'mansion' && mnFlashAt && mnFlashAt !== lastFlash) { lastFlash = mnFlashAt; thunder(a, t + 0.5 + Math.random() * 0.6, Math.random() < 0.5); }
+    if (sceneId === 'forest2') { if (!f2Thunder) f2Thunder = now + 9000 + Math.random() * 12000; if (now > f2Thunder) { f2Thunder = now + 22000 + Math.random() * 20000; thunder(a, t, false); } }
+    // footsteps: mine always, other people's (mansion yard) quieter with distance
+    if (window.ONL_MANSION && ONL_MANSION.isOpen() || document.querySelector('.hn-wrap')) return;
+    for (const c of chars) {
+      if (!c.moving || c.seat) continue;
+      const dist = c.isPlayer ? 0 : Math.hypot(c.x - player.x, c.y - player.y); if (dist > 150) continue;
+      const last = stepTick.get(c) || { at: 0, alt: false };
+      if (now - last.at < 290) continue;
+      last.at = now; last.alt = !last.alt; stepTick.set(c, last);
+      footstep(a, c.isPlayer ? 1 : 0.55 * (1 - dist / 150), last.alt, sceneId !== 'mansion' || c.y > 200);
     }
   }
   function syncSfxBtn() { const b2 = $('sfxBtn'); b2.textContent = sfxOn ? '🔊' : '🔇'; b2.setAttribute('aria-label', sfxOn ? '효과음 끄기' : '효과음 켜기'); b2.setAttribute('aria-pressed', String(!sfxOn)); }
@@ -3355,9 +3454,9 @@
       const sp = scene.spawns[spawnKey] || Object.values(scene.spawns)[0];
       player.x = sp[0]; player.y = sp[1]; player.dir = sp[2];
       camInit = false; resize();
-      $('sceneTag').textContent = scene.name; gmLabel(); fbLabel();
+      $('sceneTag').textContent = scene.name; gmLabel(); fbLabel(); chatLock();
       logEl.innerHTML = '';
-      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 안쪽으로 갈수록 숲이 이상해져요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
+      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 비가 내리기 시작했어요. 여기부터는 혼자 걷는 길이에요. 함께 온 사람들은 저택에서 다시 만나요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 먼저 도착한 사람들이 여기 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
       if (id === 'roof') loadWeather();
       if (id === 'soccer') onSoccerEnter();
@@ -3922,8 +4021,7 @@
     $('dndBtn').textContent = on ? 'OFF' : 'ON';
     $('dndBtn').setAttribute('aria-pressed', String(!on));
     document.title = on ? 'OFF-Lounge' : 'ON-Lounge';
-    $('chatInput').disabled = on;
-    $('chatInput').placeholder = on ? 'OFF-Lounge 모드에서는 채팅할 수 없어요' : '할 말을 입력하세요';
+    chatLock();
     if (on) { player.bubble = null; player.emote = null; player.playing = null; player.action = 'pray'; player.actionUntil = Infinity; player.actionT0 = performance.now(); if (!quiet) toast('OFF-Lounge 모드예요. 조용히 기도하는 시간이에요.'); }
     else { if (player.action === 'pray') player.action = null; if (!quiet) toast('ON-Lounge로 돌아왔어요'); const pane = logEl.parentElement; pane.scrollTop = pane.scrollHeight; }
     store.set('onl-off', on ? '1' : '0');

@@ -1,5 +1,14 @@
 # Changelog
 
+## Rain, footsteps, walking the forest alone
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`. No SQL.
+
+- `forest1`, `forest2` and `mansion` have rain: `drawRain()` draws streaks and splashes over the scene, and `ambTick()` (called from `drawWorld`) keeps a looped pink-noise bed (hiss + low rumble), random drop clicks, thunder after the mansion's lightning (and now and then in `forest2`), and a heel "tock" for each step of anyone walking within 150px. The rain is muffled while the story or the hunt is open (indoors) and goes silent when the tab is hidden. It follows the 🔊 button.
+- `SOLO = { forest1, forest2 }`: on those scenes `sceneTopic()` returns `lounge:<scene>-<uid>`, so each person walks the forest in a private copy (still matches the `lounge:%` channel policy). The chat feed and history are skipped there and the chat box is locked (`chatLock()`). Everyone is visible again in `mansion`.
+
 ## Outside: plaza, forest paths, the mansion (story + hunt), app install
 
 Audience: the developer and the developer's AI agent.
