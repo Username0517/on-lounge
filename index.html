@@ -377,6 +377,88 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 }
 
 /* 광야 */
+/* ---- 숲속의 저택 (이야기 모드) ---- */
+.horror { position: fixed; inset: 0; z-index: 15; background: rgba(6,4,10,.86); display: flex; align-items: center; justify-content: center; padding: 8px; }
+.hr-card { background: #16121c; border: 3px solid #000; border-radius: 12px; box-shadow: 0 6px 0 #000, 0 0 40px rgba(120,20,30,.25); display: flex; flex-direction: column; width: min(860px, 100%); max-height: 100%; overflow: hidden; color: #e8dcc2; }
+.hr-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: #0d0a12; border-bottom: 2px solid #2a2230; }
+.hr-head h2 { margin: 0; font-size: 17px; color: #e8dcc2; letter-spacing: .5px; }
+.hr-btns { display: flex; gap: 6px; }
+.hr-card .btn { background: #2a2230; color: #e8dcc2; border-color: #000; box-shadow: 0 3px 0 #000; }
+.hr-card .btn-gold { background: #8a1f24; color: #fff4e6; }
+.hr-stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; background: #07060a; aspect-ratio: 4 / 3; max-height: calc(100vh - 200px); }
+.hr-cv { image-rendering: pixelated; image-rendering: crisp-edges; display: block; touch-action: none; }
+.hr-dlg { position: absolute; left: 3%; right: 3%; bottom: 3%; background: rgba(10,8,14,.92); border: 2px solid #5a4a55; border-radius: 8px; padding: 10px 14px 12px; min-height: 64px; cursor: pointer; }
+.hr-dlg.narr { border-color: #3a3440; font-style: italic; }
+.hr-name { display: inline-block; background: #8a1f24; color: #fff4e6; padding: 1px 8px; border-radius: 4px; font-size: 13px; margin-bottom: 4px; }
+.hr-text { margin: 0; font-size: 15px; line-height: 1.55; white-space: pre-wrap; min-height: 1.5em; }
+.hr-more { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: #a89; animation: hrBlink 1s steps(2) infinite; }
+@keyframes hrBlink { 50% { opacity: 0; } }
+.hr-note { position: absolute; top: 3%; left: 50%; transform: translateX(-50%); background: rgba(10,8,14,.88); border: 1px solid #5a4a55; border-radius: 999px; padding: 5px 14px; font-size: 13px; white-space: nowrap; max-width: 94%; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.hr-panel { position: absolute; inset: 6% 8%; background: rgba(14,10,18,.97); border: 2px solid #5a4a55; border-radius: 10px; padding: 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
+.hr-panel h3 { margin: 0; font-size: 17px; }
+.hr-panel .btn { width: 100%; }
+.hr-ask, .hr-over { justify-content: center; inset: 22% 12%; }
+.hr-over { border-color: #8a1f24; background: rgba(40,4,8,.95); }
+.hr-q { margin: 0 0 4px; font-size: 16px; text-align: center; line-height: 1.5; }
+.hr-desc { margin: 0; font-size: 14px; line-height: 1.6; color: #cfc2a8; }
+.hr-empty { margin: 0; color: #8a7a8a; }
+.hr-items { display: flex; flex-wrap: wrap; gap: 6px; }
+.hr-item { background: #2a2230; color: #e8dcc2; border: 1px solid #000; border-radius: 6px; padding: 6px 10px; font: inherit; cursor: pointer; }
+.hr-item.on { background: #8a1f24; }
+.hr-row { display: flex; gap: 8px; margin-top: auto; }
+.hr-keys { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+.hr-key { background: #f4ecd8; color: #1a1418; border: 2px solid #000; border-radius: 0 0 6px 6px; height: 92px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; font: inherit; font-weight: 700; cursor: pointer; }
+.hr-key:active { background: #d8c8a8; transform: translateY(2px); }
+.hr-played { min-height: 1.4em; margin: 0; text-align: center; letter-spacing: 1px; color: #e0b84a; }
+.hr-dials { display: flex; gap: 10px; justify-content: center; }
+.hr-dialcol { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.hr-dialcol .btn { width: 54px; }
+.hr-num { font-size: 30px; width: 54px; text-align: center; background: #0a080d; border: 2px solid #3a3440; border-radius: 6px; padding: 4px 0; }
+.hr-lv { min-width: 84px; }
+.hr-small { font-size: 12px; color: #a89; }
+.hr-end { inset: 0; border: 0; border-radius: 0; justify-content: center; align-items: center; text-align: center; padding: 20px; }
+.hr-end.good { background: linear-gradient(#2a3550, #c98a6a); color: #fff8ea; }
+.hr-end.bad { background: #0a080d; }
+.hr-end h2 { margin: 8px 0 0; font-size: 20px; }
+.hr-endsub, .hr-line { margin: 0; line-height: 1.7; }
+.hr-endtag { margin: 0; opacity: .8; font-size: 13px; }
+.hr-end .btn { width: auto; padding: 8px 18px; }
+.hr-pad { display: none; align-items: center; justify-content: space-between; padding: 8px 14px 10px; gap: 10px; background: #0d0a12; }
+.hr-dpad { display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(2, 46px); gap: 4px; }
+.hr-k { background: #2a2230; color: #e8dcc2; border: 2px solid #000; border-radius: 8px; font-size: 18px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.hr-k:active { background: #3a3044; }
+.hr-up { grid-column: 2; grid-row: 1; } .hr-left { grid-column: 1; grid-row: 2; } .hr-down { grid-column: 2; grid-row: 2; } .hr-right { grid-column: 3; grid-row: 2; }
+.hr-act { width: 96px; height: 96px; border-radius: 50%; background: #8a1f24; font-size: 18px; font-weight: 700; }
+.hr-tip { margin: 0; padding: 6px 12px 8px; font-size: 12px; color: #8a7a8a; background: #0d0a12; }
+@media (hover: none), (max-width: 760px) { .hr-pad { display: flex; } .hr-tip { display: none; } .hr-stage { max-height: calc(100vh - 290px); } }
+.hr-pad { margin-top: auto; }
+@media (max-width: 760px) { .horror { padding: 0; } .hr-card { border-radius: 0; height: 100%; } .hr-panel { inset: 3%; } .hr-key { height: 70px; } .hr-text { font-size: 14px; } }
+/* ---- 저택 술래잡기 ---- */
+.hn-wrap { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+.hn-stage { position: relative; flex: 1; min-height: 260px; background: #05040a; border-radius: 8px; overflow: hidden; }
+.hn-cv, .hn-hud { position: absolute; inset: 0; margin: auto; image-rendering: pixelated; image-rendering: crisp-edges; }
+.hn-hud { pointer-events: none; }
+.hn-end { position: absolute; inset: 8% 10%; background: rgba(14,10,18,.95); color: #fff8ea; border: 3px solid #000; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; overflow: auto; }
+.hn-end h3 { margin: 0; font-size: 22px; }
+.hn-why { margin: 0; color: #cfc2a8; }
+.hn-me { margin: 0; font-weight: 800; color: #ffd65a; }
+.hn-list { display: grid; gap: 2px; margin: 6px 0; font-size: 13px; }
+.hn-list p { margin: 0; }
+.hn-pad { display: none; align-items: center; justify-content: space-between; gap: 10px; padding: 2px 4px; }
+.hn-joy { position: relative; width: 116px; height: 116px; border-radius: 50%; background: rgba(37,28,44,.18); border: 3px solid rgba(37,28,44,.5); touch-action: none; flex: none; }
+.hn-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #8a1f24; border: 3px solid var(--ink); pointer-events: none; }
+.hn-btns { display: flex; gap: 10px; align-items: center; }
+.hn-a, .hn-b { width: 78px; height: 78px; border-radius: 50%; border: 3px solid var(--ink); box-shadow: 0 3px 0 var(--ink); font: inherit; font-weight: 800; font-size: 13px; touch-action: none; user-select: none; -webkit-user-select: none; padding: 4px; line-height: 1.15; }
+.hn-a { background: #8a1f24; color: #fff8ea; }
+.hn-b { background: var(--gold); color: var(--ink); }
+.hn-b:disabled { opacity: .45; }
+@media (hover: none), (max-width: 899px) { .hn-pad { display: flex; } .hn-stage { min-height: 200px; } }
+.hn-maps { display: grid; gap: 6px; }
+.hn-maprow { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
+.hn-map { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; white-space: normal; }
+.hn-map small { font-weight: 500; font-size: 11px; opacity: .8; }
+.mn-choices { display: grid; gap: 8px; margin: 12px 0 8px; }
+.mn-choices .btn { width: 100%; text-align: left; padding: 10px 12px; }
 .wild { position: fixed; inset: 0; z-index: 15; background: rgba(20,16,28,.68); display: flex; align-items: center; justify-content: center; padding: 8px; }
 .wd-card { background: var(--cream); border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; width: min(880px, 100%); max-height: 100%; overflow: hidden; }
 .wd-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 10px; background: #e8b36a; border-bottom: 3px solid var(--ink); flex: none; }
@@ -664,6 +746,7 @@ details.paste textarea { margin-block: 6px; }
     </div>
     <div class="tg" id="tg" hidden></div>
     <div class="wild" id="wild" hidden></div>
+    <div class="horror" id="horror" hidden></div>
     <div class="gm-inv" id="gmInv" hidden role="alertdialog" aria-labelledby="gmInvText">
       <p id="gmInvText"></p>
       <div class="gm-inv-btns"><button type="button" class="btn btn-gold" id="gmAccept">수락</button><button type="button" class="btn" id="gmDecline">거절 <span id="gmInvSec"></span></button></div>
@@ -835,9 +918,11 @@ details.paste textarea { margin-block: 6px; }
 <script src="parse.js"></script>
 <script src="catan-rules.js"></script>
 <script src="chess.js"></script>
+<script src="mansion.js"></script>
 <script src="wilderness.js"></script>
 <script src="app.js"></script>
 <script src="games.js"></script>
+<script src="hunt.js"></script>
 <script>
   // 홈 화면 앱 등록. 실패해도 사이트는 평소처럼 동작해요.
   if ('serviceWorker' in navigator) {

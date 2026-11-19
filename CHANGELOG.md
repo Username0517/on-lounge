@@ -1,5 +1,175 @@
 # Changelog
 
+## Outside: plaza, forest paths, the mansion (story + hunt), app install
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `games.js`, `index.html`, `setup.sql`, `update-rooms.sql`, `README.md`. Files added: `mansion.js`, `hunt.js` (and earlier `manifest.json`, `sw.js`, icons).
+
+### New scenes
+
+- `plaza`, `forest1`, `forest2`, `mansion` in `SCENES`, reached from the 1F hall's outside door. The plaza's other exits are locked spots. The forests are drawn by `forestScene()` with a `decay` value that runs from 0 to 1 along the path. `scene.fx(b, now)` is a new per-frame overlay hook in `drawWorld` (darkness, fog, lightning). `spot.go = [scene, spawnKey]` moves between scenes.
+- These four scenes, plus `f1r4`, are added to the chat whitelist in `messages_before_insert`. `f1r4` was missing, so chat in the wilderness room was being refused.
+
+### `mansion.js` – story mode
+
+- Solo, no network. 16 rooms, ASCII maps on 16px tiles, BFS chasing monsters, hiding places, three puzzles, two endings. Save in `localStorage` (`onl_mansion_story_v1`). `ONL_MANSION.kit` exposes the drawing/collision helpers that `hunt.js` reuses.
+
+### `hunt.js` – multiplayer
+
+- Registered with the table framework (`window.ONL_TG`, exported from `games.js`). `MAX_PLAYERS = 6` because Supabase Free allows 100 messages/s and each broadcast counts N+1. On Pro it can go to 10.
+- Each client owns its own position and sends `hm` only when its direction changes (at most every 180 ms) plus a 2.5 s heartbeat; others dead-reckon with the same collision. The host is the referee for `ha` actions (hit, catch, pick up, free, install, escape), and the action carries the sender's position. The host pushes `hs` state on change or every 3 s. Measured: six players moving at random use about 10 broadcasts/s, about 60/s counted by Supabase.
+- Maps are generated from fixed seeds, so every client builds the same map without sending it. All three are checked with a flood fill: every floor tile, key point, ladder point, spawn and hiding place is reachable from the cell door.
+
+### Other
+
+- `games.js`: the lobby now draws its chat (`drawChat()` at the end of `render()`); before, the placeholder stayed on "구경 중".
+
+## Wilderness, spectating, turn clock, hand-drawn digits
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `games.js`, `index.html`, `wilderness.js`, `setup.sql`. File added: `scores.sql`.
+
+### Faults fixed
+
+- **Spectating did nothing.** The "구경하기" button on a table that was already playing called `joinTable()`, which asks the host for a seat; the host refuses a started game, so the click went nowhere. It now calls `watchTable()`, which just starts listening to the state the host is already broadcasting.
+- **The wilderness never opened.** `wilderness.js` captured `const O = window.ONL` at load time, but it is loaded before `app.js`, so `O` was always undefined and `open()` returned on its first line. It now resolves the lounge API lazily.
+- **Tile numbers 2 and 5 looked the same.** They were drawn with Pixelify Sans, whose 2 and 5 are near-identical squiggles at that size. `DIGITS` is a hand-drawn 4x7 bitmap per digit and `pixNum()` draws it, so the numbers are unambiguous at any board size.
+
+### Catan turn clock
+
+`TURN_MS` gives a window per phase (setup 60 s, roll 45 s, main 100 s, robber and discard 45 s each) measured from `G.x.actAt`, which already tracked the last action. When it runs out the host plays the simplest legal move for whoever is holding things up — the same `cAuto` path that covers an absent player. A countdown appears in the header once under 30 seconds and turns red under 10.
+
+### Drawing quiz words
+
+617 words in three baskets (231 easy, 219 middling, 167 hard), up from about 440, with trendy and brand words in the hard basket. `D.used` is no longer cleared at the start of each game, so words do not come round again after a few rounds; it is trimmed to the last 120 once it passes 220.
+
+### The wilderness leaderboard needs SQL
+
+`app.js` calls `submit_score`, `top_scores` and `my_score`, and none of them existed. `scores.sql` adds `public.scores` (one row per player per game, RLS on, no direct grants) and those three SECURITY DEFINER functions: submit keeps the better of the old and new score and returns the rank, top returns the first ten with names from `profiles` and an `is_me` flag, my returns the player's own best. Submitting is rate-limited to 30 a minute per player through the existing `guard_hit`. The same block is appended to `setup.sql` for a fresh install. **The live project needs `scores.sql` run once or the records board stays empty.**
+
+### Tested
+
+Playwright against the mock: a third person pressing 구경하기 on a running game and seeing the board, the log and a chat they cannot type into; two tables at once; ten chat messages each visible as they arrive; the wilderness opening, scrolling and counting height; Catan, chess, drawing quiz, soccer, gomoku. `scores.sql` run twice on a scratch PostgreSQL 16, then three players setting records — a worse score does not overwrite a better one, ranks and `is_me` come out right.
+
+## Several tables per room, chat fixes, rooftop dust, soccer again
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `games.js`, `index.html`.
+
+### Chat
+
+Two faults, both from the chat pane being borrowed into the game card.
+
+- **Lines stopped appearing and then arrived all at once.** `log()` decided whether to follow the newest line with `scrollHeight - scrollTop - clientHeight < 60`. Re-parenting an element resets `scrollTop` to 0, so once the pane moved into the card and the log was longer than the box, that sum was large and every later line counted as "the reader has scrolled up". Nothing scrolled until something else called `scrollTop = scrollHeight`, and then the whole backlog appeared at once. `log()` now also treats a pane with no laid-out height as being at the bottom, and `chatHold()` scrolls to the newest line after the move (and again on the next frame, once layout has settled).
+- **What you were typing was lost when somebody joined or left.** The card used to be rebuilt with `root.innerHTML = ''` on every table change, which moved the pane and blurred the input. The card is now built once (`ensureCard`) and only the body is replaced, so the pane never moves while the overlay is open.
+
+### Several tables in one room
+
+`TABLES` is a registry of every open table in the room, keyed by table id, refreshed by the host's `tbl` broadcast and pruned when a host goes quiet. `T` is the table I am sitting at, or null while browsing the list. Two people creating a table at the same moment now simply get two tables instead of one of them winning; the lobby lists them with who is sitting at each. Game traffic already carried `tid`, so a message for another table is ignored.
+
+### Rooftop dust
+
+- `WX.aqi` (US AQI, Open-Meteo) is drawn on the sign as a coloured bar under the weather picture, and the interaction reads it out in words.
+- Above AQI 150 everyone standing on the roof coughs: a `콜록!` floater every 5 seconds and a short rasp through the synth (`sfx('cough')`). It stops when the air is clean or you leave the roof. There is no cough pose in the sprite sheet, so it is the bubble and the sound only.
+
+### Soccer
+
+The ball used to be worked out from the dribbler's character as it appeared on the watcher's screen, and that position only arrived every 170 ms, so the ball stuttered a step behind whoever was running with it. Now whoever has the ball at their feet sends the ball themselves every 85 ms, and watchers ease onto that instead (`ball.ownAt` marks how fresh it is; the feet are still the fallback after 500 ms). Ownership is still handed around by the host alone. Positions on the pitch go out every 110 ms rather than 170 ms, and the shot assist only straightens onto the goal within about 38 degrees instead of 50, so a pass sideways stays a pass.
+
+A note for later: there is no drop-in open-source football to borrow here. The physics is a dozen lines; what makes it feel wrong is network timing, which is specific to how this lounge sends state.
+
+### Catan
+
+The wood resource is now a wooden stick rather than a log block.
+
+### Tested
+
+Playwright against the mock with the presence limit and 150-180 ms lag: two tables created at the same instant and both running games side by side; typed chat text surviving a join, a leave and an incoming message; ten messages in a row each visible as it arrives, at 390 px and 1440 px; coughing on the roof with the air forced to AQI 212; soccer possession, kicks, crowding and a full match; plus the Catan, chess, drawing-quiz, gomoku and reconnect tests.
+
+## Chess, Catan computer players, resource panel, soccer team sizes
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `games.js`, `index.html`. File added: `chess.js`.
+
+### Chess (`chess.js` + `GAMES.chess`)
+
+- 0x88 board, full rules: castling, en passant, promotion, check, checkmate, stalemate, the 50-move rule, threefold repetition and insufficient material. Verified by perft from the start position: 20 / 400 / 8902 / 197281 at depths 1-4, and Kiwipete 48 / 2039 at depths 1-2.
+- Engine: negamax with alpha-beta, MVV-LVA ordering, a short quiescence search, material plus piece-square tables. `easy` plays near-random but takes a free piece about half the time; `mid` searches 2 ply with noise; `hard` searches 3 ply. Worst case measured about 0.7 s in a sharp middlegame.
+- Lives in room2 (the pantry) through the existing table framework, so it gets the lobby, host migration and chat for free. Gomoku is untouched and keeps its own button. There is also a chess table in the room with a spot to walk up to.
+- Colours are drawn at random when the game starts. The whole game object is broadcast, so a new host can carry on.
+- Pieces are drawn from `PIECE_SPANS`: a list of horizontal spans per piece, with the 1-pixel outline worked out from the shape itself. Hand-placed rectangles made all six look alike at 16 px.
+
+### Catan
+
+- **Computer players.** The table host adds them from the lobby and sets 상/중/하 each. They are ordinary players with `bot: true`, so the game survives the host leaving. `botTurn` picks by priority: city, then settlement, then a road only when there is no legal settlement spot left (building roads for their own sake used up all 15 pieces and stalled the game), then a development card, then a bank trade toward the next goal. `vScore` ranks a corner by the pips around it plus a bonus for covering different resources; `easy` picks at random from the legal set, `mid` from the top few, `hard` the best. They answer trade offers and move the robber onto the leader.
+- Bots run on a separate 200 ms timer (`fastTick`); on the old 1 s table timer they moved once a second and a game never finished.
+- `cWaiting`/`C.absent` no longer auto-plays for a bot, and bots count as present for the trade-offer timeout and for starting a game.
+- **Resource panel.** Each player now has a card with their own character in the middle, three icons on the left (나무, 밀, 발전 카드) and three on the right (벽돌, 철, 양털), each with a count. Note this shows everyone's hand, not just your own — it is what was asked for, and the full state was already being broadcast, but it does remove the hidden-information part of the game.
+- The icons are pixel art drawn in `ICON_DRAW` at 16x16, in the same style as the rooms, so no image files are needed.
+
+### Soccer
+
+- Team sizes are now 1:1 up to 4:4 (`FB_MODES = [1, 2, 3, 4]`, default 2).
+- `startPractice()` drops you onto the pitch alone for 10 minutes with no opponents. `m.practice` skips the "a team is empty, end the match" check and changes the kick-off and final messages.
+
+### Waiting room
+
+The lobby card was 420 px wide and the chat took 270 of it, which cut the text and buttons off. It is now 900 px and 640 px tall on screens 900 px and wider, with the chat at 300 px; on a phone the chat still slides over the card.
+
+### Tested
+
+Playwright against the mock with the presence limit and 180 ms lag: a full Catan game of one human and three computers to a win; computer lobby add/remove/difficulty; the resource panel at 390 px and 1440 px; chess vs computer to checkmate on phone and desktop; chat inside every game, including handing the pane back; plus the existing soccer, gomoku, party, drawing-quiz and channel-recovery tests.
+
+## Soccer rewrite, chat during games, screen sizes
+
+Audience: the developer and the developer's AI agent.
+
+Files changed: `app.js`, `games.js`, `index.html`.
+
+### Soccer: why kicks were swallowed and the ball jumped about
+
+Three faults, all in the old `hostStep`/`kick` pair:
+
+1. **The host validated kicks against its own ball position.** A kicker sent `px,py`; the host measured from ITS ball to that point and dropped the kick when the distance was over `KICK_R + 8`. With any lag the host's ball had already moved, so the kick was thrown away. The player saw nothing happen.
+2. **Every player within `DRIB_R` pushed the ball every frame.** With several players around the ball the last one in the loop won each frame, so the ball shot off in random directions. The push also overwrote the direction of a kick that had just been made.
+3. **The kicker's own prediction was overwritten** by the next host packet, which did not yet contain the kick, so the ball snapped back.
+
+New model in `app.js`:
+
+- **Possession.** `ball.own` holds one player id. The ball rides at that player's feet (`ballHome`, `HOLD_AT`) on every screen, so dribbling has no lag and a crowd cannot make the ball jitter. Only the host takes the ball off a player (`stepBall(dt, now, host)`); other clients would decide from positions that run behind and would flicker.
+- **The kicker is authoritative.** `kick()` sets the ball locally and broadcasts `{t:'kick', ks, x, y, vx, vy}`. Everyone, host included, applies it. `ks` is a counter; a kick with a lower `ks` is ignored, and ties are settled by comparing the sender id, the same way on every client. A host `ball` packet with an older `ks` does not touch the ball, so a kick is never undone.
+- **Taking the ball.** The host picks the closest player within `TAKE_R`, with 2 px of hysteresis against the current owner, and never within `KICK_CD` (420 ms) of a kick. A client grabs locally the moment the ball reaches its own feet and sends `grab`; it holds that for up to 900 ms while waiting for the host to agree.
+- **Aim.** `aimDir()` takes the direction you are running (keys or path), else the way you face, and straightens onto the goal mouth when that is within about 50°. Shots work on a phone, where you cannot hold a direction key.
+- **The shoot button.** `punchBtn` becomes `⚽ 슛` with a `Space` hint on the pitch (`kickBtnLabel`), styled `.kick-btn`. Before this it still read `👊 펀치` with an `F` hint, which is why phone players said they could not shoot.
+- A gold ring under the ball shows it is at my feet. Position broadcasts on the pitch went from 300 ms to 170 ms. A non-host eases onto the host's ball, or jumps when more than 24 px out.
+
+Measured with 180 ms of simulated one-way lag, 4 players: ball positions agree within 17 px during play, kicks are never lost, the ball does not move at all under a crowd (it used to fly), goals and the final score agree on all screens.
+
+### Chat during a game
+
+The game overlay used to cover the chat, so people had to fold the game to talk. `games.js` now borrows the real `.chat-pane` element from the side panel, puts it inside the game card, and puts it back on fold, leave, or re-render (`chatHold` / `chatBack`). It is the same box and the same history, not a copy. On screens 900 px and wider it sits beside the board; narrower, a `💬 대화` button slides it over the game and carries an unread badge fed by `TG.onChat`, which `log()` in `app.js` calls.
+
+Every path that empties the overlay calls `chatBack()` first. Forgetting one would detach `#log` and lose chat for the rest of the session.
+
+### Drawing quiz
+
+- The board is wiped at the start of every turn: `dApply` now calls `dRedraw()` on the `pick` phase. It cleared the stroke list before but never repainted, so the previous drawing stayed on screen.
+- `WORD_SETS` holds three baskets (easy, middling, hard). Each turn offers one word from each, shuffled, so the drawer cannot tell which is which.
+
+### Screen sizes
+
+- The Catan board is sized from the space available in both directions, not width alone, and sets its own CSS size; the `ResizeObserver` watches the container, not the canvas, to avoid a feedback loop. Wide screens: board left, fixed 330 px column right, log fills the height. Phones: everything fits without scrolling.
+- The drawing quiz gives the guess list the leftover height on a phone and caps the side column at 300 px on a desktop.
+- Development cards now carry their effect and whether they can be played on the card itself. The effect used to be in a `title` tooltip, invisible on a phone.
+
+### Tested
+
+Playwright against the mock, with the presence limit and 180 ms lag modelled: soccer possession, non-host kicks, crowding, goals and a full match; chat inside both games at 390 px and 1440 px, including putting the pane back; Catan to the end with 3, 4 and 6 players, host leaving, a silent player; drawing quiz turns, guesses, scoring, drawer leaving; gomoku, party, channel recovery.
+
 ## Realtime without presence, Catan and drawing rooms
 
 Audience: the developer and the developer's AI agent.

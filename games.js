@@ -890,6 +890,7 @@
     } else if (key === 'wait') {
       body.appendChild(el('p', 'tg-empty', '게임 상황을 불러오고 있어요…'));
     } else GAMES[kind].mount(body, card);
+    drawChat();
   }
 
   // ================================================================================================
@@ -2061,6 +2062,12 @@
         D.need = false; dRedraw();
       }
     }
+  };
+  // other files can plug their own game into these tables (hunt.js adds the mansion tag game this way)
+  window.ONL_TG = {
+    register(kind, scene, info, impl) { KIND_OF[scene] = kind; INFO[kind] = info; GAMES[kind] = impl; label(); },
+    get T() { return T; }, get G() { return G; }, set G(v) { G = v; },
+    send, isHost, inTable, me, memberName, render, bump, backToLobby, hostLeave, now, toast: t => toast(t), el
   };
   // test hook (only with ?debug in the address)
   if (/[?&]debug\b/.test(location.search)) window.__tg = {

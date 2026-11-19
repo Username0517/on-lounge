@@ -304,7 +304,7 @@ begin
     raise exception 'not a member';
   end if;
   new.name := nm;
-  if new.scene not in ('sanctuary', 'hall', 'room1', 'room2', 'room3', 'room4', 'hall1', 'f1r1', 'f1r2', 'f1r3', 'roof', 'soccer') then
+  if new.scene not in ('sanctuary', 'hall', 'room1', 'room2', 'room3', 'room4', 'hall1', 'f1r1', 'f1r2', 'f1r3', 'f1r4', 'roof', 'soccer', 'plaza', 'forest1', 'forest2', 'mansion') then
     raise exception 'bad scene';
   end if;
   if (select count(*) from public.messages where user_id = new.user_id and created_at > now() - interval '10 seconds') >= 5 then
@@ -481,3 +481,73 @@ end $$;
 -- 아래 줄의 이메일을 바꾸고 맨 앞의 -- 두 개를 지운 다음, 그 줄만 선택해서 Run 하세요.
 -- insert into public.admins (user_id) select id from auth.users where email = '본인이메일@example.com';
 -- =====================================================================
+
+-- ================= 광야 기록판 =================
+-- 1) 기록 표: 한 사람이 게임마다 자기 최고 기록 한 줄만 가져요.
+create table if not exists public.scores (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  game text not null check (char_length(game) between 1 and 24),
+  score int not null default 0 check (score >= 0 and score <= 1000000),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, game)
+);
+
+alter table public.scores enable row level security;
+
+-- 아무도 표를 직접 못 건드려요. 아래 함수들로만 오갑니다.
+revoke all on public.scores from public, anon, authenticated;
+
+create index if not exists scores_game_rank_idx on public.scores (game, score desc, updated_at asc);
+
+-- 2) 기록 내기: 전보다 좋을 때만 갱신하고, 지금 등수를 돌려줘요.
+create or replace function public.submit_score(p_game text, p_score int) returns int
+language plpgsql security definer set search_path = public as $$
+declare v_best int; v_rank int;
+begin
+  if not public.is_member() then raise exception 'not a member'; end if;
+  if p_game is null or char_length(p_game) not between 1 and 24 then raise exception 'bad game'; end if;
+  if p_score is null or p_score < 0 or p_score > 1000000 then raise exception 'bad score'; end if;
+  -- 한 사람이 1분에 30번까지만 (자동 제출 폭주 방지)
+  if public.guard_hit('score:' || auth.uid()::text, 30, 60, true) > 0 then raise exception 'too fast'; end if;
+
+  insert into public.scores as s (user_id, game, score)
+  values (auth.uid(), p_game, p_score)
+  on conflict (user_id, game) do update
+    set score = greatest(s.score, excluded.score),
+        updated_at = case when excluded.score > s.score then now() else s.updated_at end;
+
+  select score into v_best from public.scores where user_id = auth.uid() and game = p_game;
+  select count(*) + 1 into v_rank from public.scores x where x.game = p_game and x.score > v_best;
+  return v_rank;
+end;
+$$;
+
+-- 3) 1~10등 순위표. 이름은 프로필에서 가져오고, 같은 점수면 먼저 세운 사람이 위예요.
+create or replace function public.top_scores(p_game text)
+returns table (rank int, name text, score int, is_me boolean)
+language sql security definer set search_path = public as $$
+  select (row_number() over (order by s.score desc, s.updated_at asc))::int as rank,
+         coalesce(p.name, '친구') as name,
+         s.score,
+         (s.user_id = auth.uid()) as is_me
+  from public.scores s
+  left join public.profiles p on p.id = s.user_id
+  where s.game = p_game and public.is_member()
+  order by s.score desc, s.updated_at asc
+  limit 10;
+$$;
+
+-- 4) 내 최고 기록
+create or replace function public.my_score(p_game text) returns int
+language sql security definer set search_path = public as $$
+  select coalesce((select score from public.scores
+                   where user_id = auth.uid() and game = p_game and public.is_member()), 0);
+$$;
+
+-- 5) 로그인한 교인만 부를 수 있어요.
+revoke execute on function public.submit_score(text, int) from public, anon;
+revoke execute on function public.top_scores(text) from public, anon;
+revoke execute on function public.my_score(text) from public, anon;
+grant execute on function public.submit_score(text, int) to authenticated;
+grant execute on function public.top_scores(text) to authenticated;
+grant execute on function public.my_score(text) to authenticated;

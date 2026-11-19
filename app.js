@@ -698,6 +698,312 @@
       P(g, 24, 142, 4, 8, '#5a452f'); P(g, 25, 128, 2, 4, '#6f452c');
     } }
   ];
+  // ================================================================================================
+  //  바깥: 광장 · 검은 숲길(1·2) · 저택 마당
+  // ================================================================================================
+  // Everything here is drawn once into the background, except the things you can walk behind
+  // (items) and the moving atmosphere (scene.fx: darkness that grows as you go deeper, fog, crows…).
+  const hexMix = (a, z, t) => {
+    t = clamp(t, 0, 1);
+    const A = parseInt(a.slice(1), 16), Z = parseInt(z.slice(1), 16);
+    const ch = sh => Math.round(((A >> sh) & 255) * (1 - t) + ((Z >> sh) & 255) * t);
+    return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
+  };
+  // a filled circle made of horizontal runs (fast enough to draw hundreds of leaves)
+  function blob(g, cx, cy, r, c) {
+    g.fillStyle = c;
+    for (let y = -r; y <= r; y++) { const hw = Math.floor(Math.sqrt(r * r - y * y + r * 0.5)); g.fillRect(Math.round(cx - hw), Math.round(cy + y), hw * 2 + 1, 1); }
+  }
+  // decay 0 = lush summer tree … 1 = a black, leafless, twisted thing
+  function forestTree(g, x, y, d, R, big) {
+    const s = big ? 1.25 : 1;
+    const trunk = hexMix('#6b4a32', '#241c1e', d), trunkD = hexMix('#4f3524', '#130e12', d);
+    const th = Math.round((12 + d * 6) * s);
+    P(g, x - 2, y - th, 5, th, trunk); P(g, x + 1, y - th, 2, th, trunkD);
+    P(g, x - 4, y - 2, 9, 3, trunkD);                                  // roots
+    if (d < 0.82) {
+      const leafN = Math.round((7 - d * 5) * s), dens = 1 - d * 0.75;
+      const L0 = hexMix(hexMix('#3f8a3c', '#9a8a3a', d * 1.4), '#4a3a2a', Math.max(0, d - 0.5) * 1.6);
+      const L1 = hexMix(L0, '#1d2418', 0.35), L2 = hexMix(L0, '#e6e2a0', 0.25);
+      const cy = y - th - 6 * s;
+      blob(g, x, cy, Math.round(10 * s), L1);
+      for (let i = 0; i < leafN; i++) {
+        if (R() > dens) continue;
+        const a = R() * Math.PI * 2, rr = R() * 7 * s;
+        blob(g, x + Math.cos(a) * rr, cy + Math.sin(a) * rr * 0.8, Math.round((4 + R() * 3) * s), L0);
+      }
+      for (let i = 0; i < 4; i++) if (R() < dens) P(g, x - 6 + R() * 10 | 0, cy - 6 + R() * 6 | 0, 2, 1, L2);
+      // bare twigs poke through as the tree dies
+      if (d > 0.35) for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + (R() - 0.5) * 2.2; for (let k = 4; k < 13; k++) P(g, x + Math.cos(a) * k | 0, cy + Math.sin(a) * k | 0, 1, 1, trunkD); }
+    } else {
+      // dead: crooked branches only
+      const top = y - th;
+      for (let b = 0; b < 5; b++) {
+        let bx = x, by = top + 2 + b * 2, a = -Math.PI / 2 + (b - 2) * 0.55 + (R() - 0.5) * 0.4;
+        for (let k = 0; k < 10 + R() * 6; k++) { bx += Math.cos(a); by += Math.sin(a); a += (R() - 0.5) * 0.5; P(g, bx | 0, by | 0, k < 4 ? 2 : 1, 1, trunk); }
+      }
+      P(g, x - 1, top - 4, 3, 5, trunk);
+    }
+  }
+  function grassTufts(g, x0, y0, w, h, col, n, R) { for (let i = 0; i < n; i++) { const x = x0 + R() * w | 0, y = y0 + R() * h | 0; P(g, x, y, 1, 2, col); P(g, x + 1, y + 1, 1, 1, col); } }
+  // a winding dirt path: centre line and half width as functions of y; walls of forest either side
+  function forestScene(o) {
+    const { w, h, cx, hw, decay0, decay1, seed } = o;
+    const decayAt = y => decay0 + (decay1 - decay0) * (1 - y / h);
+    const draw = (g) => {
+      const R = rnd32(seed);
+      for (let y = 0; y < h; y++) {
+        const d = decayAt(y);
+        const grass = hexMix(hexMix('#5c9a46', '#8a8248', d * 1.3), '#2c2a24', Math.max(0, d - 0.55) * 1.9);
+        const dirt = hexMix('#a9845a', '#4a3e34', d);
+        P(g, 0, y, w, 1, grass);
+        const c = cx(y), hh = hw(y) + 4;
+        P(g, Math.round(c - hh), y, Math.round(hh * 2), 1, dirt);
+        P(g, Math.round(c - hh), y, 1, 1, hexMix(dirt, '#000000', 0.25)); P(g, Math.round(c + hh), y, 1, 1, hexMix(dirt, '#000000', 0.25));
+      }
+      // grass tufts and pebbles
+      for (let y = 0; y < h; y += 8) {
+        const d = decayAt(y), c = cx(y), hh = hw(y) + 4;
+        grassTufts(g, 0, y, c - hh - 2, 8, hexMix('#3e7a32', '#3a3324', d * 1.2), 6, R);
+        grassTufts(g, c + hh + 2, y, w - c - hh, 8, hexMix('#3e7a32', '#3a3324', d * 1.2), 6, R);
+        if (R() < 0.6) P(g, c - hh + 4 + R() * (hh * 2 - 8) | 0, y + R() * 8 | 0, 2, 1, hexMix('#c7a77a', '#5a4e44', d));
+        // flowers early on, mushrooms in the middle, rotting leaves near the end
+        if (d < 0.3 && R() < 0.5) { const fx = R() < 0.5 ? R() * (c - hh - 6) : c + hh + 4 + R() * (w - c - hh - 8); P(g, fx | 0, y + 3, 2, 2, pick2(R, ['#f7e36b', '#f39ac0', '#ffffff', '#b8a6dc'])); }
+        else if (d > 0.35 && d < 0.75 && R() < 0.35) { const fx = R() < 0.5 ? c - hh - 8 - R() * 20 : c + hh + 6 + R() * 20; P(g, fx | 0, y + 4, 3, 2, d > 0.55 ? '#7a5a8a' : '#c0503a'); P(g, (fx | 0) + 1, y + 6, 1, 2, '#e8dcc2'); }
+        if (d > 0.6 && R() < 0.8) P(g, c - hh + R() * hh * 2 | 0, y + R() * 8 | 0, 2, 1, pick2(R, ['#6b4a2a', '#4a3423', '#3a2a1e']));
+      }
+      // the forest walls
+      const trees = [];
+      for (let y = -10; y < h + 22; y += 13) {
+        const c = cx(Math.max(0, Math.min(h - 1, y))), hh = hw(Math.max(0, Math.min(h - 1, y)));
+        for (let x = 6 + R() * 8; x < c - hh - 10; x += 15 + R() * 8) trees.push([x, y + R() * 8]);
+        for (let x = c + hh + 12 + R() * 6; x < w - 4; x += 15 + R() * 8) trees.push([x, y + R() * 8]);
+      }
+      trees.sort((a, z) => a[1] - z[1]);
+      for (const [x, y] of trees) forestTree(g, Math.round(x), Math.round(y), clamp(decayAt(y) + (R() - 0.5) * 0.12, 0, 1), R, R() < 0.25);
+      if (o.extra) o.extra(g, R);
+    };
+    // walls of forest as obstacles, one band every 8 px
+    const obs = [];
+    for (let y = 0; y < h; y += 8) {
+      const c = cx(y + 4), hh = hw(y + 4);
+      obs.push([0, y, Math.max(0, Math.round(c - hh)), 8], [Math.round(c + hh), y, Math.max(0, w - Math.round(c + hh)), 8]);
+    }
+    return { draw, obs, decayAt };
+  }
+  const pick2 = (R, a) => a[R() * a.length | 0];
+
+  // the creeping dark: a black veil with a soft hole of light around you
+  function darkVeil(b, amount, radius, flick) {
+    if (amount <= 0.01) return;
+    const px = player.x, py = player.y - 10;
+    const rr = radius * (flick || 1);
+    const lg = b.createRadialGradient(px, py, rr * 0.25, px, py, rr);
+    lg.addColorStop(0, `rgba(8,6,14,${amount * 0.12})`);
+    lg.addColorStop(1, `rgba(8,6,14,${amount})`);
+    b.fillStyle = lg; b.fillRect(0, 0, W, H);
+  }
+
+  // ---- 광장 ----
+  const PLAZA_W = 256, PLAZA_H = 240;
+  const PLAZA_LOCKS = [['lockNW', 34, 30, '서쪽 언덕길'], ['lockNE', 222, 30, '동쪽 언덕길'], ['lockW', 12, 120, '항구로 가는 길'], ['lockE', 244, 120, '시장으로 가는 길']];
+  function bgPlaza(g, w, h) {
+    const R = rnd32(777);
+    // grass all round, cobbles in the middle
+    P(g, 0, 0, w, h, '#78b25c');
+    for (let i = 0; i < 500; i++) P(g, R() * w | 0, R() * h | 0, 1, 2, R() < 0.5 ? '#6aa350' : '#8cc46c');
+    const cob = (x0, y0, ww, hh) => {
+      P(g, x0, y0, ww, hh, '#cbc2b2');
+      for (let y = y0; y < y0 + hh; y += 5) for (let x = x0 + ((y / 5) % 2) * 3; x < x0 + ww; x += 6) { P(g, x, y, 5, 4, R() < 0.5 ? '#d6cebf' : '#c3b9a8'); P(g, x, y + 4, 5, 1, '#a99f8e'); }
+    };
+    cob(28, 46, 200, 150);                 // the square
+    cob(112, 0, 32, 50);                   // north road to the forest
+    cob(0, 104, 30, 32); cob(226, 104, 30, 32);   // west and east roads
+    cob(26, 14, 22, 34); cob(208, 14, 22, 34);    // NW and NE lanes
+    // the forest edge at the top, already a little gloomy
+    for (let x = -6; x < w + 10; x += 13) if (x < 104 || x > 152) forestTree(g, x, 18 + (R() * 8 | 0), 0.15 + R() * 0.15, R, R() < 0.3);
+    // the north entrance: two old trees and a sign
+    forestTree(g, 104, 30, 0.35, R, true); forestTree(g, 152, 30, 0.4, R, true);
+    P(g, 150, 34, 2, 12, '#6b4a32'); P(g, 140, 30, 20, 7, '#8a5a3b'); P(g, 141, 31, 18, 5, '#a8734f'); P(g, 143, 33, 14, 1, '#4a3022');
+    // flower beds on both sides
+    for (const [fx, fy] of [[44, 60], [176, 60], [44, 166], [176, 166]]) {
+      P(g, fx, fy, 36, 14, '#5b3e2c'); P(g, fx + 1, fy + 1, 34, 12, '#6e4b33');
+      for (let i = 0; i < 18; i++) P(g, fx + 2 + R() * 31 | 0, fy + 2 + R() * 9 | 0, 2, 2, pick2(R, ['#f7e36b', '#f39ac0', '#ffffff', '#e8894a', '#b8a6dc']));
+    }
+    // our building at the bottom
+    P(g, 0, 196, w, 44, '#ece7df'); P(g, 0, 196, w, 2, '#cbc2b4');
+    for (let x = 6; x < w; x += 22) if (x < 100 || x > 150) { P(g, x, 204, 14, 14, '#9fc6d8'); P(g, x, 204, 14, 2, '#c9e4ef'); P(g, x + 6, 204, 2, 14, '#ece7df'); }
+    P(g, 106, 199, 44, 41, '#0e0d12'); P(g, 108, 201, 19, 39, '#9fc6d8'); P(g, 129, 201, 19, 39, '#9fc6d8');
+    P(g, 127, 201, 2, 39, '#0e0d12'); P(g, 123, 216, 2, 7, '#c9c9d4'); P(g, 131, 216, 2, 7, '#c9c9d4');
+    for (const x0 of [108, 129]) { P(g, x0 + 3, 205, 2, 28, 'rgba(255,255,255,.55)'); }
+    P(g, 104, 190, 48, 8, '#251c2c'); P(g, 112, 192, 32, 4, '#ffcc4d');            // sign over the door
+    P(g, 112, 196, 32, 3, 'rgba(0,0,0,.15)');
+  }
+  function lampPost(g, x, y) {
+    P(g, x - 1, y - 26, 3, 26, '#2b2233'); P(g, x - 3, y - 2, 7, 3, '#2b2233');
+    P(g, x - 4, y - 32, 9, 7, '#2b2233'); P(g, x - 3, y - 31, 7, 5, '#ffe08a'); P(g, x - 3, y - 31, 7, 1, '#fff4c4');
+  }
+  function benchSide(g, x, y) {
+    P(g, x, y, 22, 4, '#7a5238'); P(g, x, y - 5, 22, 3, '#8a5a3b'); P(g, x + 1, y + 4, 2, 4, '#2b2233'); P(g, x + 19, y + 4, 2, 4, '#2b2233');
+  }
+  const plazaItems = [
+    { id: 'pz-fountain', label: '분수', fixed: true, box: [100, 92, 56, 46], sortY: 130, obs: [[104, 104, 48, 26]], draw: g => {
+      pixCircle(g, 128, 117, 24, '#8d8676'); pixCircle(g, 128, 117, 22, '#a9a090'); pixCircle(g, 128, 117, 19, '#4f8fc0'); pixCircle(g, 128, 117, 16, '#6fb0dc');
+      P(g, 125, 98, 6, 20, '#a9a090'); P(g, 126, 98, 4, 20, '#c7beae'); pixCircle(g, 128, 98, 5, '#c7beae'); P(g, 127, 92, 2, 5, '#9fd4ff');
+    } },
+    { id: 'pz-lamp1', label: '가로등', fixed: true, box: [62, 82, 12, 36], sortY: 116, obs: [[64, 112, 8, 5]], draw: g => lampPost(g, 68, 116) },
+    { id: 'pz-lamp2', label: '가로등', fixed: true, box: [182, 82, 12, 36], sortY: 116, obs: [[184, 112, 8, 5]], draw: g => lampPost(g, 188, 116) },
+    { id: 'pz-lamp3', label: '가로등', fixed: true, box: [62, 152, 12, 36], sortY: 186, obs: [[64, 182, 8, 5]], draw: g => lampPost(g, 68, 186) },
+    { id: 'pz-lamp4', label: '가로등', fixed: true, box: [182, 152, 12, 36], sortY: 186, obs: [[184, 182, 8, 5]], draw: g => lampPost(g, 188, 186) },
+    { id: 'pz-bench1', label: '벤치', fixed: true, box: [86, 150, 24, 14], sortY: 160, obs: [[87, 154, 22, 6]], draw: g => benchSide(g, 87, 156) },
+    { id: 'pz-bench2', label: '벤치', fixed: true, box: [146, 150, 24, 14], sortY: 160, obs: [[147, 154, 22, 6]], draw: g => benchSide(g, 147, 156) }
+  ].concat(PLAZA_LOCKS.map(([id, x, y]) => ({ id: 'pz-' + id, label: '닫힌 문', fixed: true, box: [x - 12, y - 22, 24, 30], sortY: y + 6, obs: [], draw: g => {
+    // a little stone arch with a locked iron gate
+    P(g, x - 12, y - 20, 4, 26, '#7d7466'); P(g, x + 8, y - 20, 4, 26, '#7d7466'); P(g, x - 12, y - 22, 24, 5, '#8d8476');
+    for (let i = -7; i <= 6; i += 3) P(g, x + i, y - 17, 1, 22, '#2b2233');
+    P(g, x - 8, y - 6, 16, 1, '#2b2233'); P(g, x - 3, y - 9, 6, 6, '#ffcc4d'); P(g, x - 1, y - 7, 2, 2, '#251c2c');
+  } })));
+
+  // ---- 검은 숲길 1 (밝게 시작해 점점 썩어 가요) ----
+  const FOREST1 = forestScene({ w: 192, h: 480, seed: 9101, decay0: 0.0, decay1: 0.72,
+    cx: y => 96 + Math.round(Math.sin(y / 62) * 20), hw: () => 22,
+    extra: (g, R) => {
+      // a cheerful signpost at the start, a warning someone half scratched out near the end
+      P(g, 128, 440, 2, 14, '#6b4a32'); P(g, 118, 434, 22, 7, '#a8734f'); P(g, 120, 436, 18, 1, '#4a3022'); P(g, 120, 438, 12, 1, '#4a3022');
+      P(g, 60, 70, 2, 14, '#3a2a22'); P(g, 50, 63, 22, 8, '#5a4234'); P(g, 52, 66, 18, 1, '#c94a45'); P(g, 54, 68, 10, 1, '#c94a45'); P(g, 60, 64, 1, 6, '#2b2233');
+    } });
+  // ---- 검은 숲길 2 (안개, 까마귀, 어둠) ----
+  const FOREST2 = forestScene({ w: 192, h: 480, seed: 9202, decay0: 0.78, decay1: 1.0,
+    cx: y => 96 + Math.round(Math.sin(y / 55 + 1.3) * 24), hw: y => 20 - Math.round((1 - y / 480) * 3),
+    extra: (g, R) => {
+      // a broken fence, a lost shoe and old puddles
+      for (let x = 14; x < 54; x += 6) { P(g, x, 300 + (x % 4), 2, 12, '#3a3030'); } P(g, 12, 304, 44, 2, '#3a3030');
+      P(g, 104, 212, 6, 3, '#9a3a3a'); P(g, 104, 211, 3, 1, '#c94a45');
+      for (const [x, y] of [[84, 380], [108, 150], [90, 60]]) { P(g, x, y, 14, 5, '#1f2630'); P(g, x + 2, y + 1, 8, 1, '#3a4656'); }
+    } });
+  const CROWS2 = [[30, 420], [160, 360], [22, 250], [170, 180], [40, 110], [150, 60]];
+  const EYES2 = [[24, 330], [168, 270], [16, 150], [176, 96], [30, 40], [160, 20]];
+  function crow(b, x, y, flap) {
+    P(b, x - 3, y, 7, 3, '#0e0c12'); P(b, x + 3, y - 2, 3, 3, '#0e0c12'); P(b, x + 6, y - 1, 2, 1, '#3a3530'); P(b, x + 4, y - 2, 1, 1, '#c94a45');
+    if (flap) { P(b, x - 5, y - 3, 5, 2, '#0e0c12'); P(b, x - 1, y - 4, 4, 2, '#0e0c12'); } else P(b, x - 4, y + 2, 6, 1, '#1d1a22');
+  }
+  const leaves = [];
+  function forestFx1(b, now) {
+    const prog = clamp(1 - player.y / FOREST1_H, 0, 1);
+    // dead leaves drifting down once things start to rot
+    if (prog > 0.35 && Math.random() < 0.08 + prog * 0.15) leaves.push({ x: camX + Math.random() * 200, y: camY - 4, vx: (Math.random() - 0.5) * 14, vy: 12 + Math.random() * 10, t: now, c: Math.random() < 0.5 ? '#8a6a3a' : '#5a4230' });
+    for (let i = leaves.length - 1; i >= 0; i--) { const L = leaves[i], dt = 1 / 60; L.x += (L.vx + Math.sin((now - L.t) / 300) * 8) * dt; L.y += L.vy * dt; if (L.y > camY + 260 || now - L.t > 12000) { leaves.splice(i, 1); continue; } P(b, L.x | 0, L.y | 0, 2, 1, L.c); }
+    darkVeil(b, 0.04 + prog * prog * 0.5, 120 - prog * 40);
+  }
+  function forestFx2(b, now) {
+    const prog = clamp(1 - player.y / FOREST2_H, 0, 1);
+    // low fog
+    b.save();
+    for (let k = 0; k < 7; k++) {
+      const y = (k * 73 + now / 90) % 520 - 20, x = ((k * 131 + now / 40) % 360) - 90;
+      b.fillStyle = 'rgba(190,190,210,0.07)'; b.fillRect(x, y, 140, 10); b.fillRect(x + 20, y + 3, 100, 8);
+    }
+    b.restore();
+    // crows that hop and look at you
+    for (const [x, y] of CROWS2) { if (Math.abs(y - player.y) > 220) continue; crow(b, x, y, Math.floor((now + x * 13) / 260) % 9 === 0); }
+    // something's eyes, between the trees, only for a moment
+    for (const [x, y] of EYES2) {
+      const ph = ((now + x * 997 + y * 31) % 9000) / 9000;
+      if (ph < 0.06 && Math.abs(y - player.y) < 200) { P(b, x, y, 2, 1, '#ff3b3b'); P(b, x + 5, y, 2, 1, '#ff3b3b'); }
+    }
+    const flick = 1 + Math.sin(now / 90) * 0.02 + (Math.random() < 0.02 ? -0.08 : 0);
+    darkVeil(b, 0.46 + prog * 0.28, 84 - prog * 18, flick);
+  }
+  const FOREST1_H = 480, FOREST2_H = 480;
+  const forestItems = (key, F) => [{ id: key + '-walls', label: '숲', fixed: true, box: [0, 0, 1, 1], sortY: -1, obs: F.obs, draw: () => {} }];
+
+  // ---- 저택 마당 ----
+  const MANSION_W = 256, MANSION_H = 288, MANSION_DOOR = [128, 152];
+  function bgMansion(g, w, h) {
+    const R = rnd32(6606);
+    // the night above the roof
+    P(g, 0, 0, w, 40, '#14121f'); for (let i = 0; i < 40; i++) P(g, R() * w | 0, R() * 34 | 0, 1, 1, R() < 0.3 ? '#e8e6f0' : '#6a6680');
+    pixCircle(g, 212, 14, 8, '#d9d6c3'); pixCircle(g, 215, 12, 7, '#14121f');           // a thin moon
+    // roof and gables
+    P(g, 18, 22, 220, 26, '#2c2833'); for (let x = 18; x < 238; x += 6) P(g, x, 22 + (x % 12 ? 0 : 1), 5, 25, '#34303d');
+    for (const gx of [40, 128, 216]) for (let k = 0; k < 18; k++) P(g, gx - 18 + k, 22 - k * 0.8 | 0, (18 - k) * 2, 1, '#2c2833');
+    pixCircle(g, 128, 18, 5, '#1a1622'); P(g, 126, 14, 4, 8, '#3a3a52');               // round attic window
+    // overgrown hedges either side of the house
+    for (const [x0, x1] of [[0, 18], [238, 256]]) { P(g, x0, 40, x1 - x0, 120, '#1c241a'); for (let i = 0; i < 60; i++) blob(g, x0 + R() * (x1 - x0), 44 + R() * 112, 2 + (R() * 3 | 0), R() < 0.5 ? '#26331f' : '#2f3f27'); }
+    // the walls
+    P(g, 18, 46, 220, 104, '#5f5766'); for (let y = 48; y < 150; y += 6) for (let x = 18 + ((y / 6) % 2) * 6; x < 238; x += 12) P(g, x, y, 11, 1, '#544c5a');
+    P(g, 18, 46, 220, 3, '#3a3440'); P(g, 18, 96, 220, 3, '#4a4250');                   // the line between floors
+    // windows: some boarded, one broken, one with a candle
+    const win = (x, y, kind) => {
+      P(g, x - 1, y - 1, 20, 26, '#2b2433'); P(g, x, y, 18, 24, '#14111b'); P(g, x + 8, y, 2, 24, '#2b2433'); P(g, x, y + 11, 18, 2, '#2b2433');
+      if (kind === 'board') { P(g, x - 2, y + 6, 22, 3, '#6b4a32'); P(g, x - 2, y + 15, 22, 3, '#5a3e2a'); }
+      if (kind === 'broken') { P(g, x + 1, y + 1, 6, 9, '#2a2d40'); P(g, x + 3, y + 3, 2, 1, '#9aa0c0'); P(g, x + 11, y + 14, 5, 2, '#9aa0c0'); }
+      if (kind === 'curtain') { P(g, x, y, 4, 24, '#5a2a2e'); P(g, x + 14, y, 4, 24, '#5a2a2e'); }
+    };
+    win(34, 60, 'board'); win(70, 60, 'broken'); win(166, 60, 'curtain'); win(202, 60, 'board');
+    win(34, 108, 'curtain'); win(70, 108, 'board'); win(166, 108, 'broken'); win(202, 108, '');
+    win(119, 60, '');
+    // the front door and steps
+    P(g, 106, 108, 44, 42, '#2b2233'); P(g, 108, 110, 19, 40, '#3b2620'); P(g, 129, 110, 19, 40, '#3b2620');
+    for (const x0 of [108, 129]) { P(g, x0 + 2, 114, 15, 14, '#33201b'); P(g, x0 + 2, 132, 15, 14, '#33201b'); }
+    P(g, 124, 128, 2, 4, '#b08a3a'); P(g, 130, 128, 2, 4, '#b08a3a');
+    P(g, 100, 102, 56, 7, '#4a4250'); P(g, 104, 100, 48, 3, '#5a5260');
+    P(g, 98, 150, 60, 4, '#6b6560'); P(g, 94, 154, 68, 4, '#5f5954');
+    // vines creeping over everything
+    for (let k = 0; k < 26; k++) {
+      let x = 18 + R() * 220, y = 150 - R() * 10, a = -Math.PI / 2 + (R() - 0.5) * 0.8;
+      const len = 20 + R() * 70;
+      for (let i = 0; i < len; i++) {
+        x += Math.cos(a) * 0.9; y += Math.sin(a) * 0.9; a += (R() - 0.5) * 0.35;
+        if (y < 40) break;
+        P(g, x | 0, y | 0, 1, 1, '#24361f');
+        if (i % 5 === 0) P(g, (x | 0) + (R() < 0.5 ? -2 : 1), y | 0, 2, 2, R() < 0.5 ? '#2f4a2a' : '#3e5e33');
+      }
+    }
+    // the yard
+    P(g, 0, 158, w, h - 158, '#3b3a2f');
+    for (let i = 0; i < 700; i++) P(g, R() * w | 0, 160 + R() * (h - 160) | 0, 1, 2, R() < 0.5 ? '#4a4636' : '#2f2e26');
+    for (let y = 158; y < h; y += 7) { const ww = 26 + (y > 260 ? 6 : 0); for (let x = 128 - ww / 2; x < 128 + ww / 2; x += 8) if (R() < 0.85) { P(g, x, y, 7, 6, R() < 0.5 ? '#6b6560' : '#5f5954'); P(g, x, y + 5, 7, 1, '#4a4540'); } }
+    // iron fence
+    for (let y = 160; y < h; y += 5) { P(g, 4, y, 2, 4, '#1a171f'); P(g, 250, y, 2, 4, '#1a171f'); }
+    P(g, 2, 160, 6, h - 160, 'rgba(0,0,0,.15)'); P(g, 248, 160, 6, h - 160, 'rgba(0,0,0,.15)');
+    // broken gate at the bottom
+    for (let x = 4; x < 100; x += 5) P(g, x, 276, 2, 12, '#1a171f'); for (let x = 158; x < 252; x += 5) P(g, x, 276, 2, 12, '#1a171f');
+    P(g, 4, 278, 96, 2, '#1a171f'); P(g, 158, 278, 94, 2, '#1a171f');
+    P(g, 100, 266, 6, 22, '#2b2733'); P(g, 150, 266, 6, 22, '#2b2733');
+    for (let k = 0; k < 6; k++) P(g, 84 - k * 2, 252 + k * 4, 2, 4, '#1a171f');   // the gate leaf lying on the ground
+  }
+  const mansionItems = [
+    { id: 'mn-tree', label: '죽은 나무', fixed: true, box: [22, 168, 40, 56], sortY: 220, obs: [[36, 214, 10, 8]], draw: g => forestTree(g, 41, 222, 1, rnd32(41), true) },
+    { id: 'mn-statue', label: '부서진 석상', fixed: true, box: [190, 176, 30, 40], sortY: 214, obs: [[194, 204, 22, 10]], draw: g => {
+      P(g, 194, 204, 22, 10, '#4a4648'); P(g, 196, 202, 18, 3, '#5a5658');
+      P(g, 200, 178, 10, 24, '#6b6668'); pixCircle(g, 205, 176, 5, '#6b6668'); P(g, 210, 186, 6, 3, '#6b6668');   // one arm left
+      P(g, 202, 175, 2, 2, '#1a171f'); P(g, 206, 175, 2, 2, '#1a171f'); P(g, 203, 180, 4, 1, '#3a3638');
+      P(g, 214, 210, 5, 3, '#5a5658');   // a fallen hand
+    } },
+    { id: 'mn-sign', label: '낡은 팻말', fixed: true, box: [62, 228, 20, 22], sortY: 246, obs: [[69, 242, 6, 4]], draw: g => {
+      P(g, 71, 236, 2, 12, '#3a2a22'); P(g, 62, 228, 20, 10, '#5a4234'); P(g, 64, 231, 16, 1, '#c94a45'); P(g, 64, 234, 11, 1, '#c94a45');
+    } },
+    { id: 'mn-lantern', label: '꺼진 등불', fixed: true, box: [160, 236, 10, 22], sortY: 256, obs: [[162, 252, 6, 4]], draw: g => {
+      P(g, 164, 236, 2, 20, '#1a171f'); P(g, 161, 234, 8, 6, '#1a171f'); P(g, 162, 235, 6, 4, '#3a3440');
+    } }
+  ];
+  let mnFlashAt = 0, mnNextFlash = 0, mnPeekAt = 0;
+  function mansionFx(b, now) {
+    // a candle in one window
+    const fl = 0.55 + Math.sin(now / 70) * 0.2 + Math.sin(now / 33) * 0.1;
+    P(b, 203, 109, 16, 22, `rgba(255,170,70,${0.18 * fl})`); P(b, 210, 122, 2, 4, '#ffe08a'); P(b, 210, 120, 2, 2, `rgba(255,220,120,${fl})`);
+    // now and then, something stands in the attic window, looking down at you
+    if (now > mnPeekAt + 14000 && Math.random() < 0.003) mnPeekAt = now;
+    if (now - mnPeekAt < 1300) { P(b, 125, 14, 6, 8, '#3d4a8a'); P(b, 126, 16, 1, 2, '#0a0a10'); P(b, 129, 16, 1, 2, '#0a0a10'); }
+    darkVeil(b, 0.55, 78, 1 + Math.sin(now / 120) * 0.02);
+    // lightning
+    if (!mnNextFlash) mnNextFlash = now + 9000 + Math.random() * 15000;
+    if (now > mnNextFlash) { mnFlashAt = now; mnNextFlash = now + 16000 + Math.random() * 20000; }
+    const ft = now - mnFlashAt;
+    if (ft < 520) { const a = ft < 80 ? 0.55 : ft < 160 ? 0.1 : ft < 240 ? 0.4 : (520 - ft) / 280 * 0.25; b.fillStyle = `rgba(230,235,255,${a})`; b.fillRect(0, 0, W, H); }
+  }
+
   const exitSpot = { id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 144, hit: [82, 160, 28, 16], label: '복도로 나가기' };
   const SCENES = {
     sanctuary: { name: '본당', w: 192, h: 360, bounds: [10, 50, 182, 354], lights: true, drawBg: bgSanctuary, items: sanctItems, seats: sanctSeats,
@@ -728,7 +1034,7 @@
     room3: { name: 'ROOM 3 · 세미나실', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom3, items: room3Items, seats: r3Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
     room4: { name: 'ROOM 4 · 라운지', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgRoom4, items: room4Items, seats: r4Seats, spawns: { door: [96, 156, 'up'] }, spots: [exitSpot] },
     hall1: { name: '1층 복도', w: 160, h: 280, bounds: [22, 52, 138, 266], drawBg: bgHall1, items: hall1Items, seats: [],
-      spawns: { elevator: [80, 256, 'up'], f1r1: [26, 100, 'right'], f1r2: [26, 200, 'right'], f1r3: [134, 100, 'left'], f1r4: [134, 200, 'left'] },
+      spawns: { elevator: [80, 256, 'up'], outside: [80, 64, 'down'], f1r1: [26, 100, 'right'], f1r2: [26, 200, 'right'], f1r3: [134, 100, 'left'], f1r4: [134, 200, 'left'] },
       spots: [{ id: 'outside', item: null, x: 80, y: 58, r: 14, ax: 80, ay: 4, hit: [58, 7, 44, 40], label: '건물 밖으로 나가기' }, ELEV_SPOT(160, 280)]
         .concat(HALL1_DOORS.map(([id, x, y, right]) => ({ id: 'to-' + id, item: null, x: right ? x - 10 : x + 10, y, r: 12, ax: right ? x - 10 : x + 10, ay: y - 22, hit: right ? [x - 10, y - 16, 16, 32] : [x - 6, y - 16, 16, 32], label: F1_OPEN.includes(id) ? `${ROOM_INFO[id].n} ${ROOM_INFO[id].sub} 들어가기` : `${ROOM_INFO[id].n} 문 열어 보기`, room: F1_OPEN.includes(id) ? id : null, locked: !F1_OPEN.includes(id) }))),
       labels: [{ x: 80, y: 2, t: '출입문', align: 'center' }]
@@ -742,13 +1048,41 @@
       spots: [{ id: 'toHall', item: null, x: 96, y: 158, r: 14, ax: 96, ay: 146, hit: [82, 160, 28, 16], label: '복도로 돌아가기' }, { id: 'catan', item: 'ct-table', x: 96, y: 120, r: 16, ax: 96, ay: 76, label: '카탄 하기' }] },
     f1r3: { name: '1층 ROOM 3 · 낙서 골목', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgGraffiti, items: graffitiItems, seats: graffitiSeats, spawns: { door: [96, 156, 'up'] },
       spots: [exitSpot, { id: 'drawgame', item: 'dr-easel', x: 96, y: 92, r: 16, ax: 96, ay: 40, label: '그림 퀴즈 하기' }] },
+    plaza: { name: '광장', w: PLAZA_W, h: PLAZA_H, bounds: [8, 38, 248, 194], drawBg: bgPlaza, items: plazaItems, seats: [], outdoor: true,
+      spawns: { hall1: [128, 190, 'up'], forest: [128, 44, 'down'] },
+      spots: [
+        { id: 'toBuilding', item: null, x: 128, y: 194, r: 15, ax: 128, ay: 182, hit: [106, 199, 44, 41], label: '건물로 들어가기', go: ['hall1', 'outside'] },
+        { id: 'toForest', item: null, x: 128, y: 42, r: 15, ax: 128, ay: 12, hit: [112, 0, 32, 46], label: '검은 숲길로 들어가기', go: ['forest1', 'plaza'] }
+      ].concat(PLAZA_LOCKS.map(([id, x, y, nm]) => ({ id, item: null, x: clamp(x, 18, 238), y: Math.max(y + 12, 44), r: 15, ax: x, ay: y - 26, hit: [x - 12, y - 22, 24, 30], label: `${nm} (닫혀 있음)`, locked: true }))),
+      labels: [{ x: 128, y: 2, t: '검은 숲길', align: 'center', count: 'forest1' }]
+        .concat(PLAZA_LOCKS.map(([id, x, y, nm]) => ({ x: clamp(x, 30, 226), y: y + 8, t: '🔒 ' + nm, align: 'center' }))) },
+    forest1: { name: '검은 숲길 · 입구', w: 192, h: FOREST1_H, bounds: [6, 8, 186, 474], drawBg: FOREST1.draw, items: forestItems('f1', FOREST1), seats: [], outdoor: true, fx: forestFx1,
+      spawns: { plaza: [(96 + Math.round(Math.sin(466 / 62) * 20)), 466, 'up'], forest2: [(96 + Math.round(Math.sin(16 / 62) * 20)), 16, 'down'] },
+      spots: [
+        { id: 'toPlaza', item: null, x: (96 + Math.round(Math.sin(474 / 62) * 20)), y: 474, r: 16, ax: (96 + Math.round(Math.sin(474 / 62) * 20)), ay: 456, label: '광장으로 돌아가기', go: ['plaza', 'forest'] },
+        { id: 'toForest2', item: null, x: (96 + Math.round(Math.sin(8 / 62) * 20)), y: 8, r: 16, ax: (96 + Math.round(Math.sin(8 / 62) * 20)), ay: 2, label: '숲 더 깊이 들어가기', go: ['forest2', 'forest1'] }
+      ] },
+    forest2: { name: '검은 숲길 · 깊은 곳', w: 192, h: FOREST2_H, bounds: [6, 8, 186, 474], drawBg: FOREST2.draw, items: forestItems('f2', FOREST2), seats: [], outdoor: true, fx: forestFx2,
+      spawns: { forest1: [(96 + Math.round(Math.sin(466 / 55 + 1.3) * 24)), 466, 'up'], mansion: [(96 + Math.round(Math.sin(16 / 55 + 1.3) * 24)), 16, 'down'] },
+      spots: [
+        { id: 'toForest1', item: null, x: (96 + Math.round(Math.sin(474 / 55 + 1.3) * 24)), y: 474, r: 16, ax: (96 + Math.round(Math.sin(474 / 55 + 1.3) * 24)), ay: 456, label: '숲 입구로 돌아가기', go: ['forest1', 'forest2'] },
+        { id: 'toMansion', item: null, x: (96 + Math.round(Math.sin(8 / 55 + 1.3) * 24)), y: 8, r: 16, ax: (96 + Math.round(Math.sin(8 / 55 + 1.3) * 24)), ay: 2, label: '안개 너머로 가기', go: ['mansion', 'forest2'] }
+      ] },
+    mansion: { name: '숲속의 저택', w: MANSION_W, h: MANSION_H, bounds: [10, 156, 246, 284], drawBg: bgMansion, items: mansionItems, seats: [], outdoor: true, fx: mansionFx,
+      spawns: { forest2: [128, 270, 'up'], door: [128, 166, 'down'] },
+      spots: [
+        { id: 'mansionDoor', item: null, x: 128, y: 160, r: 16, ax: 128, ay: 104, hit: [106, 108, 44, 46], label: '저택 문 열기' },
+        { id: 'mansionSign', item: 'mn-sign', x: 72, y: 252, r: 14, ax: 72, ay: 222, label: '팻말 읽기' },
+        { id: 'toForest2', item: null, x: 128, y: 282, r: 16, ax: 128, ay: 262, hit: [100, 266, 56, 22], label: '숲으로 돌아가기', go: ['forest2', 'mansion'] }
+      ] },
     roof: { name: '3층 · 옥상', w: 192, h: 200, bounds: [8, 52, 184, 186], drawBg: bgRoof, items: roofItems, seats: roofSeats, weather: true, spawns: { elevator: [96, 178, 'up'] },
       spots: [ELEV_SPOT(192, 200), { id: 'weather', item: 'rf-sign', x: 163, y: 134, r: 14, ax: 163, ay: 88, label: '오늘 베이징 날씨 보기' }] },
     soccer: { name: '축구장', w: FIELD.w, h: FIELD.h, bounds: [8, 20, 312, 196], drawBg: bgSoccer, items: [], seats: [], soccer: true, spawns: { w: [110, 108, 'right'], b: [210, 108, 'left'] },
       spots: [{ id: 'leaveField', item: null, x: 160, y: 194, r: 12, ax: 160, ay: 182, hit: [146, 198, 28, 10], label: '락커룸으로 돌아가기' }] }
   };
   const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1', f1r2: 'hall1', f1r3: 'hall1', f1r4: 'hall1' };
-  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'f1r4' || id === 'soccer') ? 1 : 2;
+  const OUTSIDE = ['plaza', 'forest1', 'forest2', 'mansion'];
+  const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'f1r4' || id === 'soccer' || OUTSIDE.includes(id)) ? 1 : 2;
   const ALL_ITEMS = Object.values(SCENES).flatMap(sc => sc.items);
   const itemById = Object.fromEntries(ALL_ITEMS.map(it => [it.id, it]));
   let sceneId = 'sanctuary', scene = SCENES.sanctuary, W = scene.w, H = scene.h, ITEMS = scene.items, chairs = scene.seats, spots = [];
@@ -889,9 +1223,11 @@
     if (sp.id === 'toHall') return () => goScene(HALL_OF[sceneId] || 'hall', sceneId);
     if (sp.id === 'toSanctuary') return () => goScene('sanctuary', 'door');
     if (sp.room) return () => goScene(sp.room, 'door');
+    if (sp.go) return () => goScene(sp.go[0], sp.go[1]);
     if (sp.locked) return () => toast(pick(LOCKED_MSG));
     const RUN = {
-      elevator: () => openElevator(), outside: () => toast(pick(OUTSIDE_MSG)), weather: () => openWeather(),
+      elevator: () => openElevator(), outside: () => goScene('plaza', 'hall1'), weather: () => openWeather(),
+      mansionDoor: () => openMansionDoor(), mansionSign: () => openMansionSign(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
       catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'),
       moses: () => openMoses(),
@@ -1485,7 +1821,7 @@
   }
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { if (!$('tg').hidden) { if (TG.hide) TG.hide(); return; } if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
-    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden || !$('tg').hidden || ($('wild') && !$('wild').hidden)) return;   // 광야 게임 중엔 라운지 캐릭터는 가만히
+    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden || !$('tg').hidden || ($('wild') && !$('wild').hidden) || ($('horror') && !$('horror').hidden)) return;   // 광야 게임 중엔 라운지 캐릭터는 가만히
     const k = keyName(e);
     // a button focused by an earlier click must not also fire on Enter/Space
     if ((k === 'enter' || k === ' ') && document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
@@ -1628,6 +1964,7 @@
       else drawChar(e.c, now);
     }
     drawMachineFx(now); drawEqFx(now);
+    if (scene.fx) scene.fx(b, now);
     if (scene.weather) { drawWeatherFx(now); drawWeatherBoard(now); }
     if (!scene.lights) return;
     b.save(); b.globalCompositeOperation = 'lighter';
@@ -3005,6 +3342,7 @@
     if (sceneId === 'f1r1' && party) leaveParty(true);
     if (TG.onLeaveScene) try { TG.onLeaveScene(); } catch (e) { console.error(e); }
     if (window.ONL_WILD && ONL_WILD.isOpen()) ONL_WILD.close();
+    if (window.ONL_MANSION && ONL_MANSION.isOpen()) ONL_MANSION.close();
     player.tie = 0;
     const fade = $('fade'); fade.classList.add('on');
     setTimeout(() => {
@@ -3019,7 +3357,7 @@
       camInit = false; resize();
       $('sceneTag').textContent = scene.name; gmLabel(); fbLabel();
       logEl.innerHTML = '';
-      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
+      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 안쪽으로 갈수록 숲이 이상해져요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
       if (id === 'roof') loadWeather();
       if (id === 'soccer') onSoccerEnter();
@@ -3752,6 +4090,37 @@
     show();
     $('modal').hidden = false;
   }
+  // ---- 숲속 저택 정문 ----
+  function openMansionDoor() {
+    const M = window.ONL_MANSION;
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🏚️ 저택 정문';
+    body.appendChild(el('p', 'moses-line', '삐걱… 문틈으로 차가운 바람이 새어 나와요. 안쪽 어딘가에서 무언가 끌리는 소리가 들린 것 같아요.'));
+    const col = el('div', 'mn-choices'); body.appendChild(col);
+    const btn = (text, cls, fn) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; b.addEventListener('click', fn); col.appendChild(b); return b; };
+    const story = () => {
+      if (!M) { toast('저택을 불러오지 못했어요. 새로고침해 주세요.'); return; }
+      closeModal();
+      log('', '🕯️ 혼자 저택 안으로 들어갑니다…', 'sys game');
+      M.openStory({ onQuit: () => { if (sceneId === 'mansion') toast('저택 밖으로 나왔어요'); } });
+    };
+    if (M && M.hasSave()) {
+      btn('🕯️ 이야기 이어하기', 'btn-gold', () => { closeModal(); M.openStory({ resume: true, onQuit: () => { if (sceneId === 'mansion') toast('저택 밖으로 나왔어요'); } }); });
+      btn('🕯️ 이야기 처음부터', '', () => { if (M) M.clearSave(); story(); });
+    } else btn('🕯️ 혼자 들어가기 · 이야기 모드', 'btn-gold', story);
+    btn('👥 다 함께 술래잡기 · 3~6명', '', () => { closeModal(); tgOpen('hunt'); });
+    btn('돌아서기', '', () => { closeModal(); toast(pick(['등 뒤에서 문이 천천히 닫혀요…', '창문 너머로 무언가 움직인 것 같아요.', '오늘은 그냥 돌아가기로 했어요.'])); });
+    body.appendChild(el('p', 'small', '이야기 모드는 혼자 하는 공포 탈출 게임이에요 (진행은 이 기기에 저장돼요). 술래잡기는 괴물과 생존자로 나뉘어 함께 해요. 소리를 켜면 더 무서워요!'));
+    $('modal').hidden = false;
+  }
+  function openMansionSign() {
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🪧 낡은 팻말';
+    body.appendChild(el('p', 'moses-line', '「 들어가지 마시오. 」'));
+    body.appendChild(el('p', '', '그 아래에 누군가 손톱으로 긁어 쓴 글씨가 있어요.'));
+    body.appendChild(el('p', 'moses-line', '「 그것은 눈을 깜빡이지 않는다. 숨으면… 그냥 지나간다. 」'));
+    $('modal').hidden = false;
+  }
   function tgOpen(kind) { if (TG.open) TG.open(kind); else toast('게임을 불러오지 못했어요. 페이지를 새로고침해 주세요.'); }
   window.ONL = {
     TG, $, el, toast, sfx, newId: gmNewId, P, pixCircle,
@@ -3759,6 +4128,7 @@
     // the player's own little character, drawn onto a canvas the games can put in their panels
     lookOf: id => id === net.uid ? player.look : ((net.remotes.get(id) || {}).look || null),
     avatar: (look, dir) => sprite(validLook(look) ? look : DEFAULT_LOOK, dir || 'down', 'stand', 'none', 0),
+    avatarWalk: (look, dir, frame) => sprite(validLook(look) ? look : DEFAULT_LOOK, dir || 'down', frame ? 'walk' : 'stand', 'none', frame || 0),
     randomLook,
     SW, SH,
     send: p => netSend('tg', p),
