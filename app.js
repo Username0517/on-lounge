@@ -1485,7 +1485,7 @@
   }
   window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { if (!$('tg').hidden) { if (TG.hide) TG.hide(); return; } if (!$('gm').hidden) { $('gm').hidden = true; gmLabel(); return; } if (!$('modal').hidden) closeModal(); if (!$('qrPop').hidden) closeQr(); if (drag) endDrag(true); return; }
-    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden || !$('tg').hidden) return;
+    if (isTyping() || !$('join').hidden || !$('creator').hidden || !$('gm').hidden || !$('tg').hidden || ($('wild') && !$('wild').hidden)) return;   // 광야 게임 중엔 라운지 캐릭터는 가만히
     const k = keyName(e);
     // a button focused by an earlier click must not also fire on Enter/Space
     if ((k === 'enter' || k === ' ') && document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
