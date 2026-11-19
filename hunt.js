@@ -441,7 +441,7 @@
           if (G.down[mid]) continue;
           const mp = mid === me() ? L.me : L.rem[mid]; if (!mp) continue;
           const crawl = G.skin[mid] === 'crawl';
-          const hx = crawl ? 22 : 11, top = crawl ? 26 : 50;
+          const hx = crawl ? 20 : 11, top = crawl ? 32 : 50;
           if (b.x > mp.rx - hx && b.x < mp.rx + hx && b.y > mp.ry - top && b.y < mp.ry + 4) { b.dead = true; act({ a: 'hit', m: mid, x: Math.round(mp.x), y: Math.round(mp.y), kx: b.dx, ky: b.dy }); break; }
         }
       }
@@ -571,7 +571,7 @@
       for (const e of list) {
         if (e.o) FT[e.o.t].draw(g, e.o.x * TS, e.o.y * TS, e.o, t);
         else if (e.bar) drawBars(g, e.bar[0], e.bar[1], e.bar[2] && jailOpen(el), e.bar[2]);
-        else if (isMon(e.id)) K.drawMon(g, G.skin[e.id], e.p.rx, e.p.ry, e.p.dir, t, { moving: e.p.moving, alpha: G.down[e.id] ? 0.4 : 1 });
+        else if (isMon(e.id)) K.drawMon(g, G.skin[e.id], e.p.rx, e.p.ry, e.p.dir, t, { key: 'h' + e.id, moving: e.p.moving, alpha: G.down[e.id] ? 0.4 : 1 });
         else K.drawPerson(g, (e.id === me() ? look0 : O.lookOf(e.id)) || look0, e.p.rx, e.p.ry, e.p.dir || 'down', e.p.moving, t, e.hid ? { alpha: 0.35 } : null);
       }
       for (const b of L.bolts) { g.strokeStyle = '#e8dcc2'; g.lineWidth = 1; g.beginPath(); g.moveTo(b.x - b.dx * 6, b.y - b.dy * 6); g.lineTo(b.x, b.y); g.stroke(); P(g, b.x - 1, b.y - 1, 2, 2, '#c9c9d4'); }
@@ -595,7 +595,7 @@
       // names over people
       for (const id of Object.keys(G.roles)) {
         if (!visible(id)) continue; const p = posOf(id); if (!p) continue;
-        const sx = (p.rx + ox) * s, sy = (p.ry + oy - (isMon(id) ? (G.skin[id] === 'crawl' ? 34 : 70) : 28)) * s;
+        const sx = (p.rx + ox) * s, sy = (p.ry + oy - (isMon(id) ? (G.skin[id] === 'crawl' ? 42 : 70) : 28)) * s;
         if (sx < -40 || sx > w + 40 || sy < -20 || sy > h + 20) continue;
         tx(nameOf(id) + (G.jailed[id] ? ' ⛓️' : '') + (G.down[id] ? ' 💫' : ''), sx, sy, isMon(id) ? '#ff8a8a' : id === me() ? '#ffd65a' : '#9fe8a8', 11, 'center');
       }

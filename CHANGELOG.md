@@ -1,5 +1,15 @@
 # Changelog
 
+## New crawler art and motion, jump scares, how-to-play guide
+
+Files changed: `mansion.js`, `hunt.js`, `index.html`. No SQL.
+
+- 거미손 (`crawl`) now uses the user's new crawler art: `CRAWL_SHEET` is a 44x36, 5-frame sheet per direction (down, left, right, up), cut from their drawing, with holes filled and the black background removed. `FACE_SRC` holds four close-up faces from their art (the crawler's portrait, plus faces A, C and D from their concept sheet for 물끄러미, 히죽이 and 아우성).
+- `drawMon()` was rewritten so the monsters no longer glide. Each monster keeps state through `opt.key` (the `mon` object in the story, `'h' + id` in the hunt). Frames advance unevenly, with skips and long holds. Every 0.6–2.3 s one horizontal third of the sprite jumps sideways for a blink, more often when it is close (`rage`). Fast movement leaves after-images. The walkers rock on a stiff limp, and their head (top 27% of the sprite) snaps to one side around the neck now and then.
+- In the story, the crawler moves in bursts: a 1.85x lunge for 380 ms, a 240 ms frozen beat, then normal speed. On average it is as fast as before. Every monster waits 0.7 s after it appears before it moves. Moving monsters make sound: skittering for the crawler, uneven thuds for the walkers, and a throat croak when they are near. `jumpScare(kind)` shows the face full-screen with a flicker and a scream when a chase starts (or when the monster comes through the door), and a longer one when you are caught.
+- `showGuide()` shows a how-to-play panel once, right after the opening scene of a new story, and from a 📜 button in the bag. Enter or Space closes it.
+- Hunt: the crawler's name label and hit box are adjusted to the new sprite size.
+
 ## Fix: could not climb to the attic
 
 Files changed: `mansion.js`.
