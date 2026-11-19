@@ -3458,7 +3458,7 @@
       const sp = scene.spawns[spawnKey] || Object.values(scene.spawns)[0];
       player.x = sp[0]; player.y = sp[1]; player.dir = sp[2];
       camInit = false; resize();
-      $('sceneTag').textContent = scene.name; gmLabel(); fbLabel(); chatLock();
+      $('sceneTag').textContent = scene.name; gmLabel(); fbLabel(); chatLock(); plazaBtnSync();
       logEl.innerHTML = '';
       log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 비가 내리기 시작했어요. 여기부터는 혼자 걷는 길이에요. 함께 온 사람들은 저택에서 다시 만나요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 먼저 도착한 사람들이 여기 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
@@ -4193,6 +4193,10 @@
     $('modal').hidden = false;
   }
   // ---- 숲속 저택 정문 ----
+  // everything past the plaza (forest paths, the mansion — and whatever opens there later) has a one-tap way back
+  const PAST_PLAZA = { forest1: 1, forest2: 1, mansion: 1 };
+  function plazaBtnSync() { const b = $('plazaBtn'); if (b) b.hidden = !PAST_PLAZA[sceneId]; }
+  if ($('plazaBtn')) $('plazaBtn').addEventListener('click', () => { if (PAST_PLAZA[sceneId]) goScene('plaza', 'forest'); });
   function openForestWarn() {
     const body = $('modalBody'); body.innerHTML = '';
     $('modalTitle').textContent = '🌲 검은 숲길 입구';

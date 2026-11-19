@@ -122,7 +122,7 @@ window.ONL_MANSION = (function () {
     g.restore();
     g.restore();
   }
-  // a face that fills the screen for a moment when one of them first shows up (and when it catches you)
+  // a face that fills the screen for a moment when one of them catches you
   let scare = null;
   function jumpScare(kind, big) {
     const f = FACES[kind]; if (!f || !f.ready) return;
@@ -279,14 +279,16 @@ window.ONL_MANSION = (function () {
     check: (g, x, y, tx, ty) => { P(g, x, y, 16, 16, (tx + ty) % 2 ? '#2f2c33' : '#b9b3a6'); P(g, x, y, 16, 1, 'rgba(0,0,0,.18)'); },
     carpet: (g, x, y, tx, ty) => { P(g, x, y, 16, 16, '#5a2329'); P(g, x + 2, y + 2, 1, 1, '#6e2c33'); P(g, x + 10, y + 9, 1, 1, '#6e2c33'); P(g, x + 6, y + 13, 1, 1, '#4a1c21'); },
     stone: (g, x, y, tx, ty) => { P(g, x, y, 16, 16, '#45424a'); P(g, x + (ty % 2) * 8, y, 1, 8, '#2f2d33'); P(g, x + 8 - (ty % 2) * 8, y + 8, 1, 8, '#2f2d33'); P(g, x, y + 7, 16, 1, '#2f2d33'); P(g, x, y + 15, 16, 1, '#2f2d33'); if ((tx * 5 + ty * 3) % 7 === 0) P(g, x + 3, y + 3, 2, 1, '#55525a'); },
-    plank: (g, x, y, tx, ty) => { P(g, x, y, 16, 16, '#3a2c24'); for (let i = 0; i < 16; i += 4) P(g, x, y + i, 16, 1, '#2b2019'); if ((tx + ty * 3) % 4 === 0) P(g, x + 6, y + 2, 1, 1, '#1a1410'); }
+    plank: (g, x, y, tx, ty) => { P(g, x, y, 16, 16, '#3a2c24'); for (let i = 0; i < 16; i += 4) P(g, x, y + i, 16, 1, '#2b2019'); if ((tx + ty * 3) % 4 === 0) P(g, x + 6, y + 2, 1, 1, '#1a1410'); },
+    grass: (g, x, y, tx, ty) => { P(g, x, y, 16, 16, (tx + ty) % 2 ? '#2f3a2a' : '#34402d'); P(g, x + ((tx * 5 + ty * 3) % 13), y + ((tx + ty * 7) % 12), 1, 3, '#4a5a3a'); P(g, x + ((tx * 11 + ty) % 14), y + ((tx * 3 + ty * 5) % 13), 1, 2, '#24301f'); if ((tx * 7 + ty * 3) % 9 === 0) P(g, x + 6, y + 9, 3, 2, '#3a2c24'); }
   };
   const WALLS = {
     paper: { face: '#5b4a55', line: '#4f404a', trim: '#2c2229', base: '#3a2a26' },
     green: { face: '#3f5048', line: '#36443d', trim: '#212a25', base: '#2e2621' },
     cream: { face: '#8b8172', line: '#7d7365', trim: '#4a4239', base: '#3a2a26' },
     stone: { face: '#4c4952', line: '#3c3a42', trim: '#26242a', base: '#2a282e', stone: true },
-    wood: { face: '#5a3e2e', line: '#4a3226', trim: '#2b1d16', base: '#2b1d16', boards: true }
+    wood: { face: '#5a3e2e', line: '#4a3226', trim: '#2b1d16', base: '#2b1d16', boards: true },
+    glass: { face: '#24343e', line: '#3f5a68', trim: '#141c22', base: '#1d2a22', boards: true }
   };
   const CEIL = '#120f15';
   const isWallCh = ch => ch === '#';
@@ -414,6 +416,7 @@ window.ONL_MANSION = (function () {
     else if (c === 'sheet') { P(g, x + 3, y + 4, 10, 6, '#ece6d8'); for (let i = 0; i < 4; i++) P(g, x + 3, y + 5 + i, 10, 1, '#b9b3a6'); for (let i = 0; i < 4; i++) P(g, x + 4 + i * 2, y + 5 + (i % 3), 1, 2, '#1a1418'); }
     else if (c === 'drawing') { P(g, x + 2, y + 3, 12, 9, '#ece6d8'); P(g, x + 4, y + 7, 2, 4, '#c94a45'); P(g, x + 7, y + 6, 2, 5, '#4f7ec4'); P(g, x + 10, y + 8, 2, 3, '#f0cc55'); P(g, x + 3, y + 4, 4, 1, '#e8894a'); P(g, x + 9, y + 4, 4, 2, '#c94a45'); }
     else if (c === 'landscape') { P(g, x + 3, y + 4, 10, 3, '#4a5a7a'); P(g, x + 3, y + 7, 10, 3, '#3a5a3a'); P(g, x + 9, y + 5, 2, 2, '#e8dcc2'); }
+    else if (c === 'moons') { P(g, x + 2, y + 3, 12, 9, '#1a2236'); P(g, x + 3, y + 6, 2, 3, '#e8dcc2'); P(g, x + 6, y + 5, 3, 3, '#e8dcc2'); P(g, x + 10, y + 6, 1, 3, '#e8dcc2'); P(g, x + 12, y + 7, 1, 1, '#5a6070'); }
     else if (c === 'photo') { P(g, x + 3, y + 4, 10, 6, '#7a6a5a'); for (let i = 0; i < 4; i++) P(g, x + 4 + i * 2, y + 6, 1, 3, '#2a2228'); }
   }, { wall: true });
   def('mirror', 1, 1, null, (g, x, y, o) => { box(g, x + 3, y + 1, 10, 12, '#8a8a92', '#a9a9b4'); P(g, x + 4, y + 2, 8, 10, o.broken ? '#2a2d40' : '#6a7a92'); P(g, x + 5, y + 3, 2, 4, 'rgba(255,255,255,.4)'); if (o.broken) { P(g, x + 6, y + 4, 1, 6, '#c9c9d4'); P(g, x + 7, y + 6, 3, 1, '#c9c9d4'); } if (o.writing) { P(g, x + 4, y + 6, 8, 1, '#8a1f24'); P(g, x + 5, y + 8, 5, 1, '#8a1f24'); } }, { wall: true });
@@ -505,6 +508,26 @@ window.ONL_MANSION = (function () {
   def('chains', 1, 1, null, (g, x, y) => { for (let i = 0; i < 12; i += 2) { P(g, x + 4, y + 1 + i, 2, 1, '#8a8a92'); P(g, x + 11, y + 2 + i, 2, 1, '#8a8a92'); } P(g, x + 3, y + 13, 4, 2, '#6a6a72'); P(g, x + 10, y + 13, 4, 2, '#6a6a72'); }, { wall: true });
   def('irondoor', 1, 1, null, (g, x, y, o) => { box(g, x + 1, y + 1, 14, 15, '#3a3a44', '#5a5a66'); for (let i = 3; i < 15; i += 4) P(g, x + 2, y + i, 12, 1, '#26262e'); P(g, x + 6, y + 7, 4, 4, o.handle ? '#b08a3a' : '#26262e'); P(g, x + 7, y + 8, 2, 2, '#14121a'); }, { wall: true });
   def('coatrack', 1, 1, [6, 12, 4, 3], (g, x, y) => { P(g, x + 7, y - 10, 2, 24, '#3e2a21'); P(g, x + 4, y + 13, 8, 2, '#3e2a21'); P(g, x + 3, y - 10, 10, 1, '#3e2a21'); P(g, x + 2, y - 9, 4, 9, '#3a3040'); P(g, x + 10, y - 9, 3, 6, '#5a2329'); });
+  // 지하 처치실 · 온실
+  def('opTable', 2, 1, FULL, (g, x, y, o) => {
+    P(g, x + 3, y + 12, 2, 4, '#3a3c42'); P(g, x + 27, y + 12, 2, 4, '#3a3c42'); box(g, x, y + 1, 32, 12, '#8a8e96', '#a9adb4', '#5a5e66');
+    P(g, x + 9, y + 2, 2, 11, '#4a2a22'); P(g, x + 21, y + 2, 2, 11, '#4a2a22');   // straps
+    if (o.body) { P(g, x + 3, y + 3, 6, 6, '#231a20'); P(g, x + 5, y + 4, 4, 4, '#cfa98a'); P(g, x + 9, y + 3, 14, 7, '#b8a6dc'); P(g, x + 23, y + 4, 7, 5, '#2f3d63'); P(g, x + 12, y + 6, 6, 1, '#7a5a9a'); }
+    P(g, x + 26, y + 6, 3, 2, '#3a6aa0');
+  });
+  def('ivStand', 1, 1, [6, 11, 4, 4], (g, x, y, o, t) => { P(g, x + 7, y - 10, 2, 24, '#8a8e96'); P(g, x + 4, y + 13, 8, 2, '#5a5e66'); box(g, x + 4, y - 12, 8, 9, '#4a6a9a', '#6a8aba'); P(g, x + 8, y - 3, 1, 10, '#6a8aba'); if (Math.floor(t / 700) % 2) P(g, x + 8, y + 2, 1, 1, '#a0c0f0'); });
+  def('lilyStand', 1, 1, [3, 9, 10, 6], (g, x, y, o, t) => {
+    box(g, x + 3, y + 8, 10, 7, '#6b6668', '#8a8688'); P(g, x + 2, y + 7, 12, 2, '#4a4648');
+    P(g, x + 7, y - 2, 2, 10, '#3a5a3a'); P(g, x + 4, y + 2, 3, 2, '#3a5a3a'); P(g, x + 9, y + 3, 3, 2, '#3a5a3a');
+    if (o.bloom && !o.taken) { const f = Math.floor(t / 500) % 2; P(g, x + 4, y - 7, 8, 5, '#f4f0ff'); P(g, x + 6, y - 9, 4, 3, '#ffffff'); P(g, x + 7, y - 6, 2, 2, '#e8d070'); if (f) P(g, x + 3, y - 8, 1, 1, '#ffffff'); }
+    else if (!o.taken) { P(g, x + 6, y - 6, 4, 5, '#c9d4c0'); P(g, x + 7, y - 7, 2, 2, '#e8ecd8'); }
+  }, { lightIf: 'bloom', light: 56 });
+  def('moonbeam', 2, 2, null, (g, x, y) => { g.fillStyle = 'rgba(200,215,255,.10)'; g.fillRect(x, y, 32, 32); g.fillStyle = 'rgba(220,230,255,.07)'; g.fillRect(x + 4, y + 4, 24, 24); }, { flat: true, light: 70 });
+  def('pot', 1, 1, [3, 8, 10, 7], (g, x, y, o) => {
+    box(g, x + 3, y + 8, 10, 7, '#8a4a32', '#a05a3a');
+    if (o.dead) { for (let i = 0; i < 4; i++) P(g, x + 5 + i * 2, y + 1 + (i % 2) * 2, 1, 7, '#4a3a2a'); }
+    else { P(g, x + 4, y + 2, 8, 6, '#2f4a2a'); for (const [dx, dy] of [[4, 1], [8, 2], [6, 4], [10, 4]]) P(g, x + dx, y + dy, 2, 2, o.c || '#c94a45'); }
+  });
   def('statue', 1, 2, BASE, (g, x, y) => { box(g, x + 2, y + 22, 12, 9, '#4a4648', '#5a5658'); P(g, x + 5, y + 2, 6, 20, '#6b6668'); P(g, x + 5, y - 3, 6, 6, '#6b6668'); P(g, x + 6, y - 1, 1, 1, OUT); P(g, x + 9, y - 1, 1, 1, OUT); P(g, x + 3, y + 6, 2, 8, '#6b6668'); });
   def('pipes', 3, 1, null, (g, x, y) => { P(g, x, y + 3, 48, 3, '#5a5a62'); P(g, x, y + 3, 48, 1, '#7a7a82'); P(g, x, y + 8, 48, 2, '#4a4a52'); P(g, x + 14, y + 2, 4, 5, '#4a4a52'); P(g, x + 34, y + 7, 4, 4, '#4a4a52'); P(g, x + 22, y + 10, 1, 4, 'rgba(120,140,160,.6)'); }, { wall: true });
   def('exitLadder', 1, 2, null, (g, x, y, o, t) => {
@@ -533,7 +556,7 @@ window.ONL_MANSION = (function () {
     library: { name: '서재', floor: 'dark', wall: 'green', dark: 0.5, seed: 12, webs: [[1, 2, 0], [13, 2, 1]],
       map: ['##############', '##############', '#............#', '#............#', '#............#', '#............E', '#............#', '#............#', '#............#', '##############', '##############'],
       doors: { E: { to: 'hall', back: 'W' } },
-      objs: [].concat(Array.from({ length: 12 }, (_, i) => ({ t: 'shelf', x: 1 + i, y: 1, seed: i, gap: i === 6, use: i === 6 ? 'gapShelf' : 'books' })), [
+      objs: [].concat(Array.from({ length: 12 }, (_, i) => ({ t: 'shelf', x: 1 + i, y: 1, seed: i, gap: i === 6, id: i === 6 ? 'gap' : undefined, use: i === 6 ? 'gapShelf' : 'books' })), [
         { t: 'desk', x: 2, y: 5, lamp: true, paper: true, use: 'diary1' }, { t: 'chair', x: 2, y: 6, face: 'up' },
         { t: 'armchair', x: 9, y: 7, use: 'armchair' }, { t: 'lamp', x: 11, y: 7, out: true },
         { t: 'shelf2', x: 1, y: 8, seed: 3, use: 'books' }, { t: 'stain', x: 7, y: 6 }
@@ -600,7 +623,7 @@ window.ONL_MANSION = (function () {
         { t: 'bedSmall', x: 1, y: 2, use: 'childBed' }, { t: 'toybox', x: 3, y: 2, use: 'hideSpot', hide: true },
         { t: 'dollhouse', x: 9, y: 2, use: 'dollhouse' }, { t: 'horse', x: 10, y: 5, use: 'horse' },
         { t: 'painting', x: 6, y: 1, art: 'drawing', use: 'birthdayDrawing' }, { t: 'painting', x: 8, y: 1, art: 'drawing', use: 'scaryDrawing' },
-        { t: 'musicbox', x: 7, y: 2, use: 'musicbox' }
+        { t: 'musicbox', x: 7, y: 2, use: 'musicbox' }, { t: 'painting', x: 4, y: 1, art: 'moons', use: 'moonDrawing' }
       ] },
     bedroom: { name: '안방', floor: 'carpet', wall: 'paper', dark: 0.55, seed: 20,
       map: ['##############', '##############', '#............#', '#............#', '#............#', '#............#', '#............#', '#............#', '#######S######', '##############'],
@@ -629,8 +652,8 @@ window.ONL_MANSION = (function () {
         { t: 'paper', x: 8, y: 3, id: 'photo', use: 'oldPhoto' }, { t: 'stain', x: 9, y: 5 }
       ] },
     b1hall: { name: '지하 복도', floor: 'stone', wall: 'stone', dark: 0.9, need: 'flashlight', seed: 23, webs: [[1, 2, 0], [16, 2, 1]],
-      map: ['##################', '##################', '#................#', '#................#', 'W................E', '#................#', '#................#', '#................#', '#................#', '#................#', '##################', '##################'],
-      doors: { W: { to: 'storage', back: 'E' }, E: { to: 'jail', back: 'W' } },
+      map: ['##################', '##################', '#................#', '#................#', 'W................E', '#................#', '#................#', '#................#', '#................#', '#................#', '#########S########', '##################'],
+      doors: { W: { to: 'storage', back: 'E' }, E: { to: 'jail', back: 'W' }, S: { to: 'clinic', back: 'N', look: 'iron', lock: 'clinicOpen', lockUse: 'clinicDoor' } },
       objs: [
         { t: 'stairsUp', x: 8, y: 2, id: 'up', use: 'b1Up', door: { to: 'corridor1', back: 'E' } },
         { t: 'barrel', x: 2, y: 8, use: 'hideSpot', hide: true }, { t: 'barrel', x: 15, y: 8, use: 'hideSpot', hide: true }, { t: 'crate', x: 3, y: 8 },
@@ -651,6 +674,24 @@ window.ONL_MANSION = (function () {
         { t: 'guarddesk', x: 6, y: 7, id: 'gdesk', use: 'guardDesk' }, { t: 'chair', x: 6, y: 8, face: 'up' },
         { t: 'leverStand', x: 13, y: 7, id: 'levers', use: 'levers' }, { t: 'chains', x: 14, y: 5 }, { t: 'stain', x: 3, y: 6 }
       ]) },
+    clinic: { name: '지하 처치실', floor: 'tile', wall: 'stone', dark: 0.9, need: 'flashlight', seed: 27, webs: [[1, 2, 0], [10, 2, 1]],
+      map: ['############', '############', '#..........#', '#..........#', '#..........#', '#..........#', '#..........#', '#####N######', '############'],
+      doors: { N: { to: 'b1hall', back: 'S' } },
+      objs: [
+        { t: 'opTable', x: 4, y: 3, id: 'optable', body: true, use: 'opTable' }, { t: 'ivStand', x: 6, y: 3 },
+        { t: 'drawers', x: 1, y: 2, use: 'medCabinet' }, { t: 'jars', x: 8, y: 1, use: 'clinicJars' }, { t: 'closet', x: 10, y: 2, use: 'hideSpot', hide: true },
+        { t: 'trashcan', x: 1, y: 6, use: 'clinicTrash' }, { t: 'stain', x: 7, y: 5 }, { t: 'stain', x: 3, y: 5 }, { t: 'chains', x: 3, y: 1 }
+      ] },
+    greenhouse: { name: '달빛 온실', floor: 'grass', wall: 'glass', dark: 0.62, seed: 28, webs: [[1, 2, 0]],
+      map: ['##############', '##############', '#............#', '#............#', '#............#', '#............#', '#............#', '#............#', '######S#######', '##############'],
+      doors: { S: { to: 'library', back: 'gap' } },
+      objs: [
+        { t: 'moonbeam', x: 6, y: 3 }, { t: 'lilyStand', x: 6, y: 4, id: 'lily', use: 'lily' },
+        { t: 'pot', x: 1, y: 2, dead: true, use: 'deadPlant' }, { t: 'pot', x: 2, y: 2, c: '#c94a45', use: 'flowers' }, { t: 'pot', x: 3, y: 2, dead: true, use: 'deadPlant' },
+        { t: 'pot', x: 10, y: 2, c: '#4f7ec4', use: 'flowers' }, { t: 'pot', x: 11, y: 2, dead: true, use: 'deadPlant' },
+        { t: 'statue', x: 12, y: 2, use: 'gStatue' }, { t: 'desk', x: 1, y: 6, paper: true, use: 'gardenNote' },
+        { t: 'crate', x: 12, y: 7, use: 'hideSpot', hide: true }, { t: 'plant', x: 9, y: 7 }, { t: 'pot', x: 4, y: 7, dead: true, use: 'deadPlant' }
+      ] },
     tunnel: { name: '비밀 통로', floor: 'stone', wall: 'stone', dark: 0.92, need: 'flashlight', seed: 26,
       map: ['##########################', '##########################', '#........................#', 'W........................#', '#........................#', '##########################', '##########################'],
       doors: { W: { to: 'storage', back: 'X' } },
@@ -718,11 +759,18 @@ window.ONL_MANSION = (function () {
     return true;
   }
   // the lounge character, walking
+  let tintCv = null;
   function drawPerson(g, look, x, y, dir, moving, t, opt) {
     if (!need() || !O.avatarWalk) return;
     const frame = moving ? (1 + (Math.floor(t / 150) % 2)) : 0;
-    const sp = O.avatarWalk(look, dir, frame);
+    let sp = O.avatarWalk(look, dir, frame);
     if (!sp) return;
+    if (opt && opt.blue) {   // skin going grey-blue, and a body that twitches now and then
+      if (!tintCv) tintCv = document.createElement('canvas');
+      tintCv.width = sp.width; tintCv.height = sp.height; const c = tintCv.getContext('2d');
+      c.clearRect(0, 0, sp.width, sp.height); c.drawImage(sp, 0, 0); c.globalCompositeOperation = 'source-atop'; c.fillStyle = `rgba(70,90,200,${opt.blue})`; c.fillRect(0, 0, sp.width, sp.height); c.globalCompositeOperation = 'source-over';
+      sp = tintCv; if (Math.random() < 0.04) x += Math.random() < 0.5 ? -2 : 2;
+    }
     g.save(); if (opt && opt.alpha != null) g.globalAlpha = opt.alpha;
     g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(Math.round(x - 5), Math.round(y - 1), 10, 2);
     g.drawImage(sp, Math.round(x - sp.width / 2), Math.round(y - sp.height + 3));
@@ -745,7 +793,15 @@ window.ONL_MANSION = (function () {
     labNotes: { n: '실험 일지', d: '「41번째 시도. 쥐가 눈을 감지 않는다. 깜빡이지도 않는다. 크고, 푸르게 변했다…」 「그것들은 빛을 피하지 않는다. 소리를 따라온다. 숨으면, 모른다.」', i: '📓' },
     diary2: { n: '일기 (2)', d: '「아이들이 사라졌다. 아니, 아이들은 여기 있다. 밤마다 지하에서 우리를 부른다. ― 금고 번호는 막내가 태어난 날. 잊지 말 것.」', i: '📄' },
     photo: { n: '오래된 사진', d: '세 아이가 웃고 있는 사진. 뒷면: 「별처럼 반짝이던 첫째, 해처럼 웃던 둘째, 달처럼 조용하던 막내. ― 1986년 봄」', i: '🖼️' },
-    guardNote: { n: '간수의 쪽지', d: '「그것들은 밤마다 철창을 긁는다. 레버는 아이들 사진 뒤에 적힌 순서대로. 통로 철문 핸들은 내 서랍에.」', i: '📝' }
+    guardNote: { n: '간수의 쪽지', d: '「그것들은 밤마다 철창을 긁는다. 레버는 아이들 사진 뒤에 적힌 순서대로. 통로 철문 핸들은 내 서랍에. 남쪽 처치실 열쇠도 같이 둔다. 그 방엔… 들어가지 않는 게 좋다.」', i: '📝' },
+    clinicKey: { n: '처치실 열쇠', d: '하얀 페인트가 벗겨진 열쇠. 꼬리표에 「처치실」.', i: '🗝️' },
+    labNotes2: { n: '실험 일지 (마지막 장)', d: '「약을 맞은 자는 하룻밤 안에 그것이 된다. 되돌릴 방법은 하나뿐 ― 달빛 백합 꽃잎을 14번 병에 녹여 먹일 것. (41번의 반대.) 백합은 서재 책장 뒤 온실에 있다. 「영원에 관하여」 둘째 권을 제자리에.」 「그것들도 오르골 소리 앞에서는 얌전해진다. 막내가 그랬듯이.」', i: '📓' },
+    oldBook: { n: '「영원에 관하여」 2권', d: '두꺼운 가죽 책. 서재 책장에서 빠진 바로 그 책 같다.', i: '📕' },
+    gardenNote: { n: '정원사의 쪽지', d: '「달빛 백합은 네 개의 달을 차례로 받아야 핀다. 순서는 막내가 그려 두었다. 그 아이는 달을 참 좋아했지.」', i: '📝' },
+    moonLily: { n: '달빛 백합', d: '희미하게 빛나는 하얀 꽃. 손에 쥐고 있으면 이상하게 마음이 가라앉는다.', i: '🌸' },
+    blueVial: { n: '14번 병', d: '맑고 푸른 액체가 든 작은 병. 41번 병과 색이 정반대다.', i: '🧪' },
+    antidote: { n: '해독제', d: '백합 꽃잎을 녹인 약. 은은하게 빛난다. 유리에게 먹여야 한다.', i: '💧' },
+    hairpin: { n: '보라색 머리핀', d: '유리가 늘 꽂고 다니던 머리핀. 끝이 휘어 있다.', i: '🎀' }
   };
   const NPC_LOOK = {
     철수: { hair: 'spiky', hairColor: '#231a20', top: 'hood', topColor: '#c94a45', bottom: 'jogger', bottomColor: '#26242b' },
@@ -942,8 +998,8 @@ window.ONL_MANSION = (function () {
   function startChase(kind, x, y, secs, opt) {
     mon = { kind, room: roomId, x, y, dir: 'down', path: null, pathAt: 0, until: now() + secs * 1000, pending: null, gone: false, appearAt: now(), lostAt: 0, sniffAt: now() + 3500, opt: opt || {} };
     if (opt && opt.enterAfter) { mon.room = '(between)'; mon.pending = { room: roomId, back: opt.back, at: now() + opt.enterAfter }; }
+    if (opt && opt.calm) return;
     chaseCount++; chaseMusic(true); sfx('sting'); shake = 6;
-    if (!mon.pending) setTimeout(() => { if (mon && !mon.scared && mon.room === roomId) { mon.scared = 1; jumpScare(kind); } }, 120);
   }
   function endChase(quiet) {
     if (!mon) return;
@@ -965,12 +1021,21 @@ window.ONL_MANSION = (function () {
       if (mon.pending.room === roomId) {
         const [x, y] = spawnFor(roomId, mon.pending.back);
         mon.x = x; mon.y = y; mon.room = roomId; mon.path = null; mon.appearAt = t; sfx('door'); shake = 3;
-        if (!mon.scared) { mon.scared = 1; jumpScare(mon.kind); }
       } else mon.room = mon.pending.room;
       mon.pending = null;
     }
     if (mon.room !== roomId) { if (t > mon.until && !mon.pending) endChase(); return; }
     const dist = Math.hypot(mon.x - pl.x, mon.y - pl.y);
+    // drawn by the lullaby: it creeps closer, slowly, and does not attack
+    if (mon.opt.calm) {
+      if (mon.gone) return;
+      if (pl.hidden) { mon.gone = true; mon.fadeAt = t; note('…그것은 다시 어둠 속으로 기어갔다.'); return; }
+      if (t - mon.appearAt < 900) { mon.moving = false; return; }
+      if (dist < 28) { mon.moving = false; if (!mon.near) { mon.near = 1; mon.opt.onNear(); } return; }
+      if (t > (mon.stepAt || 0)) { mon.stepAt = t + 200 + Math.random() * 160; sfx('skitter', clamp(1 - dist / 240, 0.06, 1) * 0.1); }
+      goToward(dt * 0.32, t, pl.x, pl.y);
+      return;
+    }
     // heartbeat when it is close
     if (dist < 130 && t > heartAt) { heartAt = t + 450 + dist * 5; sfx('heart'); }
     // you hear it moving before you see it: skittering for the crawler, heavy steps for the rest, and now and then a sound from its throat
@@ -1065,7 +1130,7 @@ window.ONL_MANSION = (function () {
     for (const e of list) {
       if (e.o) T[e.o.t].draw(g, e.o.x * TS, e.o.y * TS, e.o, t);
       else if (e.me) drawPerson(g, O.lookOf(O.uid()), pl.x, pl.y, pl.dir, pl.moving, t);
-      else if (e.npc) drawPerson(g, NPC_LOOK[e.npc], e.n.x, e.n.y, e.n.dir || 'down', !!e.n.moving, t, e.n.ghost ? { alpha: 0.5 } : null);
+      else if (e.npc) drawPerson(g, NPC_LOOK[e.npc], e.n.x, e.n.y, e.n.dir || 'down', !!e.n.moving, t, e.n.ghost ? { alpha: 0.5 } : e.npc === '유리' && ST.F.yuriInfected && !ST.F.yuriCured ? { blue: 0.32 } : null);
       else if (e.mon) {
         let a = 1; if (mon.gone) a = clamp(1 - (t - mon.fadeAt) / 900, 0, 1); if (mon.gone && a <= 0) { endChase(); continue; }
         drawMon(g, mon.kind, mon.x, mon.y, mon.dir, t, { key: mon, alpha: a, moving: mon.moving, rage: !mon.gone && Math.hypot(mon.x - pl.x, mon.y - pl.y) < 50 });
@@ -1199,7 +1264,7 @@ window.ONL_MANSION = (function () {
     ['🚪', '숨기', '옷장·상자·커튼처럼 숨을 수 있는 곳에서 살펴보기를 누르면 숨어요. 괴물이 방에 들어오기 전에, 괴물 눈에 띄지 않게 숨어야 해요. 숨는 걸 들키면 끌려 나와요.'],
     ['👂', '다시 나오기', '숨어 있으면 괴물이 방 안을 서성이다가 사라져요. 「…발소리가 멀어졌다」가 뜨면 살펴보기 버튼을 눌러 나와요.'],
     ['💾', '저장', '자동으로 저장돼요. 잡히면 마지막 저장 지점부터 다시 해요. 「나가기」로 나가도 다음에 이어할 수 있어요.'],
-    ['🕯️', '목표', '저택에서 빠져나가기. 흩어진 철수·훈이·유리를 모두 찾아 함께 나가면 진엔딩이에요.']
+    ['🕯️', '목표', '저택에서 빠져나가기. 흩어진 철수·훈이·유리를 모두 찾아 함께 나가면 진엔딩이에요. 엔딩은 세 가지예요.']
   ];
   function showGuide() {
     return new Promise(res => {
@@ -1247,7 +1312,7 @@ window.ONL_MANSION = (function () {
       const p = panel('hr-dial');
       p.appendChild(el('h3', '', title)); p.appendChild(el('p', 'hr-desc', hint));
       const row = el('div', 'hr-dials'); p.appendChild(row);
-      const v = [0, 0, 0, 0];
+      const v = answer.split('').map(() => 0);
       v.forEach((_, i) => {
         const col = el('div', 'hr-dialcol');
         const up = el('button', 'btn', '▲'), num = el('b', 'hr-num', '0'), dn = el('button', 'btn', '▼'); up.type = dn.type = 'button';
@@ -1263,23 +1328,24 @@ window.ONL_MANSION = (function () {
       p._close = () => { closePanel(); busy--; res(false); };
     });
   }
-  function leverPuzzle(answer) {
+  function leverPuzzle(answer, opt) {
+    opt = opt || {};
     return new Promise(res => {
       busy++;
       const p = panel('hr-lever');
-      p.appendChild(el('h3', '', '⚙️ 레버 세 개'));
-      p.appendChild(el('p', 'hr-desc', '레버마다 해·달·별 무늬가 돌아가며 맞춰져요. 철창 위에 1·2·3 번호가 있다.'));
-      const SYM = ['☀️ 해', '🌙 달', '⭐ 별'];
-      const st = (ost('jail', 'levers').state || [0, 0, 0]).slice();
+      p.appendChild(el('h3', '', opt.title || '⚙️ 레버 세 개'));
+      p.appendChild(el('p', 'hr-desc', opt.desc || '레버마다 해·달·별 무늬가 돌아가며 맞춰져요. 철창 위에 1·2·3 번호가 있다.'));
+      const SYM = opt.syms || ['☀️ 해', '🌙 달', '⭐ 별'], KEY = opt.key || ['jail', 'levers'];
+      const st = (ost(KEY[0], KEY[1]).state || answer.split('').map(() => 0)).slice();
       const row = el('div', 'hr-dials'); p.appendChild(row);
       st.forEach((_, i) => {
         const col = el('div', 'hr-dialcol'); col.appendChild(el('span', 'hr-small', (i + 1) + '번'));
         const b = el('button', 'btn hr-lv', SYM[st[i]]); b.type = 'button';
-        b.addEventListener('click', () => { st[i] = (st[i] + 1) % 3; b.textContent = SYM[st[i]]; ost('jail', 'levers').state = st.slice(); sfx('unlock'); });
+        b.addEventListener('click', () => { st[i] = (st[i] + 1) % SYM.length; b.textContent = SYM[st[i]]; ost(KEY[0], KEY[1]).state = st.slice(); sfx(opt.sound || 'unlock'); });
         col.appendChild(b); row.appendChild(col);
       });
       const r2 = el('div', 'hr-row');
-      const ok = el('button', 'btn btn-gold', '당기기'); ok.type = 'button';
+      const ok = el('button', 'btn btn-gold', opt.ok || '당기기'); ok.type = 'button';
       ok.addEventListener('click', () => { if (st.join('') === answer) { closePanel(); busy--; res(true); } else { sfx('locked'); shake = 3; note('끼익… 아무 일도 일어나지 않는다.'); } });
       const x = el('button', 'btn', '그만두기'); x.type = 'button'; x.addEventListener('click', () => { closePanel(); busy--; res(false); });
       r2.append(ok, x); p.appendChild(r2);
@@ -1330,7 +1396,19 @@ window.ONL_MANSION = (function () {
       const n = ST.npc.유리; sfx('sting'); shake = 10; redFlash = 0.6;
       await say([['유리', '꺄악—!!'], [null, '무언가가 유리를 어둠 속으로 끌고 갔다.']]);
       npcGone('유리');
-      startChase('crawl', 2 * TS + 8, 6 * TS + 10, 28, { onEnd: () => { ST.F.chase3Done = 1; npcAt('유리', 'jail', 12, 3, 'down'); note('유리를 찾아야 해…'); } });
+      startChase('crawl', 2 * TS + 8, 6 * TS + 10, 28, { onEnd: () => { ST.F.chase3Done = 1; ST.F.yuriTaken = 1; npcGone('유리'); note('유리를 찾아야 해…'); } });
+    }
+    // Yuri, after the clinic: wrong in small ways, and it gets worse
+    const yu = ST.npc.유리;
+    if (Fl.yuriInfected && !Fl.yuriTurned && !Fl.yuriCured && yu.follow) {
+      if (has('moonLily')) return yuriTurns();
+      if (Math.random() < 0.4) { await wait(500); sfx('croak', 0.05); await say([['유리', pick(['…응? 아, 아니야. 아무것도.', '여기… 냄새 좋다.', '너 눈 깜빡이는 거, 신기하다.', '(유리가 벽을 향해 서서 꼼짝도 하지 않는다)', '추워. 아니, 더워. 잘 모르겠어.', '배고파…'])]]); }
+    }
+    if (rid === 'hall' && Fl.yuriCured && !Fl.regroup) {
+      Fl.regroup = 1;
+      for (const n of ['훈이', '철수']) if (ST.npc[n].room === 'hall') { ST.npc[n].follow = true; ST.npc[n].room = 'hall'; ST.npc[n].x = pl.x; ST.npc[n].y = pl.y; }
+      await say([['훈이', '유리야!! 진짜 유리 맞지? 이제 안 물지?'], ['유리', '…미안. 다 기억나. 너희 쫓아다닌 거.'], ['철수', '됐어. 돌아왔으면 된 거야. 이제 진짜 나가자.'], ['철수', '지하 창고 철문. 그 통로가 밖으로 이어질 거야.']]);
+      note('모두 따라옵니다!');
     }
     if (rid === 'tunnel' && Fl.freed && !Fl.finalStart) {
       Fl.finalStart = 1;
@@ -1338,6 +1416,51 @@ window.ONL_MANSION = (function () {
       startChase('scream', 1 * TS + 8, 3 * TS + 10, 999, { enterAfter: 1600, back: 'W' });
       note('뛰어요! 사다리까지!');
     }
+  }
+  // a walkable spot about `d` px from you (so something can appear near you, not on you)
+  function farSpot(d) {
+    let best = null, bd = 1e9;
+    for (let i = 0; i < grid.grid.length; i++) {
+      if (!grid.grid[i]) continue;
+      const x = (i % grid.W) * TS + 8, y = ((i / grid.W) | 0) * TS + 11, e = Math.abs(Math.hypot(x - pl.x, y - pl.y) - d);
+      if (e < bd) { bd = e; best = [x, y]; }
+    }
+    return best || [pl.x, pl.y];
+  }
+  async function yuriTurns() {
+    snapshot();   // if it catches you, you come back to just before this
+    const Fl = ST.F; Fl.yuriTurned = 1;
+    const [yx, yy] = farSpot(96);
+    await wait(400);
+    await say([['유리', '…그 꽃. 냄새가… 너무 좋다.'], [null, '유리가 걸음을 멈췄다. 어깨가 이상한 박자로 떨린다.'], ['훈이', '유, 유리야…? 장난이지?']]);
+    sfx('croak', 0.2); shake = 6; await wait(500);
+    await say([['유리', '배가… 고파.'], [null, '우드득— 유리의 목이 뒤로 꺾였다. 두 손이 바닥을 짚는다.']]);
+    sfx('sting'); shake = 12; redFlash = 0.7;
+    await say([['철수', '흩어져!! 뛰어!!']]);
+    for (const n of ['훈이', '철수']) if (ST.npc[n].follow) npcAt(n, 'hall', n === '훈이' ? 5 : 10, 5, 'down');
+    npcGone('유리');
+    startChase('crawl', yx, yy, 30, { onEnd: () => { ST.F.yuriMonster = 1; note('유리였던 것이 어딘가로 기어갔다…'); } });
+    mon.appearAt = now() + 500;
+    note('도망쳐요! 유리가… 쫓아와요!');
+  }
+  async function cureChoice() {
+    const c = await choose('유리였던 것이 바로 앞에서 고개를 갸웃거린다. 오르골 소리에 맞춰 몸을 흔든다…', ['해독제를 먹인다', '도망친다']);
+    if (!mon) return;
+    if (c === 1) {
+      mon.opt.calm = false; mon.until = now() + 25000; mon.appearAt = now() - 300; chaseCount++; chaseMusic(true); sfx('sting'); shake = 6;
+      mon.opt.onEnd = () => note('…다시 오르골을 틀면 돌아올지도 모른다.');
+      return;
+    }
+    busy++;
+    take('antidote'); const mx = mon.x, my = mon.y; mon = null;
+    await say([[null, '떨리는 손으로 해독제를 유리의 입에 흘려 넣었다.'], [null, '…!!']]);
+    sfx('scare'); shake = 10; redFlash = 0.5; await fade(1, 500);
+    npcAt('유리', roomId, Math.floor(mx / TS), Math.floor((my - 4) / TS), 'up');
+    ST.F.yuriCured = 1;
+    await wait(700); await fade(0, 900);
+    await say([['유리', '…' + ME() + '?'], ['유리', '나, 꿈을 꿨어. 아주 긴 꿈. 계속 배가 고프고… 너희 냄새가 났어.'], ['유리', '…고마워. 다시 데리러 와 줘서.'], [ME(), '훈이랑 철수는 현관 홀에 있을 거야. 같이 가자.']]);
+    ST.npc.유리.follow = true; note('유리가 따라옵니다.');
+    busy--; snapshot(); saveNow();
   }
   const SCRIPT = {
     // ---- 현관 홀 ----
@@ -1366,7 +1489,16 @@ window.ONL_MANSION = (function () {
     },
     // ---- 서재 ----
     books: async () => { await say([[null, pick(['먼지 쌓인 책들. 제목이 다 지워져 있다.', '「약초학」, 「영원에 관하여」… 어려운 책들뿐이다.', '책장 사이에 마른 꽃잎이 끼워져 있다.'])]]); },
-    gapShelf: async () => { await say([[null, '책 한 권이 빠진 자리. 그 안쪽 벽에 손톱으로 긁은 자국이 있다.']]); },
+    gapShelf: async () => {
+      if (ST.F.greenhouseOpen) return goRoom('greenhouse', 'S');
+      if (has('oldBook')) {
+        const c = await choose('빠진 자리에 「영원에 관하여」 2권을 꽂아 볼까?', ['꽂는다', '그만둔다']); if (c !== 0) return;
+        take('oldBook'); ST.F.greenhouseOpen = 1; sfx('creak'); shake = 5;
+        await say([[null, '책을 끝까지 밀어 넣자, 철컥— 책장이 안쪽으로 밀려났다.'], [null, '그 너머로 차가운 달빛과… 풀 냄새가 흘러들어 온다.']]);
+        return goRoom('greenhouse', 'S');
+      }
+      await say([[null, '책 한 권이 빠진 자리. 그 안쪽 벽에 손톱으로 긁은 자국이 있다.'], [null, '빈자리 아래 이름표: 「영원에 관하여 · 2」']]);
+    },
     diary1: async () => { if (!has('diary1')) give('diary1', true); await say([[null, '책상 위에 일기장 한 장이 펼쳐져 있다.']]); await showNote('diary1'); },
     armchair: async () => { await say([[null, '푹신한 안락의자. 방금까지 누가 앉아 있었던 것처럼… 따뜻하다.']]); },
     talk유리: async () => {
@@ -1473,16 +1605,76 @@ window.ONL_MANSION = (function () {
     horse: async () => say([[null, '흔들목마. 손을 대지도 않았는데 천천히 흔들린다.']]),
     birthdayDrawing: async () => { ST.F.sawBirthday = 1; return say([[null, '크레파스 그림. 케이크 위에 촛불이 꽂혀 있다.'], [null, '「막내 생일 ― 3월 14일 🎂」']]); },
     scaryDrawing: async () => say([[null, '같은 아이가 그린 그림. 크고 파란 사람이 아이들을 내려다보고 있다.'], [null, '그 아래: 「아빠」']]),
-    musicbox: async () => { sfx('box'); for (const [n, d] of [['솔', 0], ['미', 400], ['미', 800], ['파', 1200], ['레', 1600], ['레', 2000]]) setTimeout(() => pianoNote(n), d); return say([[null, '오르골을 열자 느린 자장가가 흘러나왔다.']]); },
+    musicbox: async () => {
+      sfx('box'); for (const [n, d] of [['솔', 0], ['미', 400], ['미', 800], ['파', 1200], ['레', 1600], ['레', 2000], ['도', 2400], ['미', 2800], ['솔', 3200]]) setTimeout(() => pianoNote(n), d);
+      if (ST.F.yuriMonster && !ST.F.yuriCured) {
+        await say([[null, '오르골을 열자 느린 자장가가 흘러나왔다.'], [null, '…천장 위에서 긁는 소리가 뚝 멈췄다.']]);
+        if (!has('antidote')) return say([[null, '사각… 사각… 무언가가 이쪽으로 오려다 멈춘다.'], [null, '아직은 안 된다. 유리를 되돌릴 약을 먼저 만들어야 해.']]);
+        await wait(600); sfx('creak');
+        await say([[null, '사각… 사각… 문 쪽에서, 무언가가 천천히 기어 들어온다.'], [null, '(도망치지 말고 기다려 보자. 숨으면 다시 사라진다)']]);
+        const [x, y] = spawnFor('child', 'S');
+        startChase('crawl', x, y - 4, 999, { calm: true, onNear: () => { cureChoice(); } });
+        mon.appearAt = now();
+        return;
+      }
+      return say([[null, '오르골을 열자 느린 자장가가 흘러나왔다.']]);
+    },
+    moonDrawing: async () => { ST.F.sawMoons = 1; return say([[null, '아이가 그린 달 그림 네 장이 나란히 붙어 있다.'], [null, '왼쪽부터 ― 반달, 보름달, 초승달, 그믐달.'], [null, '아래에 삐뚤빼뚤한 글씨: 「엄마랑 본 달 순서」']]); },
+    // ---- 온실 ----
+    lily: async ctx => {
+      const s = ost('greenhouse', 'lily');
+      if (s.taken) return say([[null, '꽃을 꺾은 줄기만 남았다.']]);
+      if (s.bloom) { s.taken = true; loadRoom('greenhouse'); give('moonLily'); return say([[null, '활짝 핀 달빛 백합을 조심스럽게 꺾었다.'], [null, '손에 쥐자 희미한 빛이 손가락 사이로 새어 나온다.']]); }
+      const okd = await leverPuzzle('2310', { title: '🌙 달 받침대', desc: '꽃봉오리 아래 받침대에 달 모양 다이얼이 네 개 있다. 돌려서 맞춰 보자.', syms: ['🌑 그믐달', '🌒 초승달', '🌓 반달', '🌕 보름달'], key: ['greenhouse', 'moondial'], ok: '달빛 비추기', sound: 'tick' });
+      if (!okd) return;
+      s.bloom = true; loadRoom('greenhouse'); sfx('box'); setTimeout(() => sfx('box'), 300);
+      return say([[null, '네 번째 다이얼이 맞물리자, 천장 유리로 달빛이 쏟아졌다.'], [null, '꽃봉오리가… 천천히 열린다. 하얗게 빛나는 백합이다.']]);
+    },
+    gardenNote: async () => { if (!has('gardenNote')) give('gardenNote', true); await say([[null, '흙 묻은 쪽지가 책상 위에 있다.']]); await showNote('gardenNote'); },
+    deadPlant: async () => say([[null, pick(['말라 죽은 화분. 흙이 돌처럼 굳어 있다.', '시든 잎사귀가 바스러진다.', '화분 흙에 작은 손자국이 찍혀 있다.'])]]),
+    flowers: async () => say([[null, '이 화분만 이상하게 싱싱하다. 꽃잎 끝이… 피처럼 붉다.']]),
+    gStatue: async () => say([[null, '두 손을 모은 소녀 석상. 얼굴이 피아노 방 초상화의 아이와 닮았다.'], [null, '석상 발치에: 「노래를 좋아하던 우리 첫째」']]),
+    // ---- 처치실 ----
+    clinicDoor: async () => {
+      if (has('clinicKey')) { sfx('unlock'); take('clinicKey'); ST.F.clinicOpen = 1; return say([[null, '처치실 열쇠로 철문을 열었다. 소독약 냄새와… 피 냄새.']]); }
+      sfx('locked'); return say([[null, '하얀 페인트가 벗겨진 철문. 「처치실」.'], [null, '안쪽에서… 아주 작게, 누가 신음하는 소리가 들린다.']]);
+    },
+    opTable: async () => {
+      if (ST.F.yuriFound) return say([[null, '가죽끈이 끊어진 처치대. 푸른 얼룩이 남아 있다.']]);
+      ST.F.yuriFound = 1; ST.F.yuriInfected = 1; ost('clinic', 'optable').body = false; loadRoom('clinic');
+      npcAt('유리', 'clinic', 5, 5, 'up');
+      sfx('creak');
+      await say([[null, '처치대 위에 유리가 묶여 있다! 팔에 꽂힌 관으로 푸른 약이 흘러 들어가고 있다.'], [null, '서둘러 바늘을 뽑고 가죽끈을 풀었다.']]);
+      await wait(400);
+      await say([['유리', '…' + ME() + '? 왔구나.'], ['유리', '괜찮아. 하나도 안 아파. …이상하게, 하나도.'], ['훈이', '유리야! 살아 있었어!'], ['철수', '팔 좀 봐… 핏줄이 파래.'], ['유리', '괜찮다니까. 가자. 여기서 나가야지.']].filter(l => l[0] !== '훈이' || ST.npc.훈이.follow).filter(l => l[0] !== '철수' || ST.npc.철수.follow));
+      ST.npc.유리.follow = true; note('유리가 따라옵니다. …어딘가 이상하다.');
+    },
+    medCabinet: async () => { if (!has('labNotes2')) { give('labNotes2', true); ST.F.readNotes2 = 1; await say([[null, '약품장 맨 아래 칸에 실험 일지의 마지막 장이 꽂혀 있다.']]); } return showNote('labNotes2'); },
+    clinicJars: async () => say([[null, '병마다 푸른 액체. 이름표 숫자는 모두 41.']]),
+    clinicTrash: async () => say([[null, '쓰레기통 가득 빈 주사기. 맨 위의 것에 작은 글씨: 「유리」']]),
+    jars: async () => {
+      if (ST.F.readNotes2 && !has('blueVial') && !ST.F.madeAntidote) {
+        const okd = await dialPuzzle('🧪 약병 선반', '병마다 두 자리 번호가 붙어 있다. 몇 번 병을 꺼낼까?', '14');
+        if (!okd) return;
+        give('blueVial'); return say([[null, '「14」번 병. 맑고 푸른 액체가 들어 있다.']]);
+      }
+      return say([[null, '병마다 탁한 액체. 이름표에 숫자만 적혀 있다. 12… 13… 14… 38… 39… 40…']]);
+    },
     bigBed: async () => say([[null, '큰 침대. 이불이 사람 모양으로 불룩하다…'], [null, '…들춰 보니 베개였다. 휴.']]),
     diary2: async () => { if (!has('diary2')) give('diary2', true); await say([[null, '협탁 위에 또 한 장의 일기.']]); await showNote('diary2'); },
     vanity: async () => say([[null, '금 간 화장대 거울. 금 사이로 비친 내 모습이 조각조각 다르게 움직인다.']]),
     fireplace: async () => say([[null, '차갑게 식은 벽난로. 재 속에 타다 만 사진 조각이 있다. 아이 셋…']]),
     // ---- 연구실 ----
-    jars: async () => say([[null, '병마다 탁한 액체. 이름표에 숫자만 적혀 있다. 38… 39… 40…']]),
     chalk: async () => say([[null, '칠판 가득 알 수 없는 수식. 맨 아래에 크게: 「눈을 감지 않는 자는 죽지 않는다」']]),
     labNotes: async () => { if (!has('labNotes')) give('labNotes', true); await say([[null, '실험 일지가 펼쳐져 있다.']]); await showNote('labNotes'); },
-    labtable: async () => say([[null, '실험대. 깨진 시험관에서 파란 얼룩이 번져 있다.']]),
+    labtable: async () => {
+      if (has('moonLily') && has('blueVial')) {
+        take('moonLily'); take('blueVial'); ST.F.madeAntidote = 1; sfx('water'); await wait(600); give('antidote');
+        return say([[null, '14번 병에 백합 꽃잎을 한 장씩 떨어뜨렸다. 푸른 액체가 천천히 하얗게 빛난다.'], [null, '해독제가 완성됐다. 이제… 유리를 찾아야 한다.'], [null, '(일지: 「그것들도 오르골 소리 앞에서는 얌전해진다」)']]);
+      }
+      if (ST.F.readNotes2) return say([[null, '실험대. 여기서 약을 섞을 수 있을 것 같다.'], [null, [!has('moonLily') && '달빛 백합', !has('blueVial') && '14번 병'].filter(Boolean).join('과 ') + '이(가) 필요하다.']]);
+      return say([[null, '실험대. 깨진 시험관에서 파란 얼룩이 번져 있다.']]);
+    },
     safe: async () => {
       if (ST.F.safeOpen) return say([[null, '빈 금고.']]);
       const hint = ST.F.sawBirthday ? '네 자리 숫자. 「막내가 태어난 날」…?' : '네 자리 숫자 자물쇠가 달린 금고.';
@@ -1502,7 +1694,10 @@ window.ONL_MANSION = (function () {
       ST.F.gotBasementKey = 1; ost('attic', 'trunk').open = true; loadRoom('attic'); give('basementKey');
       return say([[null, '트렁크 안, 아이 옷가지 밑에서 무거운 열쇠를 찾았다.'], [null, '손잡이에 쇠사슬 무늬. 지하실 열쇠다!']]);
     },
-    oldTrunk: async () => say([[null, '낡은 드레스와 작은 구두. 모두 아이 것이다.']]),
+    oldTrunk: async () => {
+      if (!ST.F.gotBook) { ST.F.gotBook = 1; give('oldBook'); return say([[null, '낡은 드레스와 작은 구두 밑에… 두꺼운 가죽 책이 깔려 있다.'], [null, '「영원에 관하여」 2권. 서재 책장에서 본 이름이다.']]); }
+      return say([[null, '낡은 드레스와 작은 구두. 모두 아이 것이다.']]);
+    },
     rocker: async () => say([[null, '흔들의자가 혼자 흔들리고 있다. 삐걱… 삐걱…']]),
     oldPhoto: async () => { if (!has('photo')) give('photo', true); await say([[null, '바닥에 떨어진 오래된 사진.']]); await showNote('photo'); },
     atticHole: async () => goRoom('corridor2', 'ladder'),
@@ -1520,11 +1715,12 @@ window.ONL_MANSION = (function () {
           유리: [['유리', '괜찮아… 다친 데는 없어. 레버 순서는 그 사진 뒤에 있었을 거야.']] }[who];
         return say(L);
       }
+      if (who === '유리' && ST.F.yuriTaken && !has('hairpin') && !ST.F.yuriFound) { give('hairpin', true); return say([[null, '빈 감옥. 바닥에… 보라색 머리핀이 떨어져 있다.'], [null, '유리 거다. 끌려간 자국이 남쪽 벽 쪽으로 이어져 있다.']]); }
       return say([[null, '빈 감옥. 벽에 수없이 긁힌 자국.']]);
     },
     guardDesk: async () => {
       if (!has('guardNote')) give('guardNote', true);
-      if (!ST.F.gotHandle) { ST.F.gotHandle = 1; give('handle'); ost('jail', 'gdesk').empty = true; loadRoom('jail'); await say([[null, '책상 서랍에서 녹슨 핸들을 찾았다!']]); }
+      if (!ST.F.gotHandle) { ST.F.gotHandle = 1; give('handle'); give('clinicKey', true); ost('jail', 'gdesk').empty = true; loadRoom('jail'); await say([[null, '책상 서랍에서 녹슨 핸들과 하얀 열쇠를 찾았다!']]); }
       return showNote('guardNote');
     },
     levers: async () => {
@@ -1536,6 +1732,7 @@ window.ONL_MANSION = (function () {
       const here = ['훈이', '철수', '유리'].filter(n => ST.npc[n].room === 'jail');
       await say([[null, '철커덩—! 세 개의 철창 문이 한꺼번에 열렸다!'], ['훈이', '나왔다아…! 진짜 나왔다!'], ['철수', '여기서 나가자. 창고 쪽에 철문 있었어. 통로 같아.'], ['유리', '다 같이 붙어서 가자.']].filter(l => !l[0] || here.includes(l[0]) || l[0] === null));
       for (const n of here) { ST.npc[n].follow = true; ST.npc[n].room = 'jail'; ST.npc[n].x = pl.x; ST.npc[n].y = pl.y; }
+      if (ST.F.yuriTaken && !here.includes('유리')) await say([['철수', '…잠깐. 유리는?'], ['훈이', '아까 그거… 그 기어다니는 게 유리를 남쪽으로 끌고 갔어. 지하 복도 아래쪽 하얀 철문.'], ['철수', '유리 없이는 못 나가. 간수 책상부터 뒤져 보자.']]);
       note('친구들이 따라옵니다!');
     },
     ironDoor: async () => {
@@ -1543,11 +1740,13 @@ window.ONL_MANSION = (function () {
       sfx('locked'); return say([[null, '육중한 철문. 손잡이가 빠져 있다. 끼울 핸들이 있으면 열 수 있을 것 같다.']]);
     },
     exit: async () => {
-      const friends = ['훈이', '철수', '유리'].filter(n => ST.npc[n].follow);
+      const ok = n => ST.npc[n].follow && !(n === '유리' && ST.F.yuriInfected && !ST.F.yuriCured);
+      const friends = ['훈이', '철수', '유리'].filter(ok);
       if (friends.length < 3) {
-        const c = await choose('친구들을 두고… 혼자 나갈까?', ['혼자 나간다', '아직 안 돼']);
+        const yuriLeft = ok('훈이') && ok('철수');
+        const c = await choose(yuriLeft ? '유리를… 두고 나갈까?' : '친구들을 두고… 나갈까?', ['나간다', '아직 안 돼']);
         if (c !== 0) return;
-        return ending(false);
+        return ending(yuriLeft ? 'yuri' : false);
       }
       return ending(true);
     }
@@ -1556,6 +1755,15 @@ window.ONL_MANSION = (function () {
   async function talkCommon(name) {
     const n = ST.npc[name];
     if (n.room === 'jail' && !ST.F.freed) { await SCRIPT.cellBars({ o: { cell: name === '훈이' ? 0 : name === '철수' ? 1 : 2 } }); return true; }
+    const Fl = ST.F;
+    if (n.follow && name === '유리' && Fl.yuriInfected && !Fl.yuriCured && has('antidote')) {
+      const c = await choose('유리에게 해독제를 먹일까?', ['먹인다', '나중에']);
+      if (c === 0) { take('antidote'); Fl.yuriCured = 1; sfx('scare'); shake = 6; await fade(1, 400); await wait(500); await fade(0, 700); await say([['유리', '…어? 나 방금까지 무슨 생각을 하고 있었지.'], ['유리', '배고픈 느낌이 사라졌어. 고마워. 진짜로.']]); note('유리가 돌아왔다!'); }
+      return true;
+    }
+    if (n.follow && name === '유리' && Fl.yuriInfected && !Fl.yuriCured) { await say([['유리', pick(['…응. 괜찮아. 다 괜찮아.', '너 눈… 왜 자꾸 깜빡여?', '배고프다. 너도 그렇지?', '(유리가 대답 대신 고개를 천천히 기울인다)', '쉿. 저기서 누가 우리 부르는데. 안 들려?'])]]); return true; }
+    if (n.follow && Fl.yuriInfected && !Fl.yuriTurned && !Fl.yuriCured) { await say([[name, pick({ 훈이: ['야… 유리 좀 이상하지 않아? 아까부터 눈을 한 번도 안 깜빡여.', '유리 팔… 점점 더 파래져.'], 철수: ['일지에 뭐라고 써 있었지? 하룻밤 안에… 그것이 된다고?', '서두르자. 서재 책장 뒤 온실이랬어.'] }[name])]]); return true; }
+    if (!n.follow && n.room === 'hall' && Fl.yuriTurned && !Fl.yuriCured) { await say([[name, pick({ 훈이: ['유리가… 유리가 그렇게 될 줄은…', '나 여기 있을게. 꼭 유리 데려와. 진짜야.'], 철수: ['해독제. 연구실 실험대에서 만들 수 있을 거야.', '그 오르골… 일지에 오르골 얘기 있었잖아. 아이 방.'] }[name])]]); return true; }
     if (n.follow) { await say([[name, pick({ 훈이: ['나 진짜 다시는 너 말 안 들을 거야…', '뛰어! 뛰라고!', '배고프다… 아니 지금 그게 문제가 아니지.'], 철수: ['뒤는 내가 볼게. 앞만 봐.', '사다리… 출구가 있을 거야.', '미안하다, 아까 먼저 도망쳐서.'], 유리: ['붙어 다니자. 절대 혼자 가지 마.', '지하에서 나는 소리… 사람 목소리 같아.', '괜찮아. 거의 다 왔어.'] }[name])]]); return true; }
     return false;
   }
@@ -1567,15 +1775,21 @@ window.ONL_MANSION = (function () {
     busy += 100; mon = null; chaseMusic(false);
     await fade(1, 900);
     const secs = Math.round(ST.t + (now() - playStart) / 1000), mm = Math.floor(secs / 60), ss = String(secs % 60).padStart(2, '0');
-    try { const e = JSON.parse(localStorage.getItem(DONE_KEY) || '{}'); e[good ? 'good' : 'alone'] = Math.min(e[good ? 'good' : 'alone'] || 1e9, secs); localStorage.setItem(DONE_KEY, JSON.stringify(e)); } catch (e) {}
+    const kind = good === true ? 'good' : good === 'yuri' ? 'yuri' : 'alone';
+    try { const e = JSON.parse(localStorage.getItem(DONE_KEY) || '{}'); e[kind] = Math.min(e[kind] || 1e9, secs); localStorage.setItem(DONE_KEY, JSON.stringify(e)); } catch (e) {}
     clearSave(); ST.ended = 1;
-    const p = panel('hr-end ' + (good ? 'good' : 'bad'));
-    if (good) {
+    const p = panel('hr-end ' + (kind === 'good' ? 'good' : 'bad'));
+    if (kind === 'yuri') {
+      p.append(el('p', 'hr-endsub', '셋이서 맨홀 밖으로 기어 나왔다. 철수가 무거운 뚜껑을 내려 덮으려던 그때—'),
+        el('p', 'hr-line', '아래에서, 유리의 목소리가 들렸다.'),
+        el('p', 'hr-line', '「…같이 가자며.」'),
+        el('h2', '', '— 셋이 맞이한 새벽 —'), el('p', 'hr-endtag', '엔딩 C · ' + mm + '분 ' + ss + '초 · 유리를 되돌릴 방법이 있었을지도…'));
+    } else if (kind === 'good') {
       p.append(el('p', 'hr-endsub', '사다리 끝, 맨홀 뚜껑을 밀어 올리자 차가운 새벽 공기가 쏟아졌다.'),
         el('p', 'hr-line', '훈이: 나 다시는 이런 데 안 와. 진짜로.'),
         el('p', 'hr-line', '철수: …근데 솔직히 좀 재밌지 않았냐?'),
         el('p', 'hr-line', '유리: 다음엔 사진만 찍고 가자. 약속해.'),
-        el('h2', '', '— 넷이 함께 맞이한 새벽 —'), el('p', 'hr-endtag', '진엔딩 · ' + mm + '분 ' + ss + '초'));
+        el('h2', '', '— 넷이 함께 맞이한 새벽 —'), el('p', 'hr-endtag', '진엔딩 · ' + mm + '분 ' + ss + '초' + (ST.F.yuriCured ? ' · 유리를 되찾았다' : '')));
     } else {
       p.append(el('p', 'hr-endsub', '숲을 빠져나와 뒤를 돌아보았다.'),
         el('p', 'hr-line', '저택의 모든 창문에서, 무언가가 나를 보고 있었다.'),

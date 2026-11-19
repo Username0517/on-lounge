@@ -1,5 +1,21 @@
 # Changelog
 
+## Longer story: the clinic, the moonlight greenhouse, Yuri turns; back-to-plaza button
+
+Files changed: `mansion.js`, `app.js`, `index.html`. No SQL.
+
+- Jump scares now happen only when you are caught. The crawler and the other monsters no longer flash a face when they appear.
+- `#plazaBtn` (🏙️ 광장으로) sits in the action bar on every scene past the plaza (`PAST_PLAZA`: forest1, forest2, mansion) and goes straight to the plaza. Add new outside scenes to `PAST_PLAZA`.
+- The story has a new second half after the basement chase:
+  - The crawler takes Yuri to the new **지하 처치실** (`clinic`, through the south door of `b1hall`), not to the jail. The guard's desk now also gives the `clinicKey`, and her empty cell has her hairpin.
+  - On the clinic's operating table she wakes up infected (`yuriInfected`). She follows you but looks grey-blue (`drawPerson` with `opt.blue`), twitches and says wrong things. The last lab page (`labNotes2`) explains the cure.
+  - The cure needs a book from the attic trunk, put back into the library's gap shelf (`greenhouseOpen`). That opens the **달빛 온실** (`greenhouse`). Its lily blooms with a 4-moon dial (`leverPuzzle` now takes options; answer `2310`, from the child's room moon drawing). Jar 14 comes from the study (`dialPuzzle` now takes any length). The two are mixed at the lab table into the `antidote`.
+  - Carrying the lily while infected Yuri follows makes her turn (`yuriTurns()`) in the next room. It starts a crawler chase from about 96px away. Hun-i and Cheol-su flee to the hall.
+  - Playing the child's music box with the antidote draws her in slowly (`opt.calm` monsters creep at 0.32x and never catch you). Next to you, you choose: give the antidote (cured), or run (a normal chase, and you can try the music box again). If you made the antidote before she turned, you can also give it to her by talking to her.
+  - In the hall the group comes back together (`regroup`).
+- Endings: the true ending (everyone, including cured Yuri), the new **엔딩 C** (leave with Hun-i and Cheol-su but not Yuri), and B (alone). An infected Yuri does not count as rescued.
+- New floor `grass`, wall `glass`, furniture `opTable`, `ivStand`, `lilyStand`, `moonbeam`, `pot`, painting art `moons`.
+
 ## New crawler art and motion, jump scares, how-to-play guide
 
 Files changed: `mansion.js`, `hunt.js`, `index.html`. No SQL.
