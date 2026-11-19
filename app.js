@@ -1179,6 +1179,7 @@
       sp.x = d.x + o.dx; sp.y = d.y + o.dy; sp.ax = d.ax + o.dx; sp.ay = d.ay + o.dy;
       if (d.sx != null) { sp.sx = d.sx + o.dx; sp.sy = d.sy + o.dy; }
       if (d.item) { const bx = itemById[d.item].box; sp.hit = [bx[0] + o.dx, bx[1] + o.dy, bx[2], bx[3]]; }
+      else if (!d.hit) { const r = (d.r || 14) + 6; sp.hit = [sp.x - r, sp.y - r - 6, r * 2, r * 2 + 6]; }   // no item box and no hit area given: a box round the spot, so it can be clicked
       sp.run = spotRun(sp);
       return sp;
     });
@@ -4271,6 +4272,6 @@
     bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
   };
   if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('700 20px "Pixelify Sans"'), document.fonts.load('400 20px "Silkscreen"')]).then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, openForestWarn, openMansionDoor, scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, openForestWarn, openMansionDoor, cam: () => ({ x: camX, y: camY, s }), scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();

@@ -1,5 +1,11 @@
 # Changelog
 
+## Fix: clicking did nothing outside (plaza, forest paths, mansion yard)
+
+Files changed: `app.js`.
+
+- Spots with no `item` and no `hit` (the forest path exits) had no click box, so `spots.find(sp => … sp.hit[0] …)` threw on every click and every mouse move in those scenes. Click-to-walk and click-to-use both broke. Spot setup now gives such spots a default box around `x, y, r`.
+
 ## Longer story: the clinic, the moonlight greenhouse, Yuri turns; back-to-plaza button
 
 Files changed: `mansion.js`, `app.js`, `index.html`. No SQL.
