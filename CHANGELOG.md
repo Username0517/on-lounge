@@ -1,5 +1,11 @@
 # Changelog
 
+## Fix: could not climb to the attic
+
+Files changed: `mansion.js`.
+
+- With the ladder down, standing under it and looking up hit the hatch first (objects were checked in list order and the first match won), and the hatch did nothing once open. `interact()` and the bubble highlight now use `pickAt()`, which takes the touching object whose middle is closest, and the open hatch itself climbs to the attic.
+
 ## Sound warnings, dress-shoe steps, story music and "…" bubbles
 
 Audience: the developer and the developer's AI agent.

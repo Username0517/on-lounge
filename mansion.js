@@ -805,17 +805,24 @@ window.ONL_MANSION = (function () {
 
   // ---- looking at things ----
   function facingPoint() { const v = DIRV[pl.dir]; return [pl.x + v[0] * 12, pl.y - 4 + v[1] * 12]; }
+  // when two things touch (a hatch above its ladder, shelves side by side) take the one whose middle is closest
+  function pickAt(fx, fy, ok) {
+    let best = null, bd = 1e9;
+    for (const o of objs) {
+      if (!ok(o)) continue;
+      const r = objRect(o), d = T[o.t];
+      const rr = d.wall ? { x: r.x, y: r.y, w: r.w, h: r.h + 6 } : { x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 };
+      if (!(fx >= rr.x && fx <= rr.x + rr.w && fy >= rr.y && fy <= rr.y + rr.h)) continue;
+      const dd = Math.hypot(fx - (rr.x + rr.w / 2), fy - (rr.y + rr.h / 2));
+      if (dd < bd) { bd = dd; best = o; }
+    }
+    return best;
+  }
   async function interact() {
     if (busy || pl.hidden) { if (pl.hidden && !busy) await leaveHide(); return; }
     const [fx, fy] = facingPoint();
     for (const [name, n] of Object.entries(ST.npc)) if (n.room === roomId && !n.gone && Math.hypot(n.x - fx, n.y - 4 - fy) < 13) return run('talk' + name, { name });
-    let best = null;
-    for (const o of objs) {
-      if (!o.use && !o.door) continue;
-      const r = objRect(o), d = T[o.t];
-      const rr = d.wall ? { x: r.x, y: r.y, w: r.w, h: r.h + 6 } : { x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 };
-      if (fx >= rr.x && fx <= rr.x + rr.w && fy >= rr.y && fy <= rr.y + rr.h) { best = o; break; }
-    }
+    const best = pickAt(fx, fy, o => o.use || o.door);
     if (best) {
       if (best.use) return run(best.use, { o: best });
       if (best.door) return goRoom(best.door.to, best.door.back);
@@ -983,13 +990,7 @@ window.ONL_MANSION = (function () {
   function facingTarget() {
     const [fx, fy] = facingPoint();
     for (const [name, n] of Object.entries(ST.npc)) if (n.room === roomId && !n.gone && Math.hypot(n.x - fx, n.y - 4 - fy) < 13) return n;
-    for (const o of objs) {
-      if (!o.use) continue;
-      const r = objRect(o), d = T[o.t];
-      const rr = d.wall ? { x: r.x, y: r.y, w: r.w, h: r.h + 6 } : { x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 };
-      if (fx >= rr.x && fx <= rr.x + rr.w && fy >= rr.y && fy <= rr.y + rr.h) return o;
-    }
-    return null;
+    return pickAt(fx, fy, o => o.use || o.door);
   }
   function bubble(x, y, hot, t) {
     x = Math.round(x); y = Math.round(y - 9 + (Math.floor(t / 400) % 2));
@@ -1331,7 +1332,7 @@ window.ONL_MANSION = (function () {
     pianoPortrait: async () => say([[null, '소녀의 초상화. 아래에 작은 글씨: 「노래를 좋아하던 우리 첫째」']]),
     // ---- 2층 ----
     hatch: async () => {
-      if (ST.F.hatchOpen) return;
+      if (ST.F.hatchOpen) return goRoom('attic', 'hole');   // the ladder is down: looking up at the hatch means climbing
       if (has('hook')) { take('hook'); ST.F.hatchOpen = 1; ost('corridor2', 'hatch').open = true; sfx('creak'); loadRoom('corridor2'); return say([[null, '갈고리 막대로 천장 문을 당겼다. 접이식 사다리가 덜컹 내려왔다.'], [null, '다락방으로 올라갈 수 있다.']]); }
       return say([[null, '천장에 작은 문이 있다. 손이 닿지 않는다.'], [null, '긴 막대 같은 게 있으면 당길 수 있을 텐데.']]);
     },
