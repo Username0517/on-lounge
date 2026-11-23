@@ -437,6 +437,48 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 @media (hover: none), (max-width: 760px) { .hr-pad { display: flex; } .hr-tip { display: none; } .hr-stage { max-height: calc(100vh - 290px); } }
 .hr-pad { margin-top: auto; }
 @media (max-width: 760px) { .horror { padding: 0; } .hr-card { border-radius: 0; height: 100%; } .hr-panel { inset: 3%; } .hr-key { height: 70px; } .hr-text { font-size: 14px; } }
+/* ---- 괴담 수집 (tales.js) ---- */
+.tl-cap { position: absolute; left: 6%; right: 6%; bottom: 6%; text-align: center; color: #e8dcc2; font-size: 15px; font-style: italic; text-shadow: 0 2px 4px #000; pointer-events: none; }
+.tl-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.tl-loading b { color: #e8dcc2; font-size: 20px; letter-spacing: 3px; font-weight: 600; animation: tlPulse 1.6s ease-in-out infinite; }
+@keyframes tlPulse { 50% { opacity: .45; } }
+.tl-skip { position: absolute; top: 3%; right: 3%; font-size: 12px; padding: 4px 10px; opacity: .8; }
+.tl-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: #000; color: #e8dcc2; opacity: 0; transition: opacity .8s; pointer-events: none; text-align: center; }
+.tl-card.on { opacity: 1; }
+.tl-card.art { background-size: cover; background-position: center; image-rendering: pixelated; justify-content: flex-end; padding-bottom: 9%; }
+.tl-card.art b { text-shadow: 0 3px 8px #000, 0 0 2px #000; }
+.tl-thumb { width: 72px; height: 42px; object-fit: cover; border-radius: 4px; border: 1px solid #000; image-rendering: pixelated; flex: 0 0 72px; }
+.tl-ch.off .tl-thumb { filter: grayscale(1) brightness(.6); }
+.tl-cut { display: block; width: min(300px, 70%); margin: 0 auto 6px; border-radius: 6px; image-rendering: pixelated; opacity: 0; animation: tlIn 2.6s ease-out .2s forwards; }
+@keyframes tlIn { to { opacity: 1; } }
+.tl-cg { inset: 0; border: 0; border-radius: 0; background: rgba(4,3,6,.92); align-items: center; justify-content: center; text-align: center; padding: 12px; cursor: pointer; }
+.tl-cgimg { max-width: 92%; max-height: 72%; image-rendering: pixelated; opacity: 0; animation: tlIn 1.8s ease-out forwards; }
+.tl-cgcap { margin: 6px 0 0; color: #e8dcc2; font-size: 14.5px; opacity: 0; animation: tlIn 1.2s ease-out .9s forwards; }
+.tl-cg::after { content: '▼'; color: #8a7a8a; font-size: 11px; opacity: 0; transition: opacity .4s; }
+.tl-cg.ready::after { opacity: 1; }
+.tl-card small { font-size: 14px; letter-spacing: 6px; color: #a8323a; }
+.tl-card b { font-size: 30px; letter-spacing: 4px; }
+.tl-card span { font-size: 14px; color: #a89; }
+.tl-chs { display: flex; flex-direction: column; gap: 8px; }
+.tl-ch { display: flex; align-items: center; gap: 12px; text-align: left; background: #1e1826; color: #e8dcc2; border: 2px solid #000; border-radius: 8px; padding: 9px 12px; font: inherit; cursor: pointer; box-shadow: 0 3px 0 #000; }
+.tl-ch:hover:not(.off) { background: #2c2236; }
+.tl-ch.off { opacity: .45; cursor: default; }
+.tl-ch.done { border-color: #5a4a2a; }
+.tl-ic { font-size: 24px; flex: 0 0 30px; text-align: center; }
+.tl-tx { display: flex; flex-direction: column; gap: 2px; }
+.tl-tx b { font-size: 15px; }
+.tl-tx small { font-size: 12px; color: #a89; }
+.tl-small { margin: 0; font-size: 12px; color: #8a7a8a; line-height: 1.5; }
+.tl-goal { margin: 0; font-size: 13px; color: #ffd23f; line-height: 1.5; }
+.tl-end { inset: 0; border: 0; border-radius: 0; justify-content: center; text-align: center; padding: 22px 12%; background: #060508; }
+.tl-end h3 { font-size: 21px; color: #e8dcc2; }
+.tl-endtx { margin: 0; white-space: pre-line; line-height: 1.8; font-size: 14.5px; color: #cfc2a8; }
+.tl-seq { margin: 0; padding-left: 22px; min-height: 1.5em; color: #ffd23f; font-size: 14px; line-height: 1.7; }
+.tl-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tl-opts .btn { font-size: 13px; padding: 7px 6px; line-height: 1.35; }
+.tl-opts .btn:disabled { opacity: .35; }
+.tl-input { font: inherit; font-size: 18px; padding: 8px 12px; border-radius: 8px; border: 2px solid #5a4a55; background: #0a080d; color: #e8dcc2; text-align: center; }
+@media (max-width: 760px) { .tl-cardwrap .hr-head h2 { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; } .tl-end { padding: 16px 6%; } .tl-card b { font-size: 24px; } .tl-opts { grid-template-columns: 1fr; } }
 /* ---- 저택 술래잡기 ---- */
 .hn-wrap { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
 .hn-stage { position: relative; flex: 1; min-height: 260px; background: #05040a; border-radius: 8px; overflow: hidden; }
@@ -940,6 +982,7 @@ details.paste textarea { margin-block: 6px; }
 <script src="catan-rules.js"></script>
 <script src="chess.js"></script>
 <script src="mansion.js"></script>
+<script src="tales.js"></script>
 <script src="wilderness.js"></script>
 <script src="app.js"></script>
 <script src="games.js"></script>

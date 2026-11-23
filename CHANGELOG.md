@@ -1,5 +1,39 @@
 # Changelog
 
+## 괴담 수집: AI art, creepier monsters, horror effects
+
+Files changed: `tales.js`, `tales-art.js` (new), `app.js`, `index.html`.
+
+- `tales-art.js` (new, about 330 KB): the user's AI pictures, cut from one sheet and shrunk to game size, as data URIs. `tales.js` loads it only the first time the tales open (`loadArt()`), so the lounge does not get slower. Until it has loaded (or if it fails), the old drawn-in-code monsters are used.
+  - Sprites: 솜이 (14 frames: walking down/left/up, plus six "broken" poses), 쿠네쿠네 (7 wriggle frames), the masked conductors (5 directions x 3 walk frames).
+  - Pictures: three chapter title cards (and one for chapter 4, shown greyed in the list), three "caught" pictures, the doll in the bathtub, the hole under the tree.
+- Monsters move wrongly on purpose: the bear flashes a frame with its head bent or twisted, jittering sideways; the white thing skips frames, snaps sideways leaving a faint trace, and turns round; one conductor's head snaps round now and then, and the two at the back always face you.
+- From the suggested list, all six were added:
+  - stop dead: while chasing, every few seconds the bear/conductors freeze for about half a second with only the head moving, then lunge faster for 0.7 s;
+  - face tracking: frozen or searching close by, the monster faces you (not while you are hidden);
+  - afterimages: one or two faint frames left behind while it lunges or is near;
+  - screen warp: the edges smear and tear the closer it gets (also for the white thing);
+  - lights: while it is in the room the darkness spikes, ceiling lamps flicker, the TV goes black and back; strongest just after it walks in.
+- Pictures fade in slowly and are never sudden: the title card behind the chapter name, the tub picture when the doll is back, the white thing in the field when 준호 sees it, the conductors at the end of the car in chapter 3, the "caught" picture above the caught text, chapter thumbnails in the list, the hole picture in the gate notice (`app.js`).
+
+## New: 괴담 수집 (urban-legend story mode), chapters 1–3, and the hidden way to it
+
+Files changed: `tales.js` (new), `app.js`, `mansion.js`, `index.html`. No SQL change: the new outside scene is a solo scene (private realtime topic, no chat).
+
+- `app.js`, 검은 숲길2: the forest wall on the right is walkable between y 232 and 256 (`forestScene({ gapR })`). It looks exactly the same as before. A pair of red eyes blinks at the gap, and a spot at the right edge leads to the new scene.
+- `app.js`, new scene `darkwood` (길 없는 숲, 400x224): solo (`SOLO`), rainy (`RAINY`, distant thunder like forest 2), very dark, no path (trees placed around an invisible way through), red eyes in the bushes that blink, look toward you and vanish when you come close. Far right: a dead giant tree with a hole. The spot `talesGate` opens `openTalesGate()`, which shows a notice, then an explanation (what it is, chapters, no jump scares, sound, saving), then `ONL_TALES.open()`. Added to `PAST_PLAZA` (plaza button), `OUTSIDE`, the scene log line. Footsteps and rain follow `ONL_TALES.rainLevel()` while it is open; `goScene` closes it.
+- `tales.js`: a solo story engine on top of `ONL_MANSION.kit` (tiles, furniture, darkness, sound, path finding). Rooms, doors, hiding, dialogue, bag with a 📌 current goal, dial/order/word puzzles, checkpoints, endings. Saved per chapter in `localStorage` (`onl_tales_v1`); nothing goes to the server.
+  - Entry film (not playable, skippable): the player's own character walks a dark rainy forest, stops to look back, steps into a hole and falls; black screen; 「입장 중입니다…」; then the chapter list. Each chapter starts with a title card.
+  - Being caught is never a face on the screen: the light fades out slowly and a line of text says what happened.
+  - 제1장 나홀로 숨바꼭질: 303호 at 3 AM. The cursed bear 솜이 walks room to room looking for you ("어디 있니…" + 8-second count, then it walks in through the far door; hide or stay out of its sight). Clues: four torn rule notes, a diary, a calendar (code 1107), a key, salt water, matches. The ending is the rule order (pour, spit, "내가 이겼다" ×3, burn). 2 endings (call 하린's name after reading her letter).
+  - 제2장 쿠네쿠네: grandmother's farm in the evening. Looking at the white thing in the rice field for too long fills a "gaze" meter (white static, screen tearing, whispers) until you lose; the binoculars lose at once. Clues: grandmother's notebook, counting puzzle (5 jars, 3 scarecrows, 2 persimmon trees → 532), candle at the shrine, salt, bell. Final: cross the village bridge without looking back while the white thing follows, ringing the bell when 준호 stops. 2 endings.
+  - 제3장 원숭이 꿈: the dream train. Every announcement takes the passenger at the back. Code from a left-behind ticket (0403), a scribbled way to wake up, the cab key; then your own name is announced and the masked conductors chase you to the cab, where you pull the brake and shout 「이건 꿈이다」. 2 endings (bring 서윤 along).
+  - 제4장 노오의 가면: listed as 준비 중.
+  - New pixel art drawn in code (until AI art replaces it): the bear 솜이, the white thing, the masked conductors; apartment, farm and train furniture; new floors and walls.
+- `mansion.js`: `kit` also exports `tone`, `noise`, `box`, `FULL`, `BASE`, `OUT`.
+- `index.html`: `<script src="tales.js">` after `mansion.js`; `.tl-*` styles.
+- All stories are original, based on public urban legends (hitori kakurenbo, kunekune, saru yume); nothing is copied from any game.
+
 ## Hunt: jail fixes, slower monster strikes, smoother movement
 
 Files changed: `hunt.js`.

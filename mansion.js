@@ -2063,7 +2063,7 @@ window.ONL_MANSION = (function () {
   const api = {
     openStory, close, isOpen: () => open_, hasSave, clearSave,
     // drawing, sound and collision pieces the tag game (hunt.js) shares
-    kit: { TS, T, FLOORS, WALLS, paintRoom, objRect, solidOf, overlap, walkGrid, bfs, darkness, drawMon, drawPerson, loadMon, MON, MON_INFO, sfx, chaseMusic, ac, setSound, AU, tileAt, isDoorCh, P, seeded, el }
+    kit: { tone, noise, box, FULL, BASE, OUT, TS, T, FLOORS, WALLS, paintRoom, objRect, solidOf, overlap, walkGrid, bfs, darkness, drawMon, drawPerson, loadMon, MON, MON_INFO, sfx, chaseMusic, ac, setSound, AU, tileAt, isDoorCh, P, seeded, el }
   };
   if (/[?&]debug\b/.test(location.search)) api._dbg = () => ({ get ST() { return ST; }, get pl() { return pl; }, get mon() { return mon; }, get room() { return roomId; }, get busy() { return busy; }, set busy(v) { busy = v; }, goRoom, run, give, loadRoom, startChase, SCRIPT, ROOMS, dlgNext, interact, get panel() { return ui.panel; }, get objs() { return objs; }, get checkpoint() { return checkpoint; } });
   return api;

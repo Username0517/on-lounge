@@ -787,7 +787,9 @@
     const obs = [];
     for (let y = 0; y < h; y += 8) {
       const c = cx(y + 4), hh = hw(y + 4);
-      obs.push([0, y, Math.max(0, Math.round(c - hh)), 8], [Math.round(c + hh), y, Math.max(0, w - Math.round(c + hh)), 8]);
+      obs.push([0, y, Math.max(0, Math.round(c - hh)), 8]);
+      // o.gapR: a secret way between the trees on the right; you can walk through, nothing shows it
+      if (!(o.gapR && y >= o.gapR[0] && y < o.gapR[1])) obs.push([Math.round(c + hh), y, Math.max(0, w - Math.round(c + hh)), 8]);
     }
     return { draw, obs, decayAt };
   }
@@ -873,7 +875,7 @@
       P(g, 60, 70, 2, 14, '#3a2a22'); P(g, 50, 63, 22, 8, '#5a4234'); P(g, 52, 66, 18, 1, '#c94a45'); P(g, 54, 68, 10, 1, '#c94a45'); P(g, 60, 64, 1, 6, '#2b2233');
     } });
   // ---- 검은 숲길 2 (안개, 까마귀, 어둠) ----
-  const FOREST2 = forestScene({ w: 192, h: 480, seed: 9202, decay0: 0.78, decay1: 1.0,
+  const FOREST2 = forestScene({ w: 192, h: 480, seed: 9202, decay0: 0.78, decay1: 1.0, gapR: [232, 256],
     cx: y => 96 + Math.round(Math.sin(y / 55 + 1.3) * 24), hw: y => 20 - Math.round((1 - y / 480) * 3),
     extra: (g, R) => {
       // a broken fence, a lost shoe and old puddles
@@ -883,6 +885,7 @@
     } });
   const CROWS2 = [[30, 420], [160, 360], [22, 250], [170, 180], [40, 110], [150, 60]];
   const EYES2 = [[24, 330], [168, 270], [16, 150], [176, 96], [30, 40], [160, 20]];
+  const EYES2_LURE = [178, 236];
   function crow(b, x, y, flap) {
     P(b, x - 3, y, 7, 3, '#0e0c12'); P(b, x + 3, y - 2, 3, 3, '#0e0c12'); P(b, x + 6, y - 1, 2, 1, '#3a3530'); P(b, x + 4, y - 2, 1, 1, '#c94a45');
     if (flap) { P(b, x - 5, y - 3, 5, 2, '#0e0c12'); P(b, x - 1, y - 4, 4, 2, '#0e0c12'); } else P(b, x - 4, y + 2, 6, 1, '#1d1a22');
@@ -911,10 +914,57 @@
       const ph = ((now + x * 997 + y * 31) % 9000) / 9000;
       if (ph < 0.06 && Math.abs(y - player.y) < 200) { P(b, x, y, 2, 1, '#ff3b3b'); P(b, x + 5, y, 2, 1, '#ff3b3b'); }
     }
+    { const [x, y] = EYES2_LURE, ph = (now % 5200) / 5200; if (ph > 0.1 && ph < 0.32 && Math.abs(y - player.y) < 140) { P(b, x, y, 2, 1, '#ff3b3b'); P(b, x + 5, y, 2, 1, '#ff3b3b'); } }
     const flick = 1 + Math.sin(now / 90) * 0.02 + (Math.random() < 0.02 ? -0.08 : 0);
     darkVeil(b, 0.46 + prog * 0.28, 84 - prog * 18, flick);
   }
   const FOREST1_H = 480, FOREST2_H = 480;
+  // ---- 길 없는 숲 (검은 숲길2 오른쪽 나무 틈으로) ----
+  // no path, rain, trees everywhere and red eyes in the bushes; far to the right a hole under a dead giant tree
+  const DW_W = 400, DW_H = 224;
+  const dwGuide = x => 112 + Math.round(Math.sin(x / 47) * 28 + Math.sin(x / 19) * 6);
+  const DARKWOOD = (() => {
+    const R = rnd32(7707), trees = [], bushes = [];
+    for (let y = 26; y < DW_H + 12; y += 15) for (let x = 6; x < DW_W; x += 17) {
+      const tx = x + R() * 10 | 0, ty = y + R() * 8 | 0;
+      if (Math.abs(ty - dwGuide(tx)) < 15 + (R() < 0.5 ? 6 : 0) && R() < 0.85) continue;   // a way through, but no path to see
+      if (tx < 34 && Math.abs(ty - 110) < 26) continue;   // where you come in
+      if (tx > 330 && ty > 50 && ty < 140) continue;      // the clearing with the hole
+      trees.push([tx, ty, 0.8 + R() * 0.2, R() < 0.3]);
+    }
+    for (let i = 0; i < 26; i++) bushes.push([10 + R() * (DW_W - 20) | 0, 30 + R() * (DW_H - 40) | 0]);
+    const draw = g => {
+      const R2 = rnd32(7708);
+      P(g, 0, 0, DW_W, DW_H, '#161a12');
+      for (let i = 0; i < 900; i++) P(g, R2() * DW_W | 0, R2() * DW_H | 0, 2, 1, pick2(R2, ['#1a1610', '#141a10', '#20180f', '#0a0c08']));
+      for (const [x, y] of bushes) { pixCircle(g, x, y, 7, '#0e150d'); pixCircle(g, x - 4, y + 2, 5, '#101a0e'); pixCircle(g, x + 5, y + 1, 5, '#0c130b'); }
+      // the clearing and the dead giant tree with a hole at its foot
+      pixCircle(g, 372, 100, 30, '#14120e');
+      P(g, 366, 34, 14, 58, '#1c1518'); P(g, 372, 34, 4, 58, '#130e12');
+      for (let b = 0; b < 7; b++) { let bx = 372, by = 40 + b * 3, a = -Math.PI / 2 + (b - 3) * 0.5; for (let k = 0; k < 22; k++) { bx += Math.cos(a); by += Math.sin(a); a += (R2() - 0.5) * 0.45; P(g, bx | 0, by | 0, k < 6 ? 2 : 1, 1, '#1c1518'); } }
+      P(g, 356, 88, 34, 6, '#130e12');
+      g.fillStyle = '#000'; g.beginPath(); g.ellipse(373, 98, 11, 6, 0, 0, Math.PI * 2); g.fill();
+      P(g, 352, 104, 2, 10, '#3a2c22'); P(g, 345, 100, 16, 6, '#4a3a2c'); P(g, 347, 102, 12, 1, '#7a2a2a');
+      trees.sort((a, z) => a[1] - z[1]);
+      for (const [x, y, d, big] of trees) forestTree(g, x, y, d, R2, big);
+    };
+    const obs = trees.map(([x, y]) => [x - 3, y - 4, 7, 5]).concat([[356, 84, 34, 8], [344, 100, 18, 6]]);
+    return { draw, obs };
+  })();
+  const DW_EYES = [[40, 60], [96, 170], [140, 44], [188, 196], [230, 52], [262, 176], [300, 40], [318, 190], [70, 150], [200, 96], [330, 66], [160, 130], [120, 204], [250, 120]];
+  function darkwoodFx(b, now) {
+    const flick = 1 + Math.sin(now / 90) * 0.02 + (Math.random() < 0.03 ? -0.1 : 0);
+    darkVeil(b, 0.74, 74, flick);
+    // eyes in the bushes: they blink, they look at you, and they go away if you come too close
+    for (let i = 0; i < DW_EYES.length; i++) {
+      const [x, y] = DW_EYES[i], d = Math.hypot(x - player.x, y - player.y);
+      if (d < 34 || d > 210) continue;
+      const ph = ((now + i * 1337) % (4200 + i * 300)) / (4200 + i * 300);
+      if (ph < 0.05 || (i % 3 === 0 && ph > 0.5 && ph < 0.75)) continue;
+      const lk = Math.round(clamp((player.x - x) / 60, -1, 1)), a = clamp((d - 34) / 30, 0, 1);
+      b.fillStyle = `rgba(255,42,42,${0.55 + 0.45 * a})`; b.fillRect(x + lk, y, 2, 1); b.fillRect(x + 5 + lk, y, 2, 1);
+    }
+  }
   const forestItems = (key, F) => [{ id: key + '-walls', label: '숲', fixed: true, box: [0, 0, 1, 1], sortY: -1, obs: F.obs, draw: () => {} }];
 
   // ---- 저택 마당 ----
@@ -1063,10 +1113,17 @@
         { id: 'toForest2', item: null, x: (96 + Math.round(Math.sin(8 / 62) * 20)), y: 8, r: 16, ax: (96 + Math.round(Math.sin(8 / 62) * 20)), ay: 2, label: '숲 더 깊이 들어가기', go: ['forest2', 'forest1'] }
       ] },
     forest2: { name: '검은 숲길 · 깊은 곳', w: 192, h: FOREST2_H, bounds: [6, 8, 186, 474], drawBg: FOREST2.draw, items: forestItems('f2', FOREST2), seats: [], outdoor: true, fx: forestFx2,
-      spawns: { forest1: [(96 + Math.round(Math.sin(466 / 55 + 1.3) * 24)), 466, 'up'], mansion: [(96 + Math.round(Math.sin(16 / 55 + 1.3) * 24)), 16, 'down'] },
+      spawns: { forest1: [(96 + Math.round(Math.sin(466 / 55 + 1.3) * 24)), 466, 'up'], mansion: [(96 + Math.round(Math.sin(16 / 55 + 1.3) * 24)), 16, 'down'], darkwood: [172, 244, 'left'] },
       spots: [
         { id: 'toForest1', item: null, x: (96 + Math.round(Math.sin(474 / 55 + 1.3) * 24)), y: 474, r: 16, ax: (96 + Math.round(Math.sin(474 / 55 + 1.3) * 24)), ay: 456, label: '숲 입구로 돌아가기', go: ['forest1', 'forest2'] },
-        { id: 'toMansion', item: null, x: (96 + Math.round(Math.sin(8 / 55 + 1.3) * 24)), y: 8, r: 16, ax: (96 + Math.round(Math.sin(8 / 55 + 1.3) * 24)), ay: 2, label: '안개 너머로 가기', go: ['mansion', 'forest2'] }
+        { id: 'toMansion', item: null, x: (96 + Math.round(Math.sin(8 / 55 + 1.3) * 24)), y: 8, r: 16, ax: (96 + Math.round(Math.sin(8 / 55 + 1.3) * 24)), ay: 2, label: '안개 너머로 가기', go: ['mansion', 'forest2'] },
+        { id: 'toDarkwood', item: null, x: 182, y: 244, r: 12, ax: 180, ay: 226, hit: [172, 232, 14, 24], label: '나무 사이 틈으로 들어가기', go: ['darkwood', 'forest2'] }
+      ] },
+    darkwood: { name: '길 없는 숲', w: DW_W, h: DW_H, bounds: [6, 24, 394, 218], drawBg: DARKWOOD.draw, items: [{ id: 'dw-trees', label: '숲', fixed: true, box: [0, 0, 1, 1], sortY: -1, obs: DARKWOOD.obs, draw: () => {} }], seats: [], outdoor: true, fx: darkwoodFx,
+      spawns: { forest2: [18, 110, 'right'], tales: [340, 112, 'left'] },
+      spots: [
+        { id: 'toForest2', item: null, x: 8, y: 110, r: 14, ax: 10, ay: 92, hit: [0, 96, 14, 28], label: '검은 숲길로 돌아가기', go: ['forest2', 'darkwood'] },
+        { id: 'talesGate', item: null, x: 362, y: 110, r: 18, ax: 373, ay: 80, hit: [358, 84, 32, 22], label: '나무 밑동의 구멍 들여다보기' }
       ] },
     mansion: { name: '숲속의 저택', w: MANSION_W, h: MANSION_H, bounds: [10, 156, 246, 284], drawBg: bgMansion, items: mansionItems, seats: [], outdoor: true, fx: mansionFx,
       spawns: { forest2: [128, 270, 'up'], door: [128, 166, 'down'] },
@@ -1081,7 +1138,7 @@
       spots: [{ id: 'leaveField', item: null, x: 160, y: 194, r: 12, ax: 160, ay: 182, hit: [146, 198, 28, 10], label: '락커룸으로 돌아가기' }] }
   };
   const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1', f1r2: 'hall1', f1r3: 'hall1', f1r4: 'hall1' };
-  const OUTSIDE = ['plaza', 'forest1', 'forest2', 'mansion'];
+  const OUTSIDE = ['plaza', 'forest1', 'forest2', 'darkwood', 'mansion'];
   const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'f1r4' || id === 'soccer' || OUTSIDE.includes(id)) ? 1 : 2;
   const ALL_ITEMS = Object.values(SCENES).flatMap(sc => sc.items);
   const itemById = Object.fromEntries(ALL_ITEMS.map(it => [it.id, it]));
@@ -1229,7 +1286,7 @@
     if (sp.locked) return () => toast(pick(LOCKED_MSG));
     const RUN = {
       elevator: () => openElevator(), outside: () => goScene('plaza', 'hall1'), weather: () => openWeather(),
-      mansionDoor: () => openMansionDoor(), mansionSign: () => openMansionSign(),
+      mansionDoor: () => openMansionDoor(), mansionSign: () => openMansionSign(), talesGate: () => openTalesGate(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
       catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'),
       moses: () => openMoses(),
@@ -1579,7 +1636,7 @@
   }
   // The forest paths are walked alone: each person gets a private copy of the room (their own channel), no shared chat.
   // Everyone meets again at the mansion.
-  const SOLO = { forest1: 1, forest2: 1 };
+  const SOLO = { forest1: 1, forest2: 1, darkwood: 1 };
   function sceneTopic() { return 'lounge:' + (sceneId === 'soccer' && match ? 'soccer-' + match.id : SOLO[sceneId] ? sceneId + '-' + net.uid : sceneId); }
   function chatLock() {
     const inp = $('chatInput'); if (!inp) return;
@@ -2562,12 +2619,13 @@
   // ================= outside: rain and footsteps (forest paths and the mansion yard) =================
   // A looped noise bed through two filters makes the rain (hiss + low rumble), random tiny clicks are drops on leaves,
   // thunder follows the mansion's lightning, and every step on these scenes is a hard little heel "tock".
-  const RAINY = { forest1: 1, forest2: 1, mansion: 1 };
+  const RAINY = { forest1: 1, forest2: 1, darkwood: 1, mansion: 1 };
   let rain = null, rainBuf = null, stepTick = new WeakMap(), lastFlash = 0, f2Thunder = 0;
   function rainLevel() {
     if (!RAINY[sceneId] || document.hidden) return 0;
     let lv = sceneId === 'forest1' ? 0.45 + 0.4 * clamp(1 - player.y / FOREST1_H, 0, 1) : sceneId === 'forest2' ? 0.9 : 1;
     if (window.ONL_MANSION && ONL_MANSION.isOpen()) lv *= 0.28;          // inside the house: rain on the windows
+    else if (window.ONL_TALES && ONL_TALES.isOpen()) lv *= ONL_TALES.rainLevel();   // the tales: depends on where the story is
     else if (document.querySelector('.hn-wrap')) lv *= 0.35;          // hunt: also indoors
     return lv;
   }
@@ -2637,9 +2695,9 @@
     if (Math.random() < 0.3 * lv) noise(a, t + Math.random() * 0.05, 0.012 + Math.random() * 0.02, (0.012 + Math.random() * 0.03) * lv, 'bandpass', 1800 + Math.random() * 4500, 6);
     // thunder: right after the mansion's lightning, or now and then far away in the deep forest
     if (sceneId === 'mansion' && mnFlashAt && mnFlashAt !== lastFlash) { lastFlash = mnFlashAt; thunder(a, t + 0.5 + Math.random() * 0.6, Math.random() < 0.4); }
-    if (sceneId === 'forest2') { if (!f2Thunder) f2Thunder = now + 9000 + Math.random() * 12000; if (now > f2Thunder) { f2Thunder = now + 22000 + Math.random() * 20000; thunder(a, t, false); } }
+    if (sceneId === 'forest2' || sceneId === 'darkwood') { if (!f2Thunder) f2Thunder = now + 9000 + Math.random() * 12000; if (now > f2Thunder) { f2Thunder = now + 22000 + Math.random() * 20000; thunder(a, t, false); } }
     // footsteps: mine always, other people's (mansion yard) quieter with distance
-    if (window.ONL_MANSION && ONL_MANSION.isOpen() || document.querySelector('.hn-wrap')) return;
+    if (window.ONL_MANSION && ONL_MANSION.isOpen() || window.ONL_TALES && ONL_TALES.isOpen() || document.querySelector('.hn-wrap')) return;
     for (const c of chars) {
       if (!c.moving || c.seat) continue;
       const dist = c.isPlayer ? 0 : Math.hypot(c.x - player.x, c.y - player.y); if (dist > 150) continue;
@@ -3447,6 +3505,7 @@
     if (TG.onLeaveScene) try { TG.onLeaveScene(); } catch (e) { console.error(e); }
     if (window.ONL_WILD && ONL_WILD.isOpen()) ONL_WILD.close();
     if (window.ONL_MANSION && ONL_MANSION.isOpen()) ONL_MANSION.close();
+    if (window.ONL_TALES && ONL_TALES.isOpen()) ONL_TALES.close();
     player.tie = 0;
     const fade = $('fade'); fade.classList.add('on');
     setTimeout(() => {
@@ -3461,7 +3520,7 @@
       camInit = false; resize();
       $('sceneTag').textContent = scene.name; gmLabel(); fbLabel(); chatLock(); plazaBtnSync();
       logEl.innerHTML = '';
-      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 비가 내리기 시작했어요. 여기부터는 혼자 걷는 길이에요. 함께 온 사람들은 저택에서 다시 만나요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 먼저 도착한 사람들이 여기 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
+      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 비가 내리기 시작했어요. 여기부터는 혼자 걷는 길이에요. 함께 온 사람들은 저택에서 다시 만나요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'darkwood' ? '길이 없는 숲이에요. 빗속, 덤불 사이에서 빨간 눈들이 깜빡여요… 오른쪽 끝에 무언가 있는 것 같아요.' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 먼저 도착한 사람들이 여기 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
       if (id === 'roof') loadWeather();
       if (id === 'soccer') onSoccerEnter();
@@ -4195,7 +4254,7 @@
   }
   // ---- 숲속 저택 정문 ----
   // everything past the plaza (forest paths, the mansion — and whatever opens there later) has a one-tap way back
-  const PAST_PLAZA = { forest1: 1, forest2: 1, mansion: 1 };
+  const PAST_PLAZA = { forest1: 1, forest2: 1, darkwood: 1, mansion: 1 };
   function plazaBtnSync() { const b = $('plazaBtn'); if (b) b.hidden = !PAST_PLAZA[sceneId]; }
   if ($('plazaBtn')) $('plazaBtn').addEventListener('click', () => { if (PAST_PLAZA[sceneId]) goScene('plaza', 'forest'); });
   function openForestWarn() {
@@ -4243,6 +4302,31 @@
     body.appendChild(el('p', 'small', '이야기 모드는 혼자 하는 공포 탈출 게임이에요 (진행은 이 기기에 저장돼요). 술래잡기는 괴물과 생존자로 나뉘어 함께 해요. 소리를 켜면 더 무서워요!'));
     $('modal').hidden = false;
   }
+  // the hole under the dead tree: a notice, what it is, then the way in
+  function openTalesGate() {
+    const TL = window.ONL_TALES;
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🕳️ 고목 밑동의 구멍';
+    body.appendChild(el('p', 'moses-line', '거대한 고목 밑동에 사람 하나 들어갈 만한 구멍이 뚫려 있어요. 구멍 속에서 누군가 무서운 이야기를 속삭이는 소리가 들려요…'));
+    body.appendChild(el('p', 'small', '옆에 쓰러진 팻말: 「이야기를 끝까지 들은 사람만 돌아올 수 있다」'));
+    if (TL && TL.loadArt) TL.loadArt(() => { const u = TL.artUrl('hole'); if (!u || !body.isConnected || $('modalTitle').textContent !== '🕳️ 고목 밑동의 구멍') return; const im = el('img'); im.src = u; im.alt = ''; im.style.cssText = 'display:block;width:min(260px,80%);margin:0 auto 10px;image-rendering:pixelated;border-radius:8px'; body.insertBefore(im, body.firstChild); });
+    const col = el('div', 'mn-choices'); body.appendChild(col);
+    const btn = (c, text, cls, fn) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; b.addEventListener('click', fn); c.appendChild(b); return b; };
+    const onQuit = () => { if (sceneId === 'darkwood') toast('구멍에서 빠져나와 숲으로 돌아왔어요'); };
+    const go = menu => { closeModal(); if (!TL) { toast('이야기를 불러오지 못했어요. 새로고침해 주세요.'); return; } ac(); log('', '🕳️ 구멍 속으로 떨어집니다…', 'sys game'); TL.open({ onQuit, menu }); };
+    btn(col, '안으로 들여다보기', 'btn-gold', () => {
+      body.innerHTML = ''; $('modalTitle').textContent = '⚠️ 들어가기 전에 · 괴담 수집';
+      const w = el('div', 'small'); w.style.cssText = 'text-align:left;line-height:1.75;margin:4px 0 10px';
+      w.innerHTML = '🕯️ <b>괴담 수집</b>은 혼자 하는 <b>추리·공포 이야기</b>예요. 장마다 널리 알려진 도시 괴담을 바탕으로 새로 쓴 이야기가 펼쳐져요.<br>📖 제1장 나홀로 숨바꼭질 · 제2장 쿠네쿠네 · 제3장 원숭이 꿈 <span style="opacity:.7">(제4장 노오의 가면은 준비 중)</span><br>🔎 방을 뒤져 <b>단서를 모으고, 퍼즐을 풀고</b>, 숨거나 도망쳐요. 엔딩이 여러 개예요.<br>🙈 <b>갑자기 튀어나오는 장면은 없어요.</b> 대신 음산한 소리, 쫓기는 장면, 어둡고 붉은 화면 연출이 있어요.<br>🔊 소리를 켜면 훨씬 무서워요. 이어폰 소리 크기를 확인해 주세요.<br>💾 진행은 이 기기에 저장돼요. 언제든 오른쪽 위 「나가기」로 나올 수 있어요.';
+      body.appendChild(w);
+      const c2 = el('div', 'mn-choices'); body.appendChild(c2);
+      btn(c2, '🕳️ 구멍 속으로 들어가기', 'btn-gold', () => go(false));
+      if (TL && TL.hasProgress()) btn(c2, '📖 바로 챕터 목록으로', '', () => go(true));
+      btn(c2, '그만둘래요', '', () => closeModal());
+    });
+    btn(col, '돌아서기', '', () => { closeModal(); toast(pick(['등 뒤에서 무언가 키득거렸어요…', '덤불 속 빨간 눈들이 한꺼번에 감겼어요.', '오늘은 그냥 돌아가기로 했어요.'])); });
+    $('modal').hidden = false;
+  }
   function openMansionSign() {
     const body = $('modalBody'); body.innerHTML = '';
     $('modalTitle').textContent = '🪧 낡은 팻말';
@@ -4272,6 +4356,6 @@
     bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
   };
   if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('700 20px "Pixelify Sans"'), document.fonts.load('400 20px "Silkscreen"')]).then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, openForestWarn, openMansionDoor, cam: () => ({ x: camX, y: camY, s }), scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { goScene, openForestWarn, openMansionDoor, openTalesGate, cam: () => ({ x: camX, y: camY, s }), scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();
