@@ -972,8 +972,19 @@ window.ONL_MANSION = (function () {
   function take(id) { ST.inv = ST.inv.filter(x => x !== id); }
   const F = () => ST.F;
   const ost = (rid, id) => (ST.obj[rid + ':' + id] = ST.obj[rid + ':' + id] || {});
-  function saveNow() { try { ST.t += (now() - playStart) / 1000; playStart = now(); localStorage.setItem(SAVE_KEY, JSON.stringify(ST)); } catch (e) {} }
-  function snapshot() { checkpoint = JSON.parse(JSON.stringify(ST)); checkpoint.room = roomId; checkpoint.x = pl.x; checkpoint.y = pl.y; checkpoint.dir = pl.dir; }
+  // where you really stand (while hidden that is in front of the furniture, not inside it)
+  function herePos() { return pl.hidden ? [pl.hidden.x, pl.hidden.y] : [pl.x, pl.y]; }
+  function saveNow() { try { ST.t += (now() - playStart) / 1000; playStart = now(); const [x, y] = herePos(); ST.room = roomId || ST.room; ST.x = x; ST.y = y; ST.dir = pl.dir; localStorage.setItem(SAVE_KEY, JSON.stringify(ST)); } catch (e) {} }
+  function snapshot() { checkpoint = JSON.parse(JSON.stringify(ST)); const [x, y] = herePos(); checkpoint.room = roomId; checkpoint.x = x; checkpoint.y = y; checkpoint.dir = pl.dir; }
+  // never leave the player standing inside a wall or a piece of furniture: step to the nearest free spot
+  function unstick() {
+    if (!room || !blockedAt(pl.x, pl.y)) return;
+    for (let r = 2; r <= 64; r += 2) for (let k = 0; k < 16; k++) {
+      const a = k / 16 * Math.PI * 2, x = pl.x + Math.cos(a) * r, y = pl.y + Math.sin(a) * r;
+      if (!blockedAt(x, y) && x > 4 && y > 4 && x < room.pw - 4 && y < room.ph - 4) { pl.x = x; pl.y = y; return; }
+    }
+    const [x, y] = spawnFor(roomId, Object.keys(room.doors || {})[0] || ''); pl.x = x; pl.y = y;
+  }
   function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
   function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
 
@@ -1020,7 +1031,7 @@ window.ONL_MANSION = (function () {
     await fade(1, 160);
     const from = roomId;
     const [x, y, dir] = spawnFor(rid, back);
-    loadRoom(rid); pl.x = x; pl.y = y; pl.dir = dir; pl.hidden = null; pl.trail = [];
+    loadRoom(rid); pl.x = x; pl.y = y; pl.dir = dir; pl.hidden = null; pl.trail = []; unstick();
     ST.room = rid;
     // friends who follow you come along
     for (const [name, n] of Object.entries(ST.npc)) if (n.follow) { n.room = rid; n.x = x; n.y = y; }
@@ -1055,6 +1066,7 @@ window.ONL_MANSION = (function () {
   }
   let stepAt = 0, bumpAt = 0;
   function movePlayer(dt, t) {
+    if (!pl.hidden && blockedAt(pl.x, pl.y) === true) unstick();
     const d = (busy || pl.hidden) ? null : inputDir();
     pl.moving = !!d;
     if (!d) return;
@@ -1244,7 +1256,7 @@ window.ONL_MANSION = (function () {
     if (!snap) return;
     const played = ST.t + (now() - playStart) / 1000;
     ST = JSON.parse(JSON.stringify(snap)); ST.t = played; mon = null; chaseMusic(false); redFlash = 0;
-    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'down'; pl.hidden = null; pl.trail = [];
+    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'down'; pl.hidden = null; pl.trail = []; unstick();
     for (const n of Object.values(ST.npc)) if (n.follow) { n.room = ST.room; n.x = pl.x; n.y = pl.y; }
     camSnap(); playStart = now(); note('다시…');
   }
@@ -2027,7 +2039,7 @@ window.ONL_MANSION = (function () {
     ST = saved && saved.v === 1 ? saved : fresh();
     playStart = now(); busy = 0; mon = null; chaseCount = 0; fadeA = 0; redFlash = 0;
     for (const k in keys) keys[k] = false; order = []; for (const d in touch) touch[d] = 0;
-    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'up'; pl.hidden = null; pl.trail = [];
+    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'up'; pl.hidden = null; pl.trail = []; unstick();
     for (const n of Object.values(ST.npc)) if (n.follow) { n.room = ST.room; n.x = pl.x; n.y = pl.y; }
     camSnap(); snapshot();
     window.addEventListener('keydown', onKey, true); window.addEventListener('keyup', onKey, true); window.addEventListener('resize', fit);

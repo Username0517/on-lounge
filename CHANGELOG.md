@@ -1,5 +1,13 @@
 # Changelog
 
+## Fix: stuck in place after "이야기 이어하기" (story mode)
+
+Files changed: `mansion.js`, `hunt.js`.
+
+- Bug: `saveNow()` saved `ST` but never updated `ST.x/ST.y`. They stayed at the new-game spot in the hall. If the tab or app was closed without the 나가기 button, the save kept that position. On resume you stood at the hall's coordinates in another room, often inside a wall, and could only turn on the spot. `saveNow()`/`snapshot()` now record where you really stand (in front of the furniture while hidden).
+- `unstick()`: after loading a room, resuming or restoring, and every frame if you are inside a wall or furniture, the player steps to the nearest free spot. Old broken saves are repaired the same way.
+- Hunt: the same safety in `step()`. A player inside a wall or furniture (after a knock-back, a teleport or a bad sync) is moved to the nearest free spot.
+
 ## Hunt, round 3: new map layouts, the floating face, secret passages, energy drinks, fixes
 
 Files changed: `hunt.js`, `mansion.js`, `index.html` (the previous hunt patch, with the aim stick and the map-sync fix, had not been uploaded; it is included).

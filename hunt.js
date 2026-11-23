@@ -488,6 +488,12 @@
       const el = elapsed();
       const e = L.me;
       if (e) {
+        // never stuck inside a wall or furniture (after a knock-back, a teleport or a bad position): step to the nearest free spot
+        if (myHide() == null && blockedAt(e.x, e.y, el, amMon())) {
+          let done = false;
+          for (let r = 3; r <= 48 && !done; r += 3) for (let k = 0; k < 16 && !done; k++) { const a = k / 16 * Math.PI * 2, x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r; if (!blockedAt(x, y, el, amMon())) { e.x = x; e.y = y; done = true; } }
+          if (done) sendMove(true);
+        }
         let [vx, vy] = frozen() ? [0, 0] : inputVec();
         if (L.hold && (vx || vy)) { L.hold = 0; L.holdWhat = null; }
         if (L.knock && t < L.knock.until) { const k = { x: e.x, y: e.y }; moveEnt(k, Math.sign(L.knock.vx), Math.sign(L.knock.vy), Math.hypot(L.knock.vx, L.knock.vy), dt, el, true); e.x = k.x; e.y = k.y; }
