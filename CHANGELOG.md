@@ -1,5 +1,14 @@
 # Changelog
 
+## Hunt: jail fixes, slower monster strikes, smoother movement
+
+Files changed: `hunt.js`.
+
+- Bug: the move into the jail cell (and back out) ran only in `applyState`, when a state message from the host changed `jailed`. The host never receives its own state, so a host who was caught as a survivor stayed free (counted as jailed, so the monster could not catch them: "invincible"). When freed, they stayed inside the cell. The move now runs in `step()` every frame from `L.myJ`: a jailed survivor is always put inside the cell, and a freed one is put outside the door. A free survivor found inside the cell after it opens is put outside.
+- Escaping the jail alone takes 2 minutes (was 90 s), with a countdown in the jailed player's hint line.
+- Monster strike cooldown 1.1 → 1.7 s (slower than the 1.2 s crossbow).
+- Remote players: their drawn position glides to the predicted one (smoothing small corrections instead of jumping), and prediction stops after 3.2 s without news, so a stalled player is not run off into the distance and then snapped back.
+
 ## Fix: stuck in place after "이야기 이어하기" (story mode)
 
 Files changed: `mansion.js`, `hunt.js`.

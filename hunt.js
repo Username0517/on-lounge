@@ -39,11 +39,12 @@
     // 밸런스 (3차 패치): 석궁을 자주 쏘고, 맞으면 잠깐 멈칫 → 그 틈에 도망
     const SURV_SPEED = 68, MON_SPEED = 60, SPEED_STEP = 0.03, SPEED_EVERY = 60000, SPEED_MAX_STEPS = 4;
     const JAIL_MS = 15000, OPEN_MS = 6000, MON_HP = 60, BOLT_CD = 1200, BOLT_SPEED = 270, BOLT_RANGE = 240;
-    const ATK_CD = 1100, ATK_REACH = 20, INSTALL_MS = 2000, KEY_RESPAWN = 8000;
+    const ATK_CD = 1700, ATK_REACH = 20,   // 괴물 공격은 석궁(1.2초)보다 느리게 1.7초
+    INSTALL_MS = 2000, KEY_RESPAWN = 8000;
     const STUN_MS = 800, STUN_IMMUNE = 1000;           // 화살에 맞으면 0.8초 기절, 깨어난 뒤 1초는 다시 기절하지 않음
     const BOOST_MS = 4000, BOOST_MUL = 1.4, BOOST_RESPAWN = 25000;   // ⚡ 각성제: 4초 동안 1.4배 빠르게, 25초 뒤 다시 생김
     const PASS_CD = 6000;                              // 비밀 통로는 한 번 쓰면 6초 뒤에 다시
-    const SELF_FREE_MS = 45000;                        // 감옥에서 45초가 지나면 스스로 탈옥 (감옥 지키기 방지)
+    const SELF_FREE_MS = 120000;                       // 감옥에서 2분이 지나면 스스로 탈옥 (감옥 지키기 방지)
     const TIME_LIMIT = 600000;
     const monstersFor = n => (n >= 6 ? 2 : 1);
     // 괴물 모습은 판마다 무작위: 기어다니는 거미손, 떠다니는 얼굴, 바닥에서 솟은 손, 굴러다니는 핏눈알
@@ -265,7 +266,7 @@
     function sendMove(force) {
       const e = L.me; if (!e) return;
       const t = now();
-      if (!force && e.vx === L.sentVx && e.vy === L.sentVy && t - L.lastSend < 2500) return;
+      if (!force && e.vx === L.sentVx && e.vy === L.sentVy && t - L.lastSend < ((e.vx || e.vy) ? 1400 : 2500)) return;
       if (!force && t - L.lastSend < 180) { clearTimeout(L.sendT); L.sendT = setTimeout(() => sendMove(true), 185 - (t - L.lastSend)); return; }
       clearTimeout(L.sendT);
       L.lastSend = t; L.sentVx = e.vx; L.sentVy = e.vy;
@@ -301,7 +302,8 @@
       let pos = hostPos(id);
       if (a.px != null && a.py != null) {
         const told = { x: +a.px || 0, y: +a.py || 0 };
-        if (!pos || Math.hypot(told.x - pos.x, told.y - pos.y) < 120) { pos = told; if (id !== me()) H.pos[id] = { x: told.x, y: told.y, vx: 0, vy: 0, at: now() }; }
+        // trust where they say they are (friends playing together; a lost or late move message must not make their action miss)
+        pos = told; if (id !== me()) H.pos[id] = { x: told.x, y: told.y, vx: (H.pos[id] || {}).vx || 0, vy: (H.pos[id] || {}).vy || 0, at: now() };
       }
       if (!G.roles[id]) return;
       if (a.a === 'atk' && mon && !G.down[id] && el >= JAIL_MS && !stunned(id, el)) {
@@ -421,12 +423,6 @@
       M = genMap(g.map);
       if (!TG.isHost() || first) { L.el0 = g.el || 0; L.elAt = now(); }
       if (!L.me && G.roles[me()]) { const s = spawnPos(me()); L.me = { x: s.x, y: s.y, vx: 0, vy: 0, dir: 'down', moving: false }; L.camX = s.x - VW / 2; L.camY = s.y - VH / 2; sendMove(true); }
-      // I was caught: into the cell. I was let out: just outside its door.
-      if (L.me && was) {
-        const nowJ = !!G.jailed[me()], wasJ = !!(was.jailed && was.jailed[me()]);
-        if (nowJ && !wasJ) { const J = M.jail; L.me.x = J.x0 + 16 + Math.random() * (J.x1 - J.x0 - 32); L.me.y = J.y0 + 28; L.me.vx = L.me.vy = 0; sendMove(true); K.sfx('catch'); L.flash = 1; }
-        if (!nowJ && wasJ) { L.me.x = M.jail.out.x + (Math.random() * 30 - 15); L.me.y = M.jail.out.y; sendMove(true); K.sfx('unlock'); }
-      }
       if (g.phase === 'end' && !L.endShown) { L.endShown = true; showEnd(); }
       if (g.phase !== 'end' && L.endShown) { L.endShown = false; hideEnd(); }
     }
@@ -472,12 +468,21 @@
       if (L.joy && L.joy.on) { x += L.joy.x; y += L.joy.y; }
       return [Math.sign(x), Math.sign(y)];
     }
-    function myHide() { if (!G) return null; const k = Object.keys(G.hides).find(s => G.hides[s] === me()); return k == null ? null : +k; }
+    function myHide() { if (!G || G.jailed[me()]) return null; const k = Object.keys(G.hides).find(s => G.hides[s] === me()); return k == null ? null : +k; }
     // a state from the host that was sent before it heard my hide/unhide should not undo it on my screen
+    // Hiding: what I asked for wins on my own screen until the host's state agrees (up to 4 s), and the request is
+    // sent again if the host has not caught up — so a late or lost message never pulls me back in or out.
+    // Being caught always wins: a jailed player is never kept hidden.
     function keepMine(g) {
-      const t = now();
-      if (L.unhideAt && t - L.unhideAt < 1500) for (const k of Object.keys(g.hides)) if (g.hides[k] === me()) delete g.hides[k];
-      if (L.hideAt && t - L.hideAt < 1500 && !Object.values(g.hides).includes(me())) { const k = Object.keys(G ? G.hides : {}).find(s => G.hides[s] === me()); if (k != null && g.hides[k] == null) g.hides[k] = me(); }
+      const W = L.want; if (!W) return;
+      const hostK = Object.keys(g.hides).find(s => g.hides[s] === me()), hostS = hostK == null ? null : +hostK;
+      if (g.jailed[me()] || hostS === W.s || now() - W.at > 4000) { L.want = null; return; }
+      for (const k of Object.keys(g.hides)) if (g.hides[k] === me()) delete g.hides[k];
+      if (W.s != null && g.hides[W.s] == null) g.hides[W.s] = me();
+    }
+    function resendWant() {
+      const W = L.want; if (!W || TG.isHost() || now() - W.sent < 900) return;
+      W.sent = now(); act(W.s == null ? { a: 'unhide' } : { a: 'hide', s: W.s });
     }
     function frozen() { return !G || !L.me || G.phase === 'end' || G.esc[me()] || (amMon() && (G.down[me()] || stunned(me()))) || myHide() != null; }
     function step(dt, t) {
@@ -488,12 +493,32 @@
       const el = elapsed();
       const e = L.me;
       if (e) {
+        // caught → into the cell; let out → just outside its door. Checked every frame (also on the host's own screen,
+        // which never gets a state message), and kept true: a jailed survivor is always inside, a free one never.
+        if (!amMon() && G.roles[me()]) {
+          const J = M.jail, jailedNow = !!G.jailed[me()];
+          if (jailedNow && (!L.myJ || !inJail(e))) {
+            if (myHide() != null) { const hs = myHide(); delete G.hides[hs]; }
+            e.x = J.x0 + 16 + Math.random() * Math.max(1, J.x1 - J.x0 - 32); e.y = J.y0 + 28; e.vx = e.vy = 0;
+            if (!L.myJ) { K.sfx('catch'); L.flash = 1; }
+            L.myJ = true; sendMove(true);
+          } else if (!jailedNow && L.myJ) {
+            L.myJ = false; e.x = J.out.x + (Math.random() * 30 - 15); e.y = J.out.y; sendMove(true); K.sfx('unlock');
+          } else if (!jailedNow && inJail(e) && el >= JAIL_MS + OPEN_MS) { e.x = J.out.x; e.y = J.out.y; sendMove(true); }
+        }
         // never stuck inside a wall or furniture (after a knock-back, a teleport or a bad position): step to the nearest free spot
-        if (myHide() == null && blockedAt(e.x, e.y, el, amMon())) {
+        const jailedMe = !!G.jailed[me()] && !amMon();
+        // caught: always inside the cell, whatever order the messages came in
+        // let out (by the key, or by picking the lock): step outside the cell door — this also covers the host, whose own state never goes through applyState
+        if (!jailedMe && L.wasJailed && !amMon() && inJail(e)) { e.x = M.jail.out.x + (Math.random() * 30 - 15); e.y = M.jail.out.y; e.vx = e.vy = 0; sendMove(true); }
+        L.wasJailed = jailedMe;
+        if (jailedMe && !inJail(e)) { const J = M.jail; e.x = J.x0 + 16 + Math.random() * (J.x1 - J.x0 - 32); e.y = J.y0 + 28; e.vx = e.vy = 0; sendMove(true); }
+        if (myHide() == null && !G.jailed[me()] && blockedAt(e.x, e.y, el, amMon())) {
           let done = false;
-          for (let r = 3; r <= 48 && !done; r += 3) for (let k = 0; k < 16 && !done; k++) { const a = k / 16 * Math.PI * 2, x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r; if (!blockedAt(x, y, el, amMon())) { e.x = x; e.y = y; done = true; } }
+          for (let r = 3; r <= 48 && !done; r += 3) for (let k = 0; k < 16 && !done; k++) { const a = k / 16 * Math.PI * 2, x = e.x + Math.cos(a) * r, y = e.y + Math.sin(a) * r; if (!blockedAt(x, y, el, amMon()) && (!jailedMe || inJail({ x, y }))) { e.x = x; e.y = y; done = true; } }
           if (done) sendMove(true);
         }
+        resendWant();
         let [vx, vy] = frozen() ? [0, 0] : inputVec();
         if (L.hold && (vx || vy)) { L.hold = 0; L.holdWhat = null; }
         if (L.knock && t < L.knock.until) { const k = { x: e.x, y: e.y }; moveEnt(k, Math.sign(L.knock.vx), Math.sign(L.knock.vy), Math.hypot(L.knock.vx, L.knock.vy), dt, el, true); e.x = k.x; e.y = k.y; }
@@ -514,9 +539,12 @@
       }
       for (const [id, r] of Object.entries(L.rem)) {
         if (!G.roles[id] && !TG.T) continue;
-        if (r.vx || r.vy) moveEnt(r, r.vx, r.vy, speedOf(id), dt, el, isMon(id));
-        r.moving = !!(r.vx || r.vy);
-        r.rx += (r.x - r.rx) * Math.min(1, dt * 12); r.ry += (r.y - r.ry) * Math.min(1, dt * 12);
+        const fresh = t - (r.at || 0) < 3200;   // no word for over 3 s (heartbeat is 1.4 s while moving): stop guessing
+        if ((r.vx || r.vy) && fresh) moveEnt(r, r.vx, r.vy, speedOf(id), dt, el, isMon(id));
+        r.moving = !!(r.vx || r.vy) && fresh;
+        // the drawn position glides to the guessed one: small corrections are smoothed out instead of jumping
+        const gap = Math.hypot(r.x - r.rx, r.y - r.ry), k = gap > 60 ? 1 : Math.min(1, dt * (gap > 12 ? 10 : 7));
+        r.rx += (r.x - r.rx) * k; r.ry += (r.y - r.ry) * k;
       }
       // arrows: mine decide whether they hit
       for (const b of L.bolts) {
@@ -626,8 +654,8 @@
       if (h.k === 'inst') { if (!L.hold) { L.hold = now(); L.holdWhat = 'inst'; } return; }
       if (h.k === 'none') return;
       if (h.k === 'pass') { L.fx.push({ k: 'puff', x: L.me.x, y: L.me.y, at: now() }); L.me.x = h.to[0]; L.me.y = h.to[1]; L.passAt = now(); sendMove(true); L.fx.push({ k: 'puff', x: h.to[0], y: h.to[1], at: now() }); K.sfx('door'); return; }
-      if (h.k === 'hide') { act({ a: 'hide', s: h.s }); for (const k of Object.keys(G.hides)) if (G.hides[k] === me()) delete G.hides[k]; G.hides[h.s] = me(); L.hideAt = now(); K.sfx('hide'); return; }
-      if (h.k === 'unhide') { const hs = myHide(); act({ a: 'unhide' }); delete G.hides[hs]; L.unhideAt = now(); stepOut(hs); sendMove(true); K.sfx('hide'); return; }
+      if (h.k === 'hide') { act({ a: 'hide', s: h.s }); for (const k of Object.keys(G.hides)) if (G.hides[k] === me()) delete G.hides[k]; G.hides[h.s] = me(); L.want = { s: h.s, at: now(), sent: now() }; K.sfx('hide'); return; }
+      if (h.k === 'unhide') { const hs = myHide(); act({ a: 'unhide' }); delete G.hides[hs]; L.want = { s: null, at: now(), sent: now() }; stepOut(hs); sendMove(true); K.sfx('hide'); return; }
       act({ a: h.k });
     }
 
@@ -831,7 +859,7 @@
       // bottom: what Space and Enter do right now
       if (inGame() && !G.esc[me()] && G.phase !== 'end') {
         const cd = amMon() ? Math.max(0, ATK_CD - (t - L.atkAt)) : Math.max(0, BOLT_CD - (t - L.boltAt));
-        const a1 = amMon() ? (G.down[me()] ? '💀 쓰러졌어요' : stunned(me(), el) ? '💫 기절! 잠시 못 움직여요' : el < JAIL_MS ? '감옥에서 기다리는 중…' : cd ? `👊 ${(cd / 1000).toFixed(1)}초` : '👊 [Space·클릭] 공격') : G.jailed[me()] ? '⛓️ 친구가 열쇠로 열어 줄 거예요' : myHide() != null ? '🫣 숨어 있어요' : cd ? `🏹 ${(cd / 1000).toFixed(1)}초` : '🏹 [Space·클릭] 석궁';
+        const a1 = amMon() ? (G.down[me()] ? '💀 쓰러졌어요' : stunned(me(), el) ? '💫 기절! 잠시 못 움직여요' : el < JAIL_MS ? '감옥에서 기다리는 중…' : cd ? `👊 ${(cd / 1000).toFixed(1)}초` : '👊 [Space·클릭] 공격') : G.jailed[me()] ? `⛓️ 열쇠로 구해 주길 기다려요 · 혼자 탈옥까지 ${Math.max(0, Math.ceil((SELF_FREE_MS - (el - ((G.jailAt || {})[me()] || el))) / 1000))}초` : myHide() != null ? '🫣 숨어 있어요' : cd ? `🏹 ${(cd / 1000).toFixed(1)}초` : '🏹 [Space·클릭] 석궁';
         const hint = interactHint();
         let line = a1 + (hint ? `   ·   [Enter] ${hint.label}` : '') + (L.carry ? '   ·   ' + L.carry : '');
         if (narrow) line = line.replace(/\[(Space·클릭|Space|Enter)\] /g, '').replace(/   ·   /g, ' · ');
@@ -959,7 +987,7 @@
       window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true); window.removeEventListener('resize', fit);
       window.removeEventListener('blur', releaseKeys); document.removeEventListener('focusin', onFocusIn); document.removeEventListener('visibilitychange', releaseKeys);
       clearTimeout(L.sendT);
-      L.dom = null; L.me = null; L.rem = {}; L.bolts = []; L.fx = []; L.msg = []; L.endShown = false; L.hold = 0; L.keys = Object.create(null); L.knock = null;
+      L.dom = null; L.me = null; L.myJ = false; L.rem = {}; L.bolts = []; L.fx = []; L.msg = []; L.endShown = false; L.hold = 0; L.keys = Object.create(null); L.knock = null;
       G = null; M = null; H.pos = {};
     }
     function showEnd() {
@@ -999,7 +1027,7 @@
         `괴물은 처음 15초 동안 감옥에 갇혀 있어요. 마지막 5초는 화면 가운데 빨간 숫자로 세요. 그 사이에 흩어져 숨으세요!`,
         `생존자: [Space] 또는 마우스 클릭으로 석궁 (1.2초에 한 발, 화살 무제한). 맞은 괴물은 밀려나고 0.8초 동안 멈칫해요. 괴물 체력 ${MON_HP}, 한 발에 1 (10% 확률로 치명타 2). 폰은 오른쪽 조준 스틱을 끌어서 겨누고 놓으면 발사, 톡 치면 가장 가까운 괴물에게 자동 조준.`,
         `괴물: [Space]·클릭 공격. 잡힌 생존자는 감옥으로! 숨은 곳 앞에서 공격하면 숨은 사람도 찾아내요. 1분마다 아주 조금씩 빨라져요. 생존자에겐 가까이 온 괴물의 빨간 눈과 방향 화살표가 보여요.`,
-        `[Enter] 옷장·통·상자에 숨기 / 나오기. 열쇠를 주워 감옥 문 앞에서 [Enter] 하면 갇힌 친구들이 풀려나요. 감옥에 45초 있으면 스스로 탈옥해요.`,
+        `[Enter] 옷장·통·상자에 숨기 / 나오기. 열쇠를 주워 감옥 문 앞에서 [Enter] 하면 갇힌 친구들이 풀려나요. 감옥에 2분 있으면 스스로 탈옥해요.`,
         `맵 곳곳의 ⚡ 각성제(노란 점)를 먹으면 4초 동안 빨라져요. 보랏빛으로 반짝이는 책장은 비밀 통로예요. [Enter]로 들어가면 멀리 떨어진 다른 책장으로 나와요 (생존자만).`,
         `사다리 조각 3개는 처음부터 맵 곳곳에 있어요(지도의 파란 점, 괴물 지도엔 안 보여요). 지도의 초록 점(구멍)에서 [Enter]를 2초 꾹 눌러 설치하세요. 3개를 다 설치하면 모두 구멍으로 탈출! 갇힌 친구까지 다 나가야 생존자 승리예요.`,
         `괴물을 모두 쓰러뜨려도 생존자 승리, 생존자를 모두 가두거나 10분 안에 탈출하지 못하면 괴물 승리. 폰은 왼쪽 조이스틱으로 움직여요.`
@@ -1024,7 +1052,7 @@
           const cur = TG.G;
           if (cur && cur.kind === 'hunt' && p.g.seq < cur.seq && p.g.map === cur.map && Object.keys(p.g.roles).join() === Object.keys(cur.roles).join()) return;
           const fresh = !cur || cur.kind !== 'hunt';
-          if (fresh) { L.me = null; L.rem = {}; L.endShown = false; }
+          if (fresh) { L.me = null; L.myJ = false; L.rem = {}; L.endShown = false; }
           applyState(p.g, true);
           if (fresh) TG.render();
           return;
@@ -1050,9 +1078,9 @@
       if (G.key.s === 2 && G.key.c === id) { const p = hostPos(id) || M.jail.out; G.key = { s: 1, x: Math.round(p.x), y: Math.round(p.y) }; }
       for (const pc of G.pieces) if (pc.s === 2 && pc.c === id) { const p = hostPos(id) || M.jail.out; pc.s = 1; pc.c = null; pc.x = Math.round(p.x); pc.y = Math.round(p.y); }
     }
-    function unmountKeep() { L.me = null; L.rem = {}; L.bolts = []; L.fx = []; L.msg = []; L.endShown = false; hideEnd(); }
+    function unmountKeep() { L.me = null; L.myJ = false; L.rem = {}; L.bolts = []; L.fx = []; L.msg = []; L.endShown = false; hideEnd(); }
 
     TG.register('hunt', 'mansion', INFO, GAME);
-    if (/[?&]debug\b/.test(location.search)) window.__hunt = { sync: () => sendMove(true), get G() { return G; }, get L() { return L; }, get M() { return M; }, genMap, THEMES, hostAct, elapsed, speedOf, primary, secondary, interactHint, push, checkWin, set t0(v) { H.t0 = v; }, get H() { return H; } };
+    if (/[?&]debug\b/.test(location.search)) window.__hunt = { sync: () => sendMove(true), get G() { return G; }, get L() { return L; }, get M() { return M; }, genMap, THEMES, hostAct, elapsed, speedOf, primary, secondary, interactHint, inJail: e => inJail(e), push, checkWin, set t0(v) { H.t0 = v; }, get H() { return H; } };
   }
 })();
