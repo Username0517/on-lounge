@@ -46,10 +46,13 @@
     const SELF_FREE_MS = 45000;                        // 감옥에서 45초가 지나면 스스로 탈옥 (감옥 지키기 방지)
     const TIME_LIMIT = 600000;
     const monstersFor = n => (n >= 6 ? 2 : 1);
-    // 괴물 모습: 기어다니는 거미손, 떠다니는 얼굴 (방장이 대기실에서 골라요)
-    const SKINS = ['crawl', 'face'];
-    const MON_KO = { crawl: '거미손', face: '떠도는 얼굴', blue: '물끄러미', grin: '히죽이', scream: '아우성' };
-    const MON_LOOKS = [[0, '🕷️ 거미손', '네 발로 기어와요'], [1, '😱 떠도는 얼굴', '얼굴만 떠다녀요'], [-1, '🎲 섞어서', '괴물마다 무작위']];
+    // 괴물 모습은 판마다 무작위: 기어다니는 거미손, 떠다니는 얼굴, 바닥에서 솟은 손, 굴러다니는 핏눈알
+    const SKINS = ['crawl', 'face', 'hand', 'eye'];
+    const MON_KO = { crawl: '거미손', face: '떠도는 얼굴', hand: '바닥손', eye: '핏눈알', blue: '물끄러미', grin: '히죽이', scream: '아우성' };
+    // per look: arrow hit box (half width, top, bottom), name height, stun-stars height, eye-glint height in the dark
+    const LOOK = { crawl: { hx: 25, top: 38, bot: 6, name: 42, stars: 36, glint: 18 }, face: { hx: 17, top: 52, bot: -4, name: 62, stars: 56, glint: 34 },
+      hand: { hx: 25, top: 28, bot: 7, name: 36, stars: 32, glint: 14 }, eye: { hx: 18, top: 31, bot: 6, name: 38, stars: 34, glint: 18 } };
+    const lookOf = id => LOOK[G.skin[id]] || LOOK.crawl;
 
     // ---------------- the three maps ----------------
     // Each map is built from a fixed seed, so everybody gets exactly the same rooms without sending them.
@@ -212,8 +215,8 @@
       const nMon = monstersFor(players.length);
       const mapIdx = T.map >= 0 && T.map < 3 ? T.map : (Math.random() * 3 | 0);
       const g = { kind: 'hunt', seq: 1, map: mapIdx, phase: 'jail', roles: {}, skin: {}, hp: {}, down: {}, jailed: {}, esc: {}, names: {}, hides: {}, inst: 0, speedLv: 0, winner: null, why: '', el: 0, spawn: {} };
-      const look = T.mon == null ? 0 : T.mon;
-      players.forEach((id, i) => { const m = i < nMon; g.roles[id] = m ? 'm' : 's'; g.names[id] = (T.members.find(x => x.id === id) || {}).name || '친구'; if (m) { g.skin[id] = look >= 0 ? SKINS[look] : pick(SKINS); g.hp[id] = MON_HP; } });
+      const skins = shuffle(SKINS);   // two monsters never look the same
+      players.forEach((id, i) => { const m = i < nMon; g.roles[id] = m ? 'm' : 's'; g.names[id] = (T.members.find(x => x.id === id) || {}).name || '친구'; if (m) { g.skin[id] = skins[i % skins.length]; g.hp[id] = MON_HP; } });
       const map = genMap(mapIdx);
       const sp = shuffle(map.spawns.map((_, i) => i));
       players.forEach((id, i) => { g.spawn[id] = g.roles[id] === 'm' ? -1 - i : sp[i % sp.length]; });
@@ -519,7 +522,7 @@
           if (G.down[mid]) continue;
           const mp = mid === me() ? L.me : L.rem[mid]; if (!mp) continue;
           // a little more generous than the drawing, so a near miss still counts
-          const sk = G.skin[mid], hx = sk === 'crawl' ? 25 : sk === 'face' ? 17 : 14, top = sk === 'crawl' ? 38 : sk === 'face' ? 52 : 54, bot = sk === 'face' ? -4 : 6;
+          const { hx, top, bot } = lookOf(mid);
           if (b.x > mp.rx - hx && b.x < mp.rx + hx && b.y > mp.ry - top && b.y < mp.ry + bot) { b.dead = true; act({ a: 'hit', m: mid, x: Math.round(mp.x), y: Math.round(mp.y), kx: b.dx, ky: b.dy }); break; }
         }
       }
@@ -529,6 +532,17 @@
       if (e && !amMon() && !G.esc[me()] && G.phase !== 'end') {
         let dmin = 1e9; for (const mid of ids('m')) { const r = L.rem[mid]; if (r && !G.down[mid]) dmin = Math.min(dmin, Math.hypot(r.x - e.x, r.y - e.y)); }
         if (dmin < 150 && t > L.beat) { L.beat = t + 380 + dmin * 4; K.sfx('heart'); }
+        // each monster has its own sound when it moves near you: nails scratching, a wet rolling squelch, skittering
+        for (const mid of ids('m')) {
+          const r = L.rem[mid]; if (!r || G.down[mid] || !r.moving) continue;
+          const d = Math.hypot(r.x - e.x, r.y - e.y); if (d > 230) continue;
+          if (t < (r.sndAt || 0)) continue;
+          const v = Math.max(0.05, 1 - d / 230) * 0.16, sk = G.skin[mid];
+          if (sk === 'hand') { r.sndAt = t + (d < 90 ? 120 : 220) + Math.random() * 160; K.sfx('scratch', v); }
+          else if (sk === 'eye') { r.sndAt = t + 160 + Math.random() * (d < 90 ? 140 : 320); K.sfx('squish', v); }
+          else if (sk === 'crawl') { r.sndAt = t + 80 + Math.random() * 90; K.sfx('skitter', v); }
+          else r.sndAt = t + 1000;
+        }
       }
     }
     // Space: shoot (survivor) or strike (monster)
@@ -645,6 +659,13 @@
       for (let i = 0; i < n; i++) { P(g, x - 5, y - 4 - i * 9, 2, 10, '#8a6040'); P(g, x + 3, y - 4 - i * 9, 2, 10, '#8a6040'); P(g, x - 5, y - 1 - i * 9, 10, 2, '#a8743a'); }
       if (n >= 3) { const a = 0.35 + Math.sin(t / 300) * 0.12; g.fillStyle = `rgba(255,230,160,${a})`; g.beginPath(); g.ellipse(x, y - 24, 14, 22, 0, 0, Math.PI * 2); g.fill(); }
     }
+    // what a monster's drawing needs: who it is looking at (the eye's pupil follows them) and whether it is close (faster, twitchier)
+    function monOpts(id, p) {
+      let tgt = null, best = 1e9;
+      if (!amMon() && L.me && inGame()) { tgt = { x: L.me.x, y: L.me.y }; best = Math.hypot(L.me.x - p.rx, L.me.y - p.ry); }
+      else for (const sid of ids('s')) { if (!visible(sid) || G.jailed[sid] || G.esc[sid]) continue; const q = posOf(sid); if (!q) continue; const d = Math.hypot(q.rx - p.rx, q.ry - p.ry); if (d < best) { best = d; tgt = { x: q.rx, y: q.ry }; } }
+      return { key: 'h' + id, moving: p.moving, alpha: G.down[id] ? 0.4 : 1, look: tgt, rage: best < 90 && !G.down[id] };
+    }
     function drawItem(g, kind, x, y, t) {
       const bob = Math.sin(t / 250) * 1.5;
       g.fillStyle = `rgba(255,236,150,${0.25 + Math.sin(t / 200) * 0.1})`; g.beginPath(); g.arc(x, y - 4 + bob, 8, 0, Math.PI * 2); g.fill();
@@ -693,11 +714,11 @@
       for (const e of list) {
         if (e.o) FT[e.o.t].draw(g, e.o.x * TS, e.o.y * TS, e.o, t);
         else if (e.bar) drawBars(g, e.bar[0], e.bar[1], e.bar[2] && jailOpen(el), e.bar[2]);
-        else if (isMon(e.id)) K.drawMon(g, G.skin[e.id], e.p.rx, e.p.ry, e.p.dir, t, { key: 'h' + e.id, moving: e.p.moving, alpha: G.down[e.id] ? 0.4 : 1 });
+        else if (isMon(e.id)) K.drawMon(g, G.skin[e.id], e.p.rx, e.p.ry, e.p.dir, t, monOpts(e.id, e.p));
         else K.drawPerson(g, (e.id === me() ? look0 : O.lookOf(e.id)) || look0, e.p.rx, e.p.ry, e.p.dir || 'down', e.p.moving, t, e.hid ? { alpha: 0.35 } : null);
       }
       for (const b of L.bolts) { g.strokeStyle = '#e8dcc2'; g.lineWidth = 1; g.beginPath(); g.moveTo(b.x - b.dx * 6, b.y - b.dy * 6); g.lineTo(b.x, b.y); g.stroke(); P(g, b.x - 1, b.y - 1, 2, 2, '#c9c9d4'); }
-      for (const id of ids('m')) if (stunned(id, el) && visible(id)) { const p = posOf(id); if (!p) continue; const top = G.skin[id] === 'crawl' ? 36 : G.skin[id] === 'face' ? 56 : 60; for (let i = 0; i < 3; i++) { const a = t / 180 + i * 2.1; P(g, Math.round(p.rx + Math.cos(a) * 9 - 1), Math.round(p.ry - top + Math.sin(a) * 3), 3, 3, i % 2 ? '#ffe06a' : '#fff8ea'); } }
+      for (const id of ids('m')) if (stunned(id, el) && visible(id)) { const p = posOf(id); if (!p) continue; const top = lookOf(id).stars; for (let i = 0; i < 3; i++) { const a = t / 180 + i * 2.1; P(g, Math.round(p.rx + Math.cos(a) * 9 - 1), Math.round(p.ry - top + Math.sin(a) * 3), 3, 3, i % 2 ? '#ffe06a' : '#fff8ea'); } }
       for (const f of L.fx) if (f.k === 'swing') { const a = 1 - (t - f.at) / 900; g.strokeStyle = `rgba(255,80,80,${a})`; g.lineWidth = 2; g.beginPath(); g.arc(f.x, f.y - 8, 12, 0, Math.PI * 2); g.stroke(); }
       if (L.aiming && L.me && L.aim) {
         const len = amMon() ? 24 : BOLT_RANGE, x0 = L.me.x, y0 = L.me.y - 10;
@@ -719,7 +740,7 @@
         const p = posOf(id); if (!p) continue;
         const d = Math.hypot(p.rx - L.me.x, p.ry - L.me.y); if (d > SENSE_R) continue;
         const a = clamp(1.25 - d / SENSE_R, 0.25, 1) * (Math.floor(t / 900 + p.rx) % 5 ? 1 : 0.2);   // a blink now and then
-        const ex = Math.round(p.rx + ox), ey = Math.round(p.ry + oy - (G.skin[id] === 'crawl' ? 18 : G.skin[id] === 'face' ? 34 : 44));
+        const ex = Math.round(p.rx + ox), ey = Math.round(p.ry + oy - lookOf(id).glint);
         g.fillStyle = `rgba(255,40,40,${a})`; g.fillRect(ex - 4, ey, 2, 2); g.fillRect(ex + 2, ey, 2, 2);
         g.fillStyle = `rgba(255,60,60,${a * 0.25})`; g.fillRect(ex - 6, ey - 2, 12, 6);
       }
@@ -734,7 +755,7 @@
       // names over people
       for (const id of Object.keys(G.roles)) {
         if (!visible(id)) continue; const p = posOf(id); if (!p) continue;
-        const sx = (p.rx + ox) * s, sy = (p.ry + oy - (isMon(id) ? (G.skin[id] === 'crawl' ? 42 : G.skin[id] === 'face' ? 62 : 70) : 28)) * s;
+        const sx = (p.rx + ox) * s, sy = (p.ry + oy - (isMon(id) ? lookOf(id).name : 28)) * s;
         if (sx < -40 || sx > w + 40 || sy < -20 || sy > h + 20) continue;
         tx(nameOf(id) + (G.jailed[id] ? ' ⛓️' : '') + (G.down[id] ? ' 💀' : stunned(id, el) ? ' 💫 기절' : ''), sx, sy, isMon(id) ? '#ff8a8a' : id === me() ? '#ffd65a' : '#9fe8a8', 11, 'center');
       }
@@ -967,26 +988,15 @@
         row.appendChild(b);
       });
       box.appendChild(row); body.appendChild(box);
-      const box2 = el('div', 'hn-maps');
-      box2.appendChild(el('b', '', '👹 괴물 모습' + (TG.isHost() ? '' : ' (방장이 골라요)')));
-      const row2 = el('div', 'hn-maprow'), curM = T.mon == null ? 0 : T.mon;
-      MON_LOOKS.forEach(([i, nm, bl]) => {
-        const b = el('button', 'btn hn-map' + (curM === i ? ' btn-gold' : ''), ''); b.type = 'button';
-        b.append(el('strong', '', nm), el('small', '', bl));
-        b.disabled = !TG.isHost(); b.setAttribute('aria-pressed', String(curM === i));
-        b.addEventListener('click', () => { if (!TG.isHost()) return; T.mon = i; TG.bump(); });
-        row2.appendChild(b);
-      });
-      box2.appendChild(row2); body.appendChild(box2);
       const d = el('details', 'tg-help'); d.open = true; d.appendChild(el('summary', '', '어떻게 하나요?'));
-      [`3~5명이면 괴물 1명, 6명이면 괴물 2명. 누가 괴물인지는 시작할 때 무작위로 정해져요.`,
+      [`3~5명이면 괴물 1명, 6명이면 괴물 2명. 누가 괴물인지는 시작할 때 무작위로 정해져요. 괴물 모습은 판마다 무작위예요: 🕷️ 거미손 · 😱 떠도는 얼굴 · ✋ 바닥손 · 👁️ 핏눈알.`,
         `괴물은 처음 15초 동안 감옥에 갇혀 있어요. 마지막 5초는 화면 가운데 빨간 숫자로 세요. 그 사이에 흩어져 숨으세요!`,
         `생존자: [Space] 또는 마우스 클릭으로 석궁 (1.2초에 한 발, 화살 무제한). 맞은 괴물은 밀려나고 0.8초 동안 멈칫해요. 괴물 체력 ${MON_HP}, 한 발에 1 (10% 확률로 치명타 2). 폰은 오른쪽 조준 스틱을 끌어서 겨누고 놓으면 발사, 톡 치면 가장 가까운 괴물에게 자동 조준.`,
         `괴물: [Space]·클릭 공격. 잡힌 생존자는 감옥으로! 숨은 곳 앞에서 공격하면 숨은 사람도 찾아내요. 1분마다 아주 조금씩 빨라져요. 생존자에겐 가까이 온 괴물의 빨간 눈과 방향 화살표가 보여요.`,
         `[Enter] 옷장·통·상자에 숨기 / 나오기. 열쇠를 주워 감옥 문 앞에서 [Enter] 하면 갇힌 친구들이 풀려나요. 감옥에 45초 있으면 스스로 탈옥해요.`,
         `맵 곳곳의 ⚡ 각성제(노란 점)를 먹으면 4초 동안 빨라져요. 보랏빛으로 반짝이는 책장은 비밀 통로예요. [Enter]로 들어가면 멀리 떨어진 다른 책장으로 나와요 (생존자만).`,
         `사다리 조각 3개는 처음부터 맵 곳곳에 있어요(지도의 파란 점, 괴물 지도엔 안 보여요). 지도의 초록 점(구멍)에서 [Enter]를 2초 꾹 눌러 설치하세요. 3개를 다 설치하면 모두 구멍으로 탈출! 갇힌 친구까지 다 나가야 생존자 승리예요.`,
-        `괴물을 모두 쓰러뜨려도 생존자 승리, 생존자를 모두 가두면 괴물 승리. 폰은 왼쪽 조이스틱으로 움직여요.`
+        `괴물을 모두 쓰러뜨려도 생존자 승리, 생존자를 모두 가두거나 10분 안에 탈출하지 못하면 괴물 승리. 폰은 왼쪽 조이스틱으로 움직여요.`
       ].forEach(t => d.appendChild(el('p', '', '· ' + t)));
       body.appendChild(d);
     }

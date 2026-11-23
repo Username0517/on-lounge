@@ -9,7 +9,14 @@ Files changed: `hunt.js`, `mansion.js`, `index.html` (the previous hunt patch, w
 - Maps (`genMap`): 5x3 cells (66x36 tiles) instead of 4x3 small rooms joined by narrow tunnels. Room kinds: plain, small closet, pillared hall, courtyard with a block in the middle, L-shaped, and long two-cell galleries with pillar rows. Corridors are 2 or 3 tiles wide, with extra loops. Still only the seeded `R`. Flood-filled: every key/ladder/spawn/hide/drink/passage point is reachable from the cell door.
 - New: two **secret passages** per map (`M.passages`; a bookcase with a purple glint, survivors only, Enter teleports to the far bookcase, 6 s cooldown), and three **⚡ energy drinks** (`G.boost`; walk over one for 1.4x speed for 4 s, back after 25 s). Both show on the survivors' minimap only.
 - The monster's minimap no longer shows the ladder pieces (it never showed survivors).
-- Monsters: the hunt now uses `crawl` (거미손) and the new `face` (떠도는 얼굴: the screaming face from the user's art, floating with bob, sway, flicker and after-images; drawn by `drawFace` in `mansion.js`). The host picks in the lobby (`T.mon`: 0 crawler, the default; 1 face; -1 mixed).
+- Monsters: four looks, picked at random each game (two monsters never share one); there is no lobby picker. `LOOK` in `hunt.js` holds each look's hit box and label heights.
+  - `crawl` 거미손: the crawler.
+  - `face` 떠도는 얼굴: the screaming face from the user's art, floating with bob, sway, flicker and after-images (`drawFace`).
+  - `hand` 바닥손 and `eye` 핏눈알 use 8- and 10-frame sprite sheets cut from the user's reference sheet (`HAND_SHEET`, `EYE_SHEET`), plus states drawn in code.
+    - Hand: IDLE writhes between frames on random holds. CRAWL advances one frame per 4.4 px moved (3.2 px when close). SCRATCH flicks two frames and leaves scratch marks. TWITCH pushes one band sideways. SPREAD flings the fingers open when close. The wrist sits in a blood pool and a broken hole and never bobs.
+    - Eye: ROLL turns frames with the signed distance rolled (faster movement means faster spin, backwards when going left). STOP snaps a dark-red iris to the front, and its pupil follows `opt.look` (the player). TWITCH (when close) shudders the ball and darts the pupil. It leaves a blood smear.
+    - Sounds near survivors: nails scratching (hand), a wet roll (eye), skittering (crawler).
+  - All four are drawn by `drawMon` in `mansion.js`. `monOpts()` in `hunt.js` passes `look` (who the eye stares at) and `rage` (within 90 px).
 - Balance: bolt cooldown 2.5 → 1.2 s, stun 2 → 0.8 s (with 1 s of immunity after it), monster HP 30 → 60 (more arrows now), bolt hit boxes are wider (crawler ±25 px, face ±17 px).
 
 ## Hunt balance patch, phone aim stick, stun, seeing the monster, a map sync fix
