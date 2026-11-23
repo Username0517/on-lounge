@@ -33,14 +33,23 @@
     const me = () => O.uid();
 
     // ---------------- rules ----------------
-    const VW = 320, VH = 240;
-    const SURV_SPEED = 66, MON_SPEED = 60, SPEED_STEP = 0.04, SPEED_EVERY = 40000, SPEED_MAX_STEPS = 7;
-    const JAIL_MS = 15000, OPEN_MS = 6000, MON_HP = 50, BOLT_CD = 3000, BOLT_SPEED = 250, BOLT_RANGE = 230;
-    const ATK_CD = 900, ATK_REACH = 24, INSTALL_MS = 3000, KEY_RESPAWN = 15000;
-    const PIECE_AT = [90000, 150000, 210000], TIME_LIMIT = 600000;
+    // the view is 320x240 world pixels, stretched taller on a phone held upright (or wider on its side) so the game fills the screen
+    const VW0 = 320, VH0 = 240;
+    let VW = VW0, VH = VH0;
+    // 밸런스 (3차 패치): 석궁을 자주 쏘고, 맞으면 잠깐 멈칫 → 그 틈에 도망
+    const SURV_SPEED = 68, MON_SPEED = 60, SPEED_STEP = 0.03, SPEED_EVERY = 60000, SPEED_MAX_STEPS = 4;
+    const JAIL_MS = 15000, OPEN_MS = 6000, MON_HP = 60, BOLT_CD = 1200, BOLT_SPEED = 270, BOLT_RANGE = 240;
+    const ATK_CD = 1100, ATK_REACH = 20, INSTALL_MS = 2000, KEY_RESPAWN = 8000;
+    const STUN_MS = 800, STUN_IMMUNE = 1000;           // 화살에 맞으면 0.8초 기절, 깨어난 뒤 1초는 다시 기절하지 않음
+    const BOOST_MS = 4000, BOOST_MUL = 1.4, BOOST_RESPAWN = 25000;   // ⚡ 각성제: 4초 동안 1.4배 빠르게, 25초 뒤 다시 생김
+    const PASS_CD = 6000;                              // 비밀 통로는 한 번 쓰면 6초 뒤에 다시
+    const SELF_FREE_MS = 45000;                        // 감옥에서 45초가 지나면 스스로 탈옥 (감옥 지키기 방지)
+    const TIME_LIMIT = 600000;
     const monstersFor = n => (n >= 6 ? 2 : 1);
-    const SKINS = ['blue', 'grin', 'scream', 'crawl'];
-    const MON_KO = { blue: '물끄러미', grin: '히죽이', scream: '아우성', crawl: '거미손' };
+    // 괴물 모습: 기어다니는 거미손, 떠다니는 얼굴 (방장이 대기실에서 골라요)
+    const SKINS = ['crawl', 'face'];
+    const MON_KO = { crawl: '거미손', face: '떠도는 얼굴', blue: '물끄러미', grin: '히죽이', scream: '아우성' };
+    const MON_LOOKS = [[0, '🕷️ 거미손', '네 발로 기어와요'], [1, '😱 떠도는 얼굴', '얼굴만 떠다녀요'], [-1, '🎲 섞어서', '괴물마다 무작위']];
 
     // ---------------- the three maps ----------------
     // Each map is built from a fixed seed, so everybody gets exactly the same rooms without sending them.
@@ -53,38 +62,64 @@
     function genMap(idx) {
       if (MAPS[idx]) return MAPS[idx];
       const th = THEMES[idx], R = K.seeded(th.seed);
-      const COLS = 4, ROWS = 3, CW = 13, CH = 11, W = COLS * CW + 1, H = ROWS * CH + 3;
+      // everything here must come from R, never Math.random: every screen has to build exactly the same map
+      const shuffleR = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = R() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+      const ri = (lo, hi) => lo + (R() * (hi - lo + 1) | 0);
+      // 5x3 cells. Each cell gets a room of a different kind: plain rooms, small closets, pillared halls,
+      // a courtyard with a block in the middle to run round, L-shaped rooms, and long two-cell galleries.
+      const COLS = 5, ROWS = 3, CW = 13, CH = 11, W = COLS * CW + 1, H = ROWS * CH + 3;
       const g = Array.from({ length: H }, () => Array(W).fill('#'));
       const carve = (x, y) => { if (x > 0 && y > 1 && x < W - 1 && y < H - 1) g[y][x] = '.'; };
-      const rooms = [];
+      const wall = (x, y) => { if (x > 0 && y > 1 && x < W - 1 && y < H - 1) g[y][x] = '#'; };
+      const JC = [2, 1];
+      const rooms = [], anchor = [];   // anchor[cell] = { mx, my, room } — where corridors meet that cell
+      const cellId = (cx, cy) => cy * COLS + cx;
+      const KINDS = ['normal', 'normal', 'small', 'pillars', 'ring', 'L'];
       for (let cy = 0; cy < ROWS; cy++) for (let cx = 0; cx < COLS; cx++) {
-        const w = 7 + (R() * 3 | 0), h = 5 + (R() * 3 | 0);
-        const x0 = cx * CW + 2 + (R() * (CW - w - 2) | 0), y0 = cy * CH + 3 + (R() * (CH - h - 2) | 0);
+        if (anchor[cellId(cx, cy)]) continue;
+        const isJ = cx === JC[0] && cy === JC[1];
+        const canMerge = !isJ && cx + 1 < COLS && !(cx + 1 === JC[0] && cy === JC[1]) && !anchor[cellId(cx + 1, cy)];
+        const kind = isJ ? 'jail' : canMerge && R() < 0.3 ? 'gallery' : KINDS[R() * KINDS.length | 0];
+        let w, h;
+        if (kind === 'gallery') { w = 2 * CW - 3 - ri(0, 2); h = ri(6, 8); }
+        else if (kind === 'jail') { w = ri(8, 9); h = ri(6, 7); }
+        else if (kind === 'small') { w = ri(5, 6); h = ri(4, 5); }
+        else if (kind === 'pillars' || kind === 'ring') { w = ri(9, 11); h = ri(7, 8); }
+        else if (kind === 'L') { w = ri(8, 10); h = ri(6, 8); }
+        else { w = ri(6, 9); h = ri(5, 7); }
+        const span = kind === 'gallery' ? 2 * CW : CW;
+        const x0 = cx * CW + 2 + (R() * Math.max(1, span - w - 2) | 0), y0 = cy * CH + 3 + (R() * Math.max(1, CH - h - 2) | 0);
+        const r = { id: rooms.length, cx, cy, kind, x0, y0, w, h, mx: x0 + (w >> 1), my: y0 + (h >> 1), nb: [] };
+        rooms.push(r);
         for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) carve(x, y);
-        rooms.push({ cx, cy, x0, y0, w, h, mx: x0 + (w >> 1), my: y0 + (h >> 1), id: rooms.length, nb: [] });
+        // the shape inside
+        if (kind === 'pillars') { for (let y = y0 + 2; y <= y0 + h - 3; y += 3) for (let x = x0 + 2; x <= x0 + w - 3; x += 3) wall(x, y); }
+        if (kind === 'gallery') { for (const y of [y0 + 1, y0 + h - 2]) for (let x = x0 + 3; x <= x0 + w - 4; x += 4) wall(x, y); }
+        if (kind === 'ring') { for (let y = y0 + 3; y <= y0 + h - 4; y++) for (let x = x0 + 3; x <= x0 + w - 4; x++) wall(x, y); }
+        if (kind === 'L') { const cw = (w >> 1) - 1, ch = (h >> 1) - 1, right = R() < 0.5, low = R() < 0.5; for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) wall(right ? x0 + w - 1 - x : x0 + x, low ? y0 + h - 1 - y : y0 + y); }
+        if (kind === 'gallery') {
+          anchor[cellId(cx, cy)] = { mx: x0 + 4, my: r.my, room: r };
+          anchor[cellId(cx + 1, cy)] = { mx: x0 + w - 5, my: r.my, room: r };
+        } else anchor[cellId(cx, cy)] = { mx: r.mx, my: r.my, room: r };
       }
-      const at = (cx, cy) => rooms[cy * COLS + cx];
-      // a random spanning tree, then a few extra loops so you can run in circles
-      const seen = new Set([0]), stack = [0], edges = [];
+      // a random spanning tree over the cells, then extra links so there are loops to run round
+      const NC = COLS * ROWS, seen = new Set([0]), stack = [0], edges = [];
+      const nbOf = c => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [c % COLS + dx, (c / COLS | 0) + dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < COLS && y < ROWS).map(([x, y]) => cellId(x, y));
       while (stack.length) {
-        const r = rooms[stack[stack.length - 1]];
-        const nbs = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [r.cx + dx, r.cy + dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !seen.has(y * COLS + x));
+        const c = stack[stack.length - 1], nbs = nbOf(c).filter(n => !seen.has(n));
         if (!nbs.length) { stack.pop(); continue; }
-        const [nx, ny] = nbs[R() * nbs.length | 0], n = at(nx, ny);
-        seen.add(n.id); stack.push(n.id); edges.push([r.id, n.id]);
+        const n = nbs[R() * nbs.length | 0]; seen.add(n); stack.push(n); edges.push([c, n]);
       }
-      for (const r of rooms) for (const [dx, dy] of [[1, 0], [0, 1]]) {
-        const x = r.cx + dx, y = r.cy + dy; if (x >= COLS || y >= ROWS) continue;
-        const n = at(x, y); if (!edges.some(([a, b]) => (a === r.id && b === n.id) || (a === n.id && b === r.id)) && R() < 0.45) edges.push([r.id, n.id]);
-      }
+      for (let c = 0; c < NC; c++) for (const n of nbOf(c)) if (n > c && !edges.some(([a, b]) => (a === c && b === n) || (a === n && b === c)) && R() < 0.42) edges.push([c, n]);
       for (const [a, b] of edges) {
-        const A = rooms[a], B = rooms[b]; A.nb.push(b); B.nb.push(a);
-        // two tiles wide, so a big monster and a survivor can pass
-        if (A.cy === B.cy) { const y = A.my; for (let x = Math.min(A.mx, B.mx); x <= Math.max(A.mx, B.mx); x++) { carve(x, y); carve(x, y + 1); } }
-        else { const x = A.mx; for (let y = Math.min(A.my, B.my); y <= Math.max(A.my, B.my); y++) { carve(x, y); carve(x + 1, y); } }
+        const A = anchor[a], B = anchor[b];
+        if (A.room !== B.room) { if (!A.room.nb.includes(B.room.id)) A.room.nb.push(B.room.id); if (!B.room.nb.includes(A.room.id)) B.room.nb.push(A.room.id); }
+        const wd = R() < 0.3 ? 3 : 2;   // corridors are two or three tiles wide
+        if ((a % COLS) !== (b % COLS)) { const y = A.my; for (let x = Math.min(A.mx, B.mx); x <= Math.max(A.mx, B.mx); x++) for (let k = 0; k < wd; k++) carve(x, y + k); }
+        else { const x = A.mx; for (let y = Math.min(A.my, B.my); y <= Math.max(A.my, B.my); y++) for (let k = 0; k < wd; k++) carve(x + k, y); }
       }
-      // the cell: room (1, 1), walled by bars with one door at the bottom
-      const J = at(1, 1);
+      // the cell: in the middle room, walled by bars with one door at the bottom
+      const J = anchor[cellId(JC[0], JC[1])].room;
       const jx0 = J.mx - 3, jy0 = J.y0, jw = 6, jh = 3;
       for (let y = jy0 - 1; y <= jy0 + jh; y++) for (let x = jx0 - 1; x <= jx0 + jw; x++) {
         const edge = y === jy0 - 1 || y === jy0 + jh || x === jx0 - 1 || x === jx0 + jw;
@@ -93,7 +128,6 @@
         g[y][x] = 'b';
       }
       const jdoor = [J.mx, jy0 + jh]; g[jdoor[1]][J.mx - 1] = 'j'; g[jdoor[1]][J.mx] = 'j';
-      // a ring of floor all round the cell, so every corridor that ran into this room still joins up
       for (let x = jx0 - 2; x <= jx0 + jw + 1; x++) { carve(x, jy0 - 2); carve(x, jy0 + jh + 1); carve(x, jy0 + jh + 2); }
       for (let y = jy0 - 2; y <= jy0 + jh + 2; y++) { carve(jx0 - 2, y); carve(jx0 + jw + 1, y); }
       // the hole up to the ground: the room furthest from the cell
@@ -101,34 +135,55 @@
       while (q.length) { const c = q.shift(); for (const n of rooms[c].nb) if (!dist.has(n)) { dist.set(n, dist.get(c) + 1); q.push(n); } }
       const far = rooms.slice().sort((a, z) => (dist.get(z.id) || 0) - (dist.get(a.id) || 0));
       const HR = far[0];
-      const hole = { x: HR.mx * TS + 8, y: HR.my * TS + 8 };
+      // a floor tile in a room, near a wanted spot if possible
+      const isFloor = (x, y) => g[y] && g[y][x] === '.';
+      const floorNear = (r, x, y) => { let best = null, bd = 1e9; for (let yy = r.y0; yy < r.y0 + r.h; yy++) for (let xx = r.x0; xx < r.x0 + r.w; xx++) if (isFloor(xx, yy) && isFloor(xx, yy + 1)) { const d = Math.abs(xx - x) + Math.abs(yy - y); if (d < bd) { bd = d; best = [xx, yy]; } } return best || [r.mx, r.my]; };
+      const floorIn = r => { for (let k = 0; k < 30; k++) { const x = r.x0 + 1 + (R() * Math.max(1, r.w - 2) | 0), y = r.y0 + 1 + (R() * Math.max(1, r.h - 2) | 0); if (isFloor(x, y)) return [x, y]; } return floorNear(r, r.mx, r.my); };
+      const [hx0, hy0] = floorNear(HR, HR.mx, HR.my);
+      const hole = { x: hx0 * TS + 8, y: hy0 * TS + 8 };
       // furniture, hiding places, and points where the key and the ladder pieces can turn up
-      const objs = [], hides = [], keyPts = [], piecePts = [], spawns = [];
+      const objs = [], hides = [], keyPts = [], piecePts = [], spawns = [], boostPts = [], passages = [];
       const free = (x, y) => g[y] && g[y][x] === '.' && !objs.some(o => o.x === x && (o.y === y || (FT[o.t].h > 1 && o.y + 1 === y)));
-      const clearOf = (x, y, r) => { for (const o of rooms) if (Math.abs(x - o.mx) <= r && (y === o.my || y === o.my + 1)) return false; return true; };
+      const clearOf = (x, y, rr) => { for (const o of anchor) if (o && Math.abs(x - o.mx) <= rr + 1 && Math.abs(y - o.my) <= 2) return false; return true; };
+      const northCols = r => shuffleR(Array.from({ length: r.w }, (_, i) => r.x0 + i)).filter(x => isFloor(x, r.y0) && isFloor(x, r.y0 + 1) && g[r.y0 - 1][x] === '#' && clearOf(x, r.y0, 1));
       for (const r of rooms) {
         if (r === J) continue;
-        // along the north wall, away from the doorways
-        const cols = shuffle(Array.from({ length: r.w }, (_, i) => r.x0 + i)).filter(x => Math.abs(x - r.mx) > 1 && g[r.y0 - 1][x] === '#' && g[r.y0 - 1][x + 0] !== '.');
-        let nh = r === HR ? 0 : 1 + (R() < 0.6 ? 1 : 0), nt = 1;
+        const cols = northCols(r);
+        let nh = r === HR ? 0 : (r.kind === 'small' ? 1 : 1 + (R() < 0.6 ? 1 : 0)) + (r.kind === 'gallery' ? 1 : 0), nt = 1;
         for (const x of cols) {
           if (nh > 0) { const t = th.hide[R() * th.hide.length | 0], tall = FT[t].h > 1; const o = { t, x, y: tall ? r.y0 - 1 : r.y0, hide: true }; if (free(x, r.y0)) { objs.push(o); hides.push({ x: x * TS + 8, y: (r.y0 + 1) * TS - 2, o }); nh--; } continue; }
           if (nt > 0) { const t = th.tall[R() * th.tall.length | 0]; if (free(x, r.y0)) { objs.push({ t, x, y: r.y0 - 1 }); nt--; } continue; }
-          if (R() < 0.35) objs.push({ t: th.deco[R() * th.deco.length | 0], x, y: r.y0 - 1, art: pick(['photo', 'landscape', 'girl']) });
+          if (R() < 0.35) objs.push({ t: th.deco[R() * th.deco.length | 0], x, y: r.y0 - 1, art: ['photo', 'landscape', 'girl'][R() * 3 | 0] });
         }
         // a hiding place in a lower corner too
         const cx = R() < 0.5 ? r.x0 : r.x0 + r.w - 1, cy = r.y0 + r.h - 1;
-        if (r !== HR && free(cx, cy) && clearOf(cx, cy, 1)) { const t = th.hide[R() * th.hide.length | 0]; if (FT[t].h === 1) { objs.push({ t, x: cx, y: cy, hide: true }); hides.push({ x: cx * TS + 8, y: cy * TS + 14, o: objs[objs.length - 1] }); } }
-        if (R() < 0.5) objs.push({ t: 'stain', x: r.x0 + 1 + (R() * (r.w - 2) | 0), y: r.y0 + 1 + (R() * (r.h - 2) | 0) });
-        if (R() < 0.45) { const x = r.x0 + r.w - 1, y = r.y0; if (free(x, y) && clearOf(x, y, 1)) objs.push({ t: 'candle', x, y }); }
-        keyPts.push([(r.x0 + 1 + (R() * (r.w - 2) | 0)) * TS + 8, (r.y0 + 1 + (R() * (r.h - 2) | 0)) * TS + 8]);
-        if (r !== HR) piecePts.push([r.mx * TS + 8, (r.my + 1) * TS + 2], [(r.x0 + 1) * TS + 8, (r.y0 + r.h - 2) * TS + 8]);
-        if (dist.get(r.id) >= 2) spawns.push([r.mx * TS + 8, (r.my + 1) * TS + 4]);
+        if (r !== HR && free(cx, cy) && isFloor(cx, cy - 1) && clearOf(cx, cy, 1)) { const t = th.hide[R() * th.hide.length | 0]; if (FT[t].h === 1) { objs.push({ t, x: cx, y: cy, hide: true }); hides.push({ x: cx * TS + 8, y: cy * TS + 14, o: objs[objs.length - 1] }); } }
+        if (R() < 0.5) { const [sx, sy] = floorIn(r); objs.push({ t: 'stain', x: sx, y: sy }); }
+        // big rooms get candles (a little light); small ones stay pitch dark
+        const nc = r.kind === 'gallery' ? 2 : r.kind === 'small' ? 0 : R() < 0.45 ? 1 : 0;
+        for (let k = 0; k < nc; k++) { const x = k ? r.x0 : r.x0 + r.w - 1, y = r.y0; if (free(x, y) && clearOf(x, y, 1)) objs.push({ t: 'candle', x, y }); }
+        const kp = floorIn(r); keyPts.push([kp[0] * TS + 8, kp[1] * TS + 8]);
+        if (r !== HR) { const a1 = floorNear(r, r.mx, r.my + 1), a2 = floorIn(r); piecePts.push([a1[0] * TS + 8, a1[1] * TS + 10], [a2[0] * TS + 8, a2[1] * TS + 8]); }
+        if ((dist.get(r.id) || 0) >= 2) { const sp = floorNear(r, r.mx, r.my + 1); spawns.push([sp[0] * TS + 8, sp[1] * TS + 12]); }
+      }
+      // energy drinks (a short burst of speed for survivors): three rooms
+      for (const r of shuffleR(rooms.filter(r => r !== J && r !== HR)).slice(0, 3)) { const [x, y] = floorIn(r); boostPts.push([x * TS + 8, y * TS + 10]); }
+      // two secret passages: a bookcase in one room opens onto a bookcase in a far-away room (survivors only)
+      const cand = shuffleR(rooms.filter(r => r !== J && r !== HR));
+      const used = new Set();
+      for (let k = 0, tries = 0; passages.length < 2 && tries < 12; tries++) {
+        let pair = null;
+        for (const A of cand) { if (used.has(A.id)) continue; for (const B of cand) { if (B === A || used.has(B.id)) continue; if (Math.abs(A.cx - B.cx) + Math.abs(A.cy - B.cy) >= 3) { pair = [A, B]; break; } } if (pair) break; }
+        if (!pair) break;
+        const ends = pair.map(r => { const x = northCols(r).find(x => free(x, r.y0) && !objs.some(o => o.x === x && o.y === r.y0 - 1)); return x == null ? null : { r, x }; });
+        if (ends.some(e => !e)) { used.add(pair[0].id); continue; }
+        for (const e of ends) { objs.push({ t: 'shelf', x: e.x, y: e.r.y0 - 1, secret: passages.length + 1 }); used.add(e.r.id); }
+        passages.push(ends.map(e => [e.x * TS + 8, (e.r.y0 + 1) * TS + 4]));
       }
       const room = { map: g.map(r => r.join('')), floor: th.floor, wall: th.wall, doors: {}, seed: th.seed, webs: [] };
       K.paintRoom(room);
       const jail = { x0: jx0 * TS, y0: jy0 * TS, x1: (jx0 + jw) * TS, y1: (jy0 + jh) * TS, door: { x: jdoor[0] * TS, y: jdoor[1] * TS + 8 }, out: { x: jdoor[0] * TS, y: (jdoor[1] + 2) * TS + 4 } };
-      const M = { idx, th, room, W, H, objs, hides, keyPts, piecePts, spawns: spawns.length ? spawns : [[hole.x, hole.y + 20]], hole, jail, jdoor };
+      const M = { idx, th, room, W, H, objs, hides, keyPts, piecePts, boostPts, passages, spawns: spawns.length ? spawns : [[hole.x, hole.y + 20]], hole, jail, jdoor };
       M.solids = objs.map(o => K.solidOf(o)).filter(Boolean);
       M.grid = K.walkGrid(room, M.solids, () => true);
       MAPS[idx] = M;
@@ -147,7 +202,8 @@
     const amMon = () => isMon(me());
     const inGame = () => !!G && !!G.roles[me()];
     const jailOpen = el => el >= JAIL_MS && el < JAIL_MS + OPEN_MS;
-    const speedOf = id => isMon(id) ? MON_SPEED * (1 + SPEED_STEP * (G.speedLv || 0)) : SURV_SPEED;
+    const speedOf = id => isMon(id) ? MON_SPEED * (1 + SPEED_STEP * (G.speedLv || 0)) : SURV_SPEED * (G.fast && G.fast[id] > elapsed() ? BOOST_MUL : 1);
+    const stunned = (id, el) => !!(G && G.stun && G.stun[id] && (el == null ? elapsed() : el) < G.stun[id]);
     const nameOf = id => (G && G.names[id]) || TG.memberName(id) || '친구';
 
     function newGame() {
@@ -156,13 +212,15 @@
       const nMon = monstersFor(players.length);
       const mapIdx = T.map >= 0 && T.map < 3 ? T.map : (Math.random() * 3 | 0);
       const g = { kind: 'hunt', seq: 1, map: mapIdx, phase: 'jail', roles: {}, skin: {}, hp: {}, down: {}, jailed: {}, esc: {}, names: {}, hides: {}, inst: 0, speedLv: 0, winner: null, why: '', el: 0, spawn: {} };
-      const skins = shuffle(SKINS);
-      players.forEach((id, i) => { const m = i < nMon; g.roles[id] = m ? 'm' : 's'; g.names[id] = (T.members.find(x => x.id === id) || {}).name || '친구'; if (m) { g.skin[id] = skins[i % 4]; g.hp[id] = MON_HP; } });
+      const look = T.mon == null ? 0 : T.mon;
+      players.forEach((id, i) => { const m = i < nMon; g.roles[id] = m ? 'm' : 's'; g.names[id] = (T.members.find(x => x.id === id) || {}).name || '친구'; if (m) { g.skin[id] = look >= 0 ? SKINS[look] : pick(SKINS); g.hp[id] = MON_HP; } });
       const map = genMap(mapIdx);
       const sp = shuffle(map.spawns.map((_, i) => i));
       players.forEach((id, i) => { g.spawn[id] = g.roles[id] === 'm' ? -1 - i : sp[i % sp.length]; });
       g.key = { s: 1, ...ptOf(map.keyPts[Math.random() * map.keyPts.length | 0]) };
-      g.pieces = shuffle(map.piecePts.map((_, i) => i)).slice(0, 3).map(i => ({ s: 0, ...ptOf(map.piecePts[i]) }));
+      g.pieces = shuffle(map.piecePts.map((_, i) => i)).slice(0, 3).map(i => ({ s: 1, ...ptOf(map.piecePts[i]) }));   // 사다리 조각은 처음부터 맵에 있어요
+      g.stun = {}; g.jailAt = {}; g.fast = {};
+      g.boost = map.boostPts.map(p => ({ s: 1, x: p[0], y: p[1], at: 0 }));
       return g;
     }
     const ptOf = p => ({ x: p[0], y: p[1] });
@@ -243,7 +301,7 @@
         if (!pos || Math.hypot(told.x - pos.x, told.y - pos.y) < 120) { pos = told; if (id !== me()) H.pos[id] = { x: told.x, y: told.y, vx: 0, vy: 0, at: now() }; }
       }
       if (!G.roles[id]) return;
-      if (a.a === 'atk' && mon && !G.down[id] && el >= JAIL_MS) {
+      if (a.a === 'atk' && mon && !G.down[id] && el >= JAIL_MS && !stunned(id, el)) {
         const ax = +a.x || 0, ay = +a.y || 0;
         if (pos && Math.hypot(ax - pos.x, ay - pos.y) > 60) return;   // they are not where they say
         fx({ f: 'swing', id, x: Math.round(ax), y: Math.round(ay), d: a.d });
@@ -261,7 +319,10 @@
         const mp = hostPos(mid); if (mp && Math.hypot(mp.x - (+a.x || 0), mp.y - (+a.y || 0)) > 48) return;
         const crit = Math.random() < 0.1, dmg = crit ? 2 : 1;
         G.hp[mid] = Math.max(0, (G.hp[mid] || MON_HP) - dmg);
-        fx({ f: 'dmg', m: mid, n: dmg, crit: crit ? 1 : 0, kx: clamp(+a.kx || 0, -1, 1), ky: clamp(+a.ky || 0, -1, 1) });
+        G.stun = G.stun || {};
+        const st = G.stun[mid] || 0, canStun = el > st + STUN_IMMUNE;   // st = when the last stun ends
+        if (canStun) G.stun[mid] = el + STUN_MS;
+        fx({ f: 'dmg', m: mid, n: dmg, crit: crit ? 1 : 0, kx: clamp(+a.kx || 0, -1, 1), ky: clamp(+a.ky || 0, -1, 1), stun: canStun ? 1 : 0 });
         if (G.hp[mid] <= 0) { G.down[mid] = 1; fx({ f: 'msg', text: `💥 ${MON_KO[G.skin[mid]]}(${nameOf(mid)})가 쓰러졌어요!` }); }
         dirty(); checkWin(); return;
       }
@@ -274,6 +335,11 @@
         G.hides[s] = id; dirty(); return;
       }
       if (a.a === 'unhide') { for (const k of Object.keys(G.hides)) if (G.hides[k] === id) delete G.hides[k]; dirty(); return; }
+      if (a.a === 'pick' && a.w === 'boost') {
+        const b = (G.boost || [])[a.i | 0];
+        if (b && b.s === 1 && pos && Math.hypot(b.x - pos.x, b.y - pos.y) < 26 && !G.jailed[id]) { b.s = 0; b.at = el; (G.fast || (G.fast = {}))[id] = el + BOOST_MS; fx({ f: 'boost', id }); dirty(); }
+        return;
+      }
       if (a.a === 'pick') {
         if (a.w === 'key' && G.key.s === 1 && pos && Math.hypot(G.key.x - pos.x, G.key.y - pos.y) < 26) { G.key = { s: 2, c: id, x: 0, y: 0 }; fx({ f: 'msg', text: `🗝️ ${nameOf(id)}님이 감옥 열쇠를 주웠어요`, who: 's' }); dirty(); }
         const i = +a.i;
@@ -284,7 +350,7 @@
         if (!(G.key.s === 2 && G.key.c === id)) return;
         if (pos && Math.hypot(M.jail.door.x - pos.x, M.jail.door.y - pos.y) > 34) return;
         const who = Object.keys(G.jailed); if (!who.length) return;
-        G.jailed = {}; G.freed = (G.freed || 0) + 1; G.key = { s: 0, at: elapsed() + KEY_RESPAWN };
+        G.jailed = {}; G.jailAt = {}; G.freed = (G.freed || 0) + 1; G.key = { s: 0, at: elapsed() + KEY_RESPAWN };
         fx({ f: 'msg', text: `🔓 ${nameOf(id)}님이 감옥 문을 열었어요! (${who.length}명 탈출)` }); K.sfx('unlock');
         dirty(); return;
       }
@@ -308,7 +374,7 @@
     function catchS(sid, by, found) {
       if (G.jailed[sid]) return;
       const sp = hostPos(sid) || { x: M.jail.out.x, y: M.jail.out.y };
-      G.jailed[sid] = 1;
+      G.jailed[sid] = 1; (G.jailAt || (G.jailAt = {}))[sid] = elapsed();
       for (const k of Object.keys(G.hides)) if (G.hides[k] === sid) delete G.hides[k];
       // whatever they carried falls where they were caught
       if (G.key.s === 2 && G.key.c === sid) G.key = { s: 1, x: Math.round(sp.x), y: Math.round(sp.y) };
@@ -334,7 +400,9 @@
       if (G.phase === 'play') {
         const lv = clamp(Math.floor((el - JAIL_MS) / SPEED_EVERY), 0, SPEED_MAX_STEPS);
         if (lv !== G.speedLv) { G.speedLv = lv; fx({ f: 'msg', text: `👣 괴물이 조금 더 빨라졌어요 (+${Math.round(lv * SPEED_STEP * 100)}%)` }); dirty(); }
-        G.pieces.forEach((p, i) => { if (p.s === 0 && el - JAIL_MS >= PIECE_AT[i]) { p.s = 1; fx({ f: 'msg', text: `✨ 사다리 조각이 어딘가에 나타났어요! (${i + 1}/3)`, big: 1 }); dirty(); } });
+        // 감옥에 오래 있으면 스스로 탈옥
+        for (const sid of Object.keys(G.jailed)) { const at = (G.jailAt || {})[sid]; if (at != null && el - at >= SELF_FREE_MS) { delete G.jailed[sid]; delete G.jailAt[sid]; fx({ f: 'msg', text: `🗝️ ${nameOf(sid)}님이 몰래 감옥 자물쇠를 풀고 빠져나왔어요!` }); dirty(); } }
+        for (const b of G.boost || []) if (b.s === 0 && el - b.at >= BOOST_RESPAWN) { b.s = 1; dirty(); }
         if (G.key.s === 0 && el >= G.key.at) { G.key = { s: 1, ...ptOf(pick(M.keyPts)) }; fx({ f: 'msg', text: '🗝️ 감옥 열쇠가 다시 나타났어요' }); dirty(); }
         checkWin();
       }
@@ -345,6 +413,7 @@
     function applyState(g, fromHost) {
       const first = !G || G.seq == null;
       const was = G;
+      if (was && !TG.isHost()) keepMine(g);
       G = g; TG.G = g;
       M = genMap(g.map);
       if (!TG.isHost() || first) { L.el0 = g.el || 0; L.elAt = now(); }
@@ -373,11 +442,13 @@
       const t = now();
       if (f.f === 'arrow') { if (f.from === me() && f.mine == null) return; L.bolts.push({ x: f.x, y: f.y, dx: f.dx, dy: f.dy, d: 0, mine: f.from === me(), id: f.from }); K.sfx('shoot'); return; }
       if (f.f === 'swing') { L.fx.push({ k: 'swing', x: f.x, y: f.y, at: t, d: f.d }); if (L.me && Math.hypot(L.me.x - f.x, L.me.y - f.y) < 140) K.sfx('hit'); return; }
+      if (f.f === 'boost') { if (G) { G.fast = G.fast || {}; G.fast[f.id] = elapsed() + BOOST_MS; } if (f.id === me()) { L.msg.push({ text: '⚡ 각성! 4초 동안 빨라져요', at: t }); if (L.msg.length > 4) L.msg.shift(); K.sfx('pick'); } return; }
       if (f.f === 'dmg') {
         const mp = f.m === me() ? L.me : L.rem[f.m];
         if (mp) L.fx.push({ k: 'dmg', x: mp.x, y: mp.y - 40, n: f.n, crit: f.crit, at: t });
         K.sfx('hit');
         if (f.m === me() && L.me) L.knock = { vx: f.kx * 140, vy: f.ky * 140, until: t + 160 };
+        if (f.stun) { if (G) { G.stun = G.stun || {}; G.stun[f.m] = elapsed() + STUN_MS; } if (mp) L.fx.push({ k: 'stun', id: f.m, at: t }); }
         if (G && G.hp[f.m] != null && !TG.isHost()) G.hp[f.m] = Math.max(0, G.hp[f.m] - f.n);
         return;
       }
@@ -399,7 +470,13 @@
       return [Math.sign(x), Math.sign(y)];
     }
     function myHide() { if (!G) return null; const k = Object.keys(G.hides).find(s => G.hides[s] === me()); return k == null ? null : +k; }
-    function frozen() { return !G || !L.me || G.phase === 'end' || G.esc[me()] || (amMon() && G.down[me()]) || myHide() != null; }
+    // a state from the host that was sent before it heard my hide/unhide should not undo it on my screen
+    function keepMine(g) {
+      const t = now();
+      if (L.unhideAt && t - L.unhideAt < 1500) for (const k of Object.keys(g.hides)) if (g.hides[k] === me()) delete g.hides[k];
+      if (L.hideAt && t - L.hideAt < 1500 && !Object.values(g.hides).includes(me())) { const k = Object.keys(G ? G.hides : {}).find(s => G.hides[s] === me()); if (k != null && g.hides[k] == null) g.hides[k] = me(); }
+    }
+    function frozen() { return !G || !L.me || G.phase === 'end' || G.esc[me()] || (amMon() && (G.down[me()] || stunned(me()))) || myHide() != null; }
     function step(dt, t) {
       if (!G || !M) return;
       // the host never hears its own state, so it opens and closes the result box here
@@ -420,6 +497,7 @@
         // walk over the key or a ladder piece to pick it up
         if (!amMon() && !G.jailed[me()] && t - H.lastPick > 400) {
           if (G.key.s === 1 && Math.hypot(G.key.x - e.x, G.key.y - e.y) < 14) { H.lastPick = t; act({ a: 'pick', w: 'key' }); }
+          (G.boost || []).forEach((b, i) => { if (b.s === 1 && Math.hypot(b.x - e.x, b.y - e.y) < 14) { H.lastPick = t; act({ a: 'pick', w: 'boost', i }); } });
           G.pieces.forEach((p, i) => { if (p.s === 1 && Math.hypot(p.x - e.x, p.y - e.y) < 14 && !G.pieces.some(q => q.s === 2 && q.c === me())) { H.lastPick = t; act({ a: 'pick', w: 'piece', i }); } });
         }
         // putting a ladder piece up: hold for three seconds
@@ -440,13 +518,13 @@
         for (const mid of ids('m')) {
           if (G.down[mid]) continue;
           const mp = mid === me() ? L.me : L.rem[mid]; if (!mp) continue;
-          const crawl = G.skin[mid] === 'crawl';
-          const hx = crawl ? 20 : 11, top = crawl ? 32 : 50;
-          if (b.x > mp.rx - hx && b.x < mp.rx + hx && b.y > mp.ry - top && b.y < mp.ry + 4) { b.dead = true; act({ a: 'hit', m: mid, x: Math.round(mp.x), y: Math.round(mp.y), kx: b.dx, ky: b.dy }); break; }
+          // a little more generous than the drawing, so a near miss still counts
+          const sk = G.skin[mid], hx = sk === 'crawl' ? 25 : sk === 'face' ? 17 : 14, top = sk === 'crawl' ? 38 : sk === 'face' ? 52 : 54, bot = sk === 'face' ? -4 : 6;
+          if (b.x > mp.rx - hx && b.x < mp.rx + hx && b.y > mp.ry - top && b.y < mp.ry + bot) { b.dead = true; act({ a: 'hit', m: mid, x: Math.round(mp.x), y: Math.round(mp.y), kx: b.dx, ky: b.dy }); break; }
         }
       }
       L.bolts = L.bolts.filter(b => !b.dead);
-      L.fx = L.fx.filter(f => t - f.at < 900);
+      L.fx = L.fx.filter(f => t - f.at < (f.k === 'stun' ? STUN_MS : f.k === 'puff' ? 500 : 900));
       // a heartbeat when a monster is near (for survivors)
       if (e && !amMon() && !G.esc[me()] && G.phase !== 'end') {
         let dmin = 1e9; for (const mid of ids('m')) { const r = L.rem[mid]; if (r && !G.down[mid]) dmin = Math.min(dmin, Math.hypot(r.x - e.x, r.y - e.y)); }
@@ -454,21 +532,41 @@
       }
     }
     // Space: shoot (survivor) or strike (monster)
-    function primary() {
+    // which way to shoot or strike: an aimed direction (aim stick / mouse), or else where I am going or facing,
+    // pulled onto a visible target if one is roughly that way (or, for a plain tap, the nearest one in reach)
+    function aimDir(aim, tap) {
+      const e = L.me;
+      let [vx, vy] = inputVec(); if (!vx && !vy) { const v = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[e.dir] || [0, 1]; vx = v[0]; vy = v[1]; }
+      let n = Math.hypot(vx, vy), d = aim ? { dx: aim.dx, dy: aim.dy } : { dx: vx / n, dy: vy / n };
+      if (aim && !tap) return d;
+      const reach = amMon() ? 60 : BOLT_RANGE;
+      let best = null, bs = -1;
+      for (const id of Object.keys(G.roles)) {
+        if (id === me() || isMon(id) === amMon() || !visible(id) || G.jailed[id] || G.esc[id] || G.down[id]) continue;
+        const p = posOf(id); if (!p) continue;
+        const tx = p.rx - e.x, ty = (p.ry - (isMon(id) ? 16 : 8)) - (e.y - 10), dist = Math.hypot(tx, ty); if (dist > reach || dist < 1) continue;
+        const cos = (tx * d.dx + ty * d.dy) / dist;
+        const score = tap ? 2 - dist / reach + cos * 0.3 : cos > 0.86 ? cos - dist / reach * 0.2 : -1;   // a tap takes the nearest; Space only a target within ~30°
+        if (score > bs) { bs = score; best = { dx: tx / dist, dy: ty / dist }; }
+      }
+      return best || d;
+    }
+    const dirName = (dx, dy) => Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
+    function primary(aim, tap) {
       if (!G || !L.me || G.phase === 'end' || G.esc[me()]) return;
       const t = now(), e = L.me, el = elapsed();
       if (amMon()) {
-        if (G.down[me()] || el < JAIL_MS || t - L.atkAt < ATK_CD) return;
+        if (G.down[me()] || stunned(me(), el) || el < JAIL_MS || t - L.atkAt < ATK_CD) return;
         L.atkAt = t;
-        const v = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[e.dir] || [0, 1];
-        act({ a: 'atk', x: Math.round(e.x + v[0] * 12), y: Math.round(e.y + v[1] * 12), d: e.dir });
-        if (!TG.isHost()) L.fx.push({ k: 'swing', x: e.x + v[0] * 12, y: e.y + v[1] * 12, at: t, d: e.dir });
+        const v = aimDir(aim, tap); e.dir = dirName(v.dx, v.dy);
+        act({ a: 'atk', x: Math.round(e.x + v.dx * 12), y: Math.round(e.y + v.dy * 12), d: e.dir });
+        if (!TG.isHost()) L.fx.push({ k: 'swing', x: e.x + v.dx * 12, y: e.y + v.dy * 12, at: t, d: e.dir });
         return;
       }
       if (G.jailed[me()] || myHide() != null || t - L.boltAt < BOLT_CD) return;
       L.boltAt = t;
-      let [vx, vy] = inputVec(); if (!vx && !vy) { const v = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[e.dir] || [0, 1]; vx = v[0]; vy = v[1]; }
-      const n = Math.hypot(vx, vy), dx = vx / n, dy = vy / n;
+      const v = aimDir(aim, tap), dx = v.dx, dy = v.dy;
+      if (!e.moving) e.dir = dirName(dx, dy);
       const b = { x: e.x + dx * 8, y: e.y - 10 + dy * 6, dx, dy, d: 0, mine: true, id: me() };
       L.bolts.push(b); K.sfx('shoot');
       send({ t: 'hx', f: 'arrow', x: Math.round(b.x), y: Math.round(b.y), dx: +dx.toFixed(3), dy: +dy.toFixed(3) });
@@ -481,23 +579,42 @@
       if (G.jailed[me()]) return null;
       if (myHide() != null) return { k: 'unhide', label: '나오기' };
       if (G.inst >= 3 && Math.hypot(M.hole.x - e.x, M.hole.y - e.y) < 30) return { k: 'esc', label: '🌅 탈출하기' };
-      if (G.pieces.some(p => p.s === 2 && p.c === me()) && Math.hypot(M.hole.x - e.x, M.hole.y - e.y) < 30) return { k: 'inst', label: '🪜 사다리 설치 (3초 꾹)' };
+      if (G.pieces.some(p => p.s === 2 && p.c === me()) && Math.hypot(M.hole.x - e.x, M.hole.y - e.y) < 30) return { k: 'inst', label: '🪜 사다리 설치 (2초 꾹)' };
       if (G.key.s === 2 && G.key.c === me() && Object.keys(G.jailed).length && Math.hypot(M.jail.door.x - e.x, M.jail.door.y - e.y) < 30) return { k: 'free', label: '🔓 감옥 문 열기' };
       const h = nearest(M.hides, e, 24); if (h >= 0 && G.hides[h] == null) return { k: 'hide', s: h, label: '🫣 숨기' };
+      for (const pr of M.passages || []) for (let k = 0; k < 2; k++) if (Math.hypot(pr[k][0] - e.x, pr[k][1] - e.y) < 20) {
+        const wait = PASS_CD - (now() - (L.passAt || -1e9));
+        return wait > 0 ? { k: 'none', label: `🚪 비밀 통로 (${Math.ceil(wait / 1000)}초)` } : { k: 'pass', to: pr[1 - k], label: '🚪 비밀 통로로 들어가기' };
+      }
       return null;
+    }
+    // coming out of a hiding place: the nearest free spot around it (the hiding place itself is solid)
+    function stepOut(hs) {
+      const h = M.hides[hs], e = L.me; if (!h || !e) return;
+      let best = null, bd = 1e9;
+      for (let r = 10; r <= 40 && !best; r += 6) for (let k = 0; k < 16; k++) {
+        const a = k / 16 * Math.PI * 2, x = h.x + Math.cos(a) * r, y = h.y + Math.sin(a) * r + 4;
+        if (blockedAt(x, y, elapsed(), false)) continue;
+        const d = Math.abs(a - Math.PI / 2); if (d < bd) { bd = d; best = { x, y }; }   // prefer stepping out the front (down)
+      }
+      if (best) { e.x = best.x; e.y = best.y; }
     }
     function secondary(down) {
       const h = interactHint();
       if (!down) { if (L.holdWhat === 'inst') { L.hold = 0; L.holdWhat = null; } return; }
       if (!h) return;
       if (h.k === 'inst') { if (!L.hold) { L.hold = now(); L.holdWhat = 'inst'; } return; }
-      if (h.k === 'hide') { act({ a: 'hide', s: h.s }); K.sfx('hide'); return; }
-      if (h.k === 'unhide') { act({ a: 'unhide' }); K.sfx('hide'); return; }
+      if (h.k === 'none') return;
+      if (h.k === 'pass') { L.fx.push({ k: 'puff', x: L.me.x, y: L.me.y, at: now() }); L.me.x = h.to[0]; L.me.y = h.to[1]; L.passAt = now(); sendMove(true); L.fx.push({ k: 'puff', x: h.to[0], y: h.to[1], at: now() }); K.sfx('door'); return; }
+      if (h.k === 'hide') { act({ a: 'hide', s: h.s }); for (const k of Object.keys(G.hides)) if (G.hides[k] === me()) delete G.hides[k]; G.hides[h.s] = me(); L.hideAt = now(); K.sfx('hide'); return; }
+      if (h.k === 'unhide') { const hs = myHide(); act({ a: 'unhide' }); delete G.hides[hs]; L.unhideAt = now(); stepOut(hs); sendMove(true); K.sfx('hide'); return; }
       act({ a: h.k });
     }
 
     // ---------------- drawing ----------------
-    const LIGHT_S = 92, LIGHT_M = 106;
+    const TOUCH = window.matchMedia && matchMedia('(hover: none), (max-width: 899px)').matches;
+    const LIGHT_S = 118, LIGHT_M = 100;   // 생존자 손전등이 더 멀리 비춰요
+    const SENSE_R = 260;                  // 이 거리 안의 괴물은 어둠 속에서도 빨간 눈이 보이고, 화면 가장자리에 방향 표시가 떠요
     function lightR() { return !inGame() || G.esc[me()] ? 140 : amMon() ? LIGHT_M : LIGHT_S; }
     function posOf(id) { if (id === me()) return L.me ? { x: L.me.x, y: L.me.y, rx: L.me.x, ry: L.me.y, dir: L.me.dir, moving: L.me.moving } : null; return L.rem[id] || null; }
     function camTarget() {
@@ -531,6 +648,7 @@
     function drawItem(g, kind, x, y, t) {
       const bob = Math.sin(t / 250) * 1.5;
       g.fillStyle = `rgba(255,236,150,${0.25 + Math.sin(t / 200) * 0.1})`; g.beginPath(); g.arc(x, y - 4 + bob, 8, 0, Math.PI * 2); g.fill();
+      if (kind === 'boost') { P(g, x - 2, y - 11 + bob, 4, 2, '#c0c0c0'); P(g, x - 3, y - 9 + bob, 6, 8, '#ffe14a'); P(g, x - 2, y - 8 + bob, 2, 5, '#fff6b0'); P(g, x - 1, y - 6 + bob, 2, 2, '#c08a00'); return; }
       if (kind === 'key') { P(g, x - 4, y - 7 + bob, 4, 4, '#e0b84a'); P(g, x - 3, y - 6 + bob, 2, 2, '#14121a'); P(g, x, y - 6 + bob, 6, 2, '#e0b84a'); P(g, x + 4, y - 4 + bob, 1, 2, '#e0b84a'); }
       else { P(g, x - 4, y - 10 + bob, 2, 12, '#8a6040'); P(g, x + 2, y - 10 + bob, 2, 12, '#8a6040'); P(g, x - 4, y - 7 + bob, 8, 2, '#c99866'); P(g, x - 4, y - 2 + bob, 8, 2, '#c99866'); }
     }
@@ -557,6 +675,10 @@
       drawHole(g, M.hole.x, M.hole.y, G.inst, t);
       if (G.key.s === 1) drawItem(g, 'key', G.key.x, G.key.y, t);
       for (const p of G.pieces) if (p.s === 1) drawItem(g, 'piece', p.x, p.y, t);
+      for (const b of G.boost || []) if (b.s === 1) drawItem(g, 'boost', b.x, b.y, t);
+      // survivors know which bookcases are passages: a faint glint
+      if (!amMon()) for (const pr of M.passages || []) for (const [px, py] of pr) { const a = 0.35 + Math.sin(t / 260 + px) * 0.25; g.fillStyle = `rgba(190,150,255,${a})`; g.fillRect(px - 5, py - 30, 10, 2); g.fillRect(px - 1, py - 34, 2, 10); }
+      for (const f of L.fx) if (f.k === 'puff') { const k = (t - f.at) / 500; if (k < 1) { g.fillStyle = `rgba(200,180,255,${0.6 * (1 - k)})`; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.fillRect(Math.round(f.x + Math.cos(a) * k * 14), Math.round(f.y - 8 + Math.sin(a) * k * 10), 2, 2); } } }
       const list = [];
       for (const o of M.objs) { const d = FT[o.t]; if (!d.flat && !d.wall) list.push({ y: (o.y + d.h) * TS - 1, o }); }
       for (let ty = 0; ty < M.H; ty++) for (let tx = 0; tx < M.W; tx++) { const ch = M.room.map[ty][tx]; if (ch === 'b' || ch === 'j') list.push({ y: ty * TS + 15, bar: [tx * TS, ty * TS, ch === 'j'] }); }
@@ -575,7 +697,14 @@
         else K.drawPerson(g, (e.id === me() ? look0 : O.lookOf(e.id)) || look0, e.p.rx, e.p.ry, e.p.dir || 'down', e.p.moving, t, e.hid ? { alpha: 0.35 } : null);
       }
       for (const b of L.bolts) { g.strokeStyle = '#e8dcc2'; g.lineWidth = 1; g.beginPath(); g.moveTo(b.x - b.dx * 6, b.y - b.dy * 6); g.lineTo(b.x, b.y); g.stroke(); P(g, b.x - 1, b.y - 1, 2, 2, '#c9c9d4'); }
+      for (const id of ids('m')) if (stunned(id, el) && visible(id)) { const p = posOf(id); if (!p) continue; const top = G.skin[id] === 'crawl' ? 36 : G.skin[id] === 'face' ? 56 : 60; for (let i = 0; i < 3; i++) { const a = t / 180 + i * 2.1; P(g, Math.round(p.rx + Math.cos(a) * 9 - 1), Math.round(p.ry - top + Math.sin(a) * 3), 3, 3, i % 2 ? '#ffe06a' : '#fff8ea'); } }
       for (const f of L.fx) if (f.k === 'swing') { const a = 1 - (t - f.at) / 900; g.strokeStyle = `rgba(255,80,80,${a})`; g.lineWidth = 2; g.beginPath(); g.arc(f.x, f.y - 8, 12, 0, Math.PI * 2); g.stroke(); }
+      if (L.aiming && L.me && L.aim) {
+        const len = amMon() ? 24 : BOLT_RANGE, x0 = L.me.x, y0 = L.me.y - 10;
+        g.strokeStyle = amMon() ? 'rgba(255,90,90,.85)' : 'rgba(255,230,140,.75)'; g.lineWidth = 1; g.setLineDash([3, 3]);
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + L.aim.dx * len, y0 + L.aim.dy * len); g.stroke(); g.setLineDash([]);
+        P(g, Math.round(x0 + L.aim.dx * len) - 1, Math.round(y0 + L.aim.dy * len) - 1, 3, 3, amMon() ? '#ff5a5a' : '#ffe68c');
+      }
       // the dark
       g.setTransform(1, 0, 0, 1, 0, 0);
       const lights = [];
@@ -584,6 +713,16 @@
       for (const o of M.objs) if (o.t === 'candle') lights.push({ x: o.x * TS + 8 + ox, y: o.y * TS + oy, r: 44, a: 0.8 });
       if (G.inst >= 3) lights.push({ x: M.hole.x + ox, y: M.hole.y - 20 + oy, r: 70, a: 0.9 });
       if (K.darkness(D.dk, D.dkg, M.th.dark, lights, VW, VH)) g.drawImage(D.dk, 0, 0);
+      // in the dark: the monsters' eyes, for survivors, when they are near enough to sense
+      if (inGame() && !amMon() && L.me && !G.esc[me()]) for (const id of ids('m')) {
+        if (G.down[id] || visible(id)) continue;
+        const p = posOf(id); if (!p) continue;
+        const d = Math.hypot(p.rx - L.me.x, p.ry - L.me.y); if (d > SENSE_R) continue;
+        const a = clamp(1.25 - d / SENSE_R, 0.25, 1) * (Math.floor(t / 900 + p.rx) % 5 ? 1 : 0.2);   // a blink now and then
+        const ex = Math.round(p.rx + ox), ey = Math.round(p.ry + oy - (G.skin[id] === 'crawl' ? 18 : G.skin[id] === 'face' ? 34 : 44));
+        g.fillStyle = `rgba(255,40,40,${a})`; g.fillRect(ex - 4, ey, 2, 2); g.fillRect(ex + 2, ey, 2, 2);
+        g.fillStyle = `rgba(255,60,60,${a * 0.25})`; g.fillRect(ex - 6, ey - 2, 12, 6);
+      }
       if (L.flash) { g.fillStyle = `rgba(150,0,10,${L.flash * 0.5})`; g.fillRect(0, 0, VW, VH); L.flash = Math.max(0, L.flash - 0.02); }
       hud(t, ox, oy, el);
     }
@@ -595,9 +734,9 @@
       // names over people
       for (const id of Object.keys(G.roles)) {
         if (!visible(id)) continue; const p = posOf(id); if (!p) continue;
-        const sx = (p.rx + ox) * s, sy = (p.ry + oy - (isMon(id) ? (G.skin[id] === 'crawl' ? 42 : 70) : 28)) * s;
+        const sx = (p.rx + ox) * s, sy = (p.ry + oy - (isMon(id) ? (G.skin[id] === 'crawl' ? 42 : G.skin[id] === 'face' ? 62 : 70) : 28)) * s;
         if (sx < -40 || sx > w + 40 || sy < -20 || sy > h + 20) continue;
-        tx(nameOf(id) + (G.jailed[id] ? ' ⛓️' : '') + (G.down[id] ? ' 💫' : ''), sx, sy, isMon(id) ? '#ff8a8a' : id === me() ? '#ffd65a' : '#9fe8a8', 11, 'center');
+        tx(nameOf(id) + (G.jailed[id] ? ' ⛓️' : '') + (G.down[id] ? ' 💀' : stunned(id, el) ? ' 💫 기절' : ''), sx, sy, isMon(id) ? '#ff8a8a' : id === me() ? '#ffd65a' : '#9fe8a8', 11, 'center');
       }
       // my role
       const role = !inGame() ? '👀 구경 중' : amMon() ? `👹 괴물 · ${MON_KO[G.skin[me()]]}` : G.esc[me()] ? '🌅 탈출 성공!' : G.jailed[me()] ? '⛓️ 감옥' : '🧍 생존자';
@@ -627,9 +766,31 @@
       const dot = (x, y, col, r) => { c.fillStyle = col; c.beginPath(); c.arc(mx + x / TS * mk, my + y / TS * mk, r || 2.2, 0, Math.PI * 2); c.fill(); };
       dot(M.hole.x, M.hole.y, G.inst >= 3 ? '#ffe08a' : '#7ad07a', 3);
       if (G.key.s === 1 && !amMon()) dot(G.key.x, G.key.y, '#e0b84a', 2.5);
-      for (const p of G.pieces) if (p.s === 1) dot(p.x, p.y, '#5fd0e8', 2.5);
-      for (const id of Object.keys(G.roles)) { if (id === me() || !visible(id) || G.esc[id]) continue; if (isMon(id) !== amMon() && inGame()) continue; const p = posOf(id); if (p) dot(p.rx, p.ry, isMon(id) ? '#ff6b6b' : '#8fe38a'); }
+      if (!amMon()) { for (const p of G.pieces) if (p.s === 1) dot(p.x, p.y, '#5fd0e8', 2.5); for (const b of G.boost || []) if (b.s === 1) dot(b.x, b.y, '#ffe14a', 2); for (const pr of M.passages || []) for (const [px, py] of pr) dot(px, py, '#b48cff', 2); }
+      for (const id of Object.keys(G.roles)) {
+        if (id === me() || G.esc[id]) continue;
+        const p = posOf(id); if (!p) continue;
+        const sensed = inGame() && !amMon() && isMon(id) && L.me && Math.hypot(p.rx - L.me.x, p.ry - L.me.y) < SENSE_R;
+        if (!sensed) { if (!visible(id)) continue; if (isMon(id) !== amMon() && inGame()) continue; }
+        dot(p.rx, p.ry, isMon(id) ? (Math.floor(t / 300) % 2 ? '#ff6b6b' : '#ff2a2a') : '#8fe38a', isMon(id) ? 2.8 : 2.2);
+      }
       if (L.me && inGame() && !G.esc[me()]) dot(L.me.x, L.me.y, '#ffffff', 2.8);
+      // arrows at the edge of the screen pointing at monsters that are near but out of sight
+      if (inGame() && !amMon() && L.me && !G.esc[me()] && G.phase !== 'jail') for (const id of ids('m')) {
+        if (G.down[id]) continue; const p = posOf(id); if (!p) continue;
+        const ddx = p.rx - L.me.x, ddy = p.ry - L.me.y, d = Math.hypot(ddx, ddy);
+        if (d > SENSE_R + 60 || d < 1) continue;
+        const sx = (p.rx + ox) * s, sy = (p.ry - 20 + oy) * s;
+        if (sx > 20 && sx < w - 20 && sy > 20 && sy < h - 20 && visible(id)) continue;
+        const ux = ddx / d, uy = ddy / d, cx = w / 2, cy = h / 2, rx = w / 2 - 34 * Z, ry = h / 2 - 34 * Z;
+        const k2 = Math.min(rx / Math.max(0.001, Math.abs(ux)), ry / Math.max(0.001, Math.abs(uy)));
+        const ax = cx + ux * k2, ay = cy + uy * k2, a = clamp(1.3 - d / (SENSE_R + 60), 0.35, 1), ang = Math.atan2(uy, ux), R = 13 * Z;
+        c.save(); c.globalAlpha = a * (0.75 + Math.sin(t / 120) * 0.25); c.translate(ax, ay); c.rotate(ang);
+        c.fillStyle = '#ff3030'; c.strokeStyle = 'rgba(0,0,0,.8)'; c.lineWidth = 2;
+        c.beginPath(); c.moveTo(R, 0); c.lineTo(-R * 0.7, -R * 0.75); c.lineTo(-R * 0.35, 0); c.lineTo(-R * 0.7, R * 0.75); c.closePath(); c.stroke(); c.fill();
+        c.restore();
+        tx(`${Math.round(d / TS)}칸`, ax - ux * 22 * Z, ay - uy * 22 * Z, '#ff8a8a', 9, 'center');
+      }
       // the countdown before the cell opens
       if (G.phase === 'jail' && el > JAIL_MS - 5000) {
         const n = Math.ceil((JAIL_MS - el) / 1000), ph = 1 - ((JAIL_MS - el) % 1000) / 1000;
@@ -643,15 +804,17 @@
       // bottom: what Space and Enter do right now
       if (inGame() && !G.esc[me()] && G.phase !== 'end') {
         const cd = amMon() ? Math.max(0, ATK_CD - (t - L.atkAt)) : Math.max(0, BOLT_CD - (t - L.boltAt));
-        const a1 = amMon() ? (G.down[me()] ? '💫 쓰러졌어요' : el < JAIL_MS ? '감옥에서 기다리는 중…' : cd ? `👊 ${(cd / 1000).toFixed(1)}초` : '👊 [Space] 공격') : G.jailed[me()] ? '⛓️ 친구가 열쇠로 열어 줄 거예요' : myHide() != null ? '🫣 숨어 있어요' : cd ? `🏹 ${(cd / 1000).toFixed(1)}초` : '🏹 [Space] 석궁';
+        const a1 = amMon() ? (G.down[me()] ? '💀 쓰러졌어요' : stunned(me(), el) ? '💫 기절! 잠시 못 움직여요' : el < JAIL_MS ? '감옥에서 기다리는 중…' : cd ? `👊 ${(cd / 1000).toFixed(1)}초` : '👊 [Space·클릭] 공격') : G.jailed[me()] ? '⛓️ 친구가 열쇠로 열어 줄 거예요' : myHide() != null ? '🫣 숨어 있어요' : cd ? `🏹 ${(cd / 1000).toFixed(1)}초` : '🏹 [Space·클릭] 석궁';
         const hint = interactHint();
         let line = a1 + (hint ? `   ·   [Enter] ${hint.label}` : '') + (L.carry ? '   ·   ' + L.carry : '');
-        if (narrow) line = line.replace(/\[(Space|Enter)\] /g, '').replace(/   ·   /g, ' · ');
+        if (narrow) line = line.replace(/\[(Space·클릭|Space|Enter)\] /g, '').replace(/   ·   /g, ' · ');
+        // on a touch screen the sticks cover the bottom corners, so the line sits above them
+        const by = h - 8 - (w < 560 && L.dom.pad && L.dom.pad.offsetHeight ? L.dom.pad.offsetHeight + 6 : 0);
         c.font = font(12); const bw = c.measureText(line).width + 20;
-        c.fillStyle = 'rgba(10,8,14,.78)'; c.fillRect(w / 2 - bw / 2, h - 8 - 22 * Z, bw, 22 * Z); tx(line, w / 2, h - 8 - 11 * Z, '#fff8ea', 12, 'center');
-        if (L.hold && L.holdWhat === 'inst') { const f = clamp((t - L.hold) / INSTALL_MS, 0, 1); c.fillStyle = 'rgba(10,8,14,.8)'; c.fillRect(w / 2 - 80, h - 52, 160, 14); c.fillStyle = '#ffd65a'; c.fillRect(w / 2 - 78, h - 50, 156 * f, 10); tx('사다리 설치 중…', w / 2, h - 60, '#ffd65a', 11, 'center'); }
-        if (D.btnA) D.btnA.textContent = amMon() ? (cd ? (cd / 1000).toFixed(1) : '👊 공격') : (cd ? (cd / 1000).toFixed(1) : '🏹 쏘기');
-        if (D.btnB) { D.btnB.textContent = hint ? hint.label.replace(/ \(3초 꾹\)/, '') : '✋'; D.btnB.disabled = !hint; }
+        c.fillStyle = 'rgba(10,8,14,.78)'; c.fillRect(w / 2 - bw / 2, by - 22 * Z, bw, 22 * Z); tx(line, w / 2, by - 11 * Z, '#fff8ea', 12, 'center');
+        if (L.hold && L.holdWhat === 'inst') { const f = clamp((t - L.hold) / INSTALL_MS, 0, 1); c.fillStyle = 'rgba(10,8,14,.8)'; c.fillRect(w / 2 - 80, by - 52, 160, 14); c.fillStyle = '#ffd65a'; c.fillRect(w / 2 - 78, by - 50, 156 * f, 10); tx('사다리 설치 중…', w / 2, by - 60, '#ffd65a', 11, 'center'); }
+        if (D.btnA) { const lab = D.btnA.querySelector('.hn-aimlab'); if (lab) lab.textContent = cd ? (cd / 1000).toFixed(1) : amMon() ? '👊' : '🏹'; D.btnA.classList.toggle('cool', !!cd); }
+        if (D.btnB) { D.btnB.textContent = hint ? hint.label.replace(/ \(2초 꾹\)/, '') : '✋'; D.btnB.disabled = !hint; }
       }
       const carry = []; if (G.key.s === 2 && G.key.c === me()) carry.push('🗝️ 열쇠'); if (G.pieces.some(p => p.s === 2 && p.c === me())) carry.push('🪜 조각'); L.carry = carry.join(' ');
     }
@@ -661,7 +824,12 @@
       const D = L.dom; if (!D) return;
       const W = D.stage.clientWidth, Hh = D.stage.clientHeight;
       if (!W || !Hh) return;
-      const s = Math.max(0.5, Math.min(W / VW, Hh / VH));
+      const ratio = Hh / W;
+      VW = VW0; VH = VH0;
+      if (ratio > VH0 / VW0) VH = Math.min(Math.round(VW0 * ratio), 440);
+      else if (W > 0 && 1 / ratio > VW0 / VH0 + 0.05 && W < 1000) VW = Math.min(Math.round(VH0 / ratio), 440);
+      if (D.cv.width !== VW || D.cv.height !== VH) { D.cv.width = VW; D.cv.height = VH; D.dk.width = VW; D.dk.height = VH; D.g.imageSmoothingEnabled = false; }
+      const s = Math.max(0.3, Math.min(W / VW, Hh / VH));
       const cw = Math.floor(VW * s), ch = Math.floor(VH * s);
       for (const c of [D.cv, D.hud]) { c.style.width = cw + 'px'; c.style.height = ch + 'px'; }
       const k = Math.min(3, window.devicePixelRatio || 1);
@@ -673,7 +841,11 @@
       try { step(dt, t); draw(t); } catch (e) { console.error(e); }
     }
     function typing() { const a = document.activeElement; return a && /INPUT|TEXTAREA/.test(a.tagName); }
+    function onFocusIn(e) { if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) releaseKeys(); }
+    function releaseKeys() { for (const k of Object.keys(L.keys)) L.keys[k] = false; if (L.joy) { L.joy.on = false; L.joy.x = L.joy.y = 0; } if (L.holdWhat) { L.hold = 0; L.holdWhat = null; } }
     function onKey(e) {
+      // a key let go always counts, even while typing in the chat box (otherwise it stays "held" and you keep walking)
+      if (e.type === 'keyup' && MOVE_KEYS[e.code]) L.keys[e.code] = false;
       if (!L.dom || typing()) return;
       const root = document.getElementById('tg'); if (!root || root.hidden) return;
       const down = e.type === 'keydown';
@@ -699,6 +871,27 @@
       j.addEventListener('pointerup', off); j.addEventListener('pointercancel', off);
       pad.appendChild(j);
     }
+    // the right-hand stick: drag to aim (a dotted line shows where), let go to fire; a quick tap fires at the nearest target
+    function aimStick() {
+      const j = el('div', 'hn-joy hn-aimjoy'), knob = el('div', 'hn-knob hn-aimknob'), lab = el('span', 'hn-aimlab', '🏹');
+      j.append(knob, lab);
+      let id = null, moved = false;
+      const upd = ev => {
+        const r = j.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const dx = ev.clientX - cx, dy = ev.clientY - cy, d = Math.hypot(dx, dy), max = r.width / 2;
+        if (d > 16) { moved = true; L.aim = { dx: dx / d, dy: dy / d }; L.aiming = true; }
+        const k = d ? Math.min(d, max) / d : 0; knob.style.transform = `translate(${dx * k * 0.6}px, ${dy * k * 0.6}px)`;
+      };
+      j.addEventListener('pointerdown', ev => { ev.preventDefault(); K.ac(); id = ev.pointerId; try { j.setPointerCapture(id); } catch (e) {} moved = false; L.aim = null; L.aiming = false; upd(ev); });
+      j.addEventListener('pointermove', ev => { if (ev.pointerId === id) upd(ev); });
+      const up = ev => {
+        if (ev.pointerId !== id) return; id = null; knob.style.transform = '';
+        if (ev.type !== 'pointercancel') { if (moved && L.aim) primary(L.aim, false); else primary(null, true); }
+        L.aiming = false; L.aim = null;
+      };
+      j.addEventListener('pointerup', up); j.addEventListener('pointercancel', up);
+      return j;
+    }
     function mount(body) {
       body.innerHTML = '';
       const wrap = el('div', 'hn-wrap');
@@ -708,19 +901,28 @@
       stage.append(cv, hudC); wrap.appendChild(stage);
       const pad = el('div', 'hn-pad'); joystick(pad);
       const btns = el('div', 'hn-btns');
-      const A = el('button', 'hn-a', '🏹'), B = el('button', 'hn-b', '✋'); A.type = B.type = 'button';
-      A.addEventListener('pointerdown', ev => { ev.preventDefault(); K.ac(); primary(); });
+      const B = el('button', 'hn-b', '✋'); B.type = 'button';
+      const A = aimStick();
       B.addEventListener('pointerdown', ev => { ev.preventDefault(); K.ac(); secondary(true); });
       B.addEventListener('pointerup', () => secondary(false)); B.addEventListener('pointerleave', () => secondary(false)); B.addEventListener('pointercancel', () => secondary(false));
       btns.append(B, A); pad.appendChild(btns); wrap.appendChild(pad);
       const endBox = el('div', 'hn-end'); endBox.hidden = true; stage.appendChild(endBox);
       body.appendChild(wrap);
+      // computer: click on the game to fire towards the mouse
+      stage.addEventListener('pointerdown', ev => {
+        if (ev.pointerType !== 'mouse' || ev.button !== 0 || !L.me) return;
+        const r = cv.getBoundingClientRect(); if (!r.width) return;
+        const wx = (ev.clientX - r.left) / r.width * VW + L.camX, wy = (ev.clientY - r.top) / r.height * VH + L.camY;
+        const dx = wx - L.me.x, dy = wy - (L.me.y - 10), d = Math.hypot(dx, dy); if (d < 4) return;
+        ev.preventDefault(); K.ac(); primary({ dx: dx / d, dy: dy / d }, false);
+      });
       const dk = document.createElement('canvas'); dk.width = VW; dk.height = VH;
       const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
-      L.dom = { wrap, stage, cv, g, hud: hudC, hg: hudC.getContext('2d'), k: 1, dk, dkg: dk.getContext('2d'), endBox, btnA: A, btnB: B };
+      L.dom = { wrap, stage, cv, g, pad, hud: hudC, hg: hudC.getContext('2d'), k: 1, dk, dkg: dk.getContext('2d'), endBox, btnA: A, btnB: B };
       K.loadMon();
       G = TG.G; if (G) { M = genMap(G.map); if (!L.me && G.roles[me()]) applyState(G); }
       window.addEventListener('keydown', onKey, true); window.addEventListener('keyup', onKey, true); window.addEventListener('resize', fit);
+      window.addEventListener('blur', releaseKeys); document.addEventListener('focusin', onFocusIn); document.addEventListener('visibilitychange', releaseKeys);
       setTimeout(fit, 30); setTimeout(fit, 300);
       cancelAnimationFrame(L.raf); L.lastT = now(); L.raf = requestAnimationFrame(loop);
       if (G && G.phase === 'end') { L.endShown = true; showEnd(); }
@@ -728,6 +930,7 @@
     function unmount() {
       cancelAnimationFrame(L.raf); L.raf = 0;
       window.removeEventListener('keydown', onKey, true); window.removeEventListener('keyup', onKey, true); window.removeEventListener('resize', fit);
+      window.removeEventListener('blur', releaseKeys); document.removeEventListener('focusin', onFocusIn); document.removeEventListener('visibilitychange', releaseKeys);
       clearTimeout(L.sendT);
       L.dom = null; L.me = null; L.rem = {}; L.bolts = []; L.fx = []; L.msg = []; L.endShown = false; L.hold = 0; L.keys = Object.create(null); L.knock = null;
       G = null; M = null; H.pos = {};
@@ -764,13 +967,25 @@
         row.appendChild(b);
       });
       box.appendChild(row); body.appendChild(box);
+      const box2 = el('div', 'hn-maps');
+      box2.appendChild(el('b', '', '👹 괴물 모습' + (TG.isHost() ? '' : ' (방장이 골라요)')));
+      const row2 = el('div', 'hn-maprow'), curM = T.mon == null ? 0 : T.mon;
+      MON_LOOKS.forEach(([i, nm, bl]) => {
+        const b = el('button', 'btn hn-map' + (curM === i ? ' btn-gold' : ''), ''); b.type = 'button';
+        b.append(el('strong', '', nm), el('small', '', bl));
+        b.disabled = !TG.isHost(); b.setAttribute('aria-pressed', String(curM === i));
+        b.addEventListener('click', () => { if (!TG.isHost()) return; T.mon = i; TG.bump(); });
+        row2.appendChild(b);
+      });
+      box2.appendChild(row2); body.appendChild(box2);
       const d = el('details', 'tg-help'); d.open = true; d.appendChild(el('summary', '', '어떻게 하나요?'));
       [`3~5명이면 괴물 1명, 6명이면 괴물 2명. 누가 괴물인지는 시작할 때 무작위로 정해져요.`,
         `괴물은 처음 15초 동안 감옥에 갇혀 있어요. 마지막 5초는 화면 가운데 빨간 숫자로 세요. 그 사이에 흩어져 숨으세요!`,
-        `생존자: [Space] 석궁 (3초에 한 발, 화살 무제한). 맞은 괴물은 살짝 밀려나요. 괴물 체력 50, 한 발에 1 (10% 확률로 치명타 2).`,
-        `괴물: [Space] 공격. 잡힌 생존자는 감옥으로! 숨은 곳 앞에서 공격하면 숨은 사람도 찾아내요. 시간이 갈수록 조금씩 빨라져요.`,
-        `[Enter] 옷장·통·상자에 숨기 / 나오기. 열쇠를 주워 감옥 문 앞에서 [Enter] 하면 갇힌 친구들이 풀려나요.`,
-        `후반에 사다리 조각 3개가 하나씩 나타나요. 지도의 초록 점(구멍)에서 [Enter]를 3초 꾹 눌러 설치하세요. 3개를 다 설치하면 모두 구멍으로 탈출! 갇힌 친구까지 다 나가야 생존자 승리예요.`,
+        `생존자: [Space] 또는 마우스 클릭으로 석궁 (1.2초에 한 발, 화살 무제한). 맞은 괴물은 밀려나고 0.8초 동안 멈칫해요. 괴물 체력 ${MON_HP}, 한 발에 1 (10% 확률로 치명타 2). 폰은 오른쪽 조준 스틱을 끌어서 겨누고 놓으면 발사, 톡 치면 가장 가까운 괴물에게 자동 조준.`,
+        `괴물: [Space]·클릭 공격. 잡힌 생존자는 감옥으로! 숨은 곳 앞에서 공격하면 숨은 사람도 찾아내요. 1분마다 아주 조금씩 빨라져요. 생존자에겐 가까이 온 괴물의 빨간 눈과 방향 화살표가 보여요.`,
+        `[Enter] 옷장·통·상자에 숨기 / 나오기. 열쇠를 주워 감옥 문 앞에서 [Enter] 하면 갇힌 친구들이 풀려나요. 감옥에 45초 있으면 스스로 탈옥해요.`,
+        `맵 곳곳의 ⚡ 각성제(노란 점)를 먹으면 4초 동안 빨라져요. 보랏빛으로 반짝이는 책장은 비밀 통로예요. [Enter]로 들어가면 멀리 떨어진 다른 책장으로 나와요 (생존자만).`,
+        `사다리 조각 3개는 처음부터 맵 곳곳에 있어요(지도의 파란 점, 괴물 지도엔 안 보여요). 지도의 초록 점(구멍)에서 [Enter]를 2초 꾹 눌러 설치하세요. 3개를 다 설치하면 모두 구멍으로 탈출! 갇힌 친구까지 다 나가야 생존자 승리예요.`,
         `괴물을 모두 쓰러뜨려도 생존자 승리, 생존자를 모두 가두면 괴물 승리. 폰은 왼쪽 조이스틱으로 움직여요.`
       ].forEach(t => d.appendChild(el('p', '', '· ' + t)));
       body.appendChild(d);
@@ -822,6 +1037,6 @@
     function unmountKeep() { L.me = null; L.rem = {}; L.bolts = []; L.fx = []; L.msg = []; L.endShown = false; hideEnd(); }
 
     TG.register('hunt', 'mansion', INFO, GAME);
-    if (/[?&]debug\b/.test(location.search)) window.__hunt = { sync: () => sendMove(true), get G() { return G; }, get L() { return L; }, get M() { return M; }, genMap, THEMES, hostAct, elapsed, primary, secondary, interactHint, push, checkWin, set t0(v) { H.t0 = v; }, get H() { return H; } };
+    if (/[?&]debug\b/.test(location.search)) window.__hunt = { sync: () => sendMove(true), get G() { return G; }, get L() { return L; }, get M() { return M; }, genMap, THEMES, hostAct, elapsed, speedOf, primary, secondary, interactHint, push, checkWin, set t0(v) { H.t0 = v; }, get H() { return H; } };
   }
 })();

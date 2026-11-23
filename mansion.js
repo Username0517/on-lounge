@@ -104,6 +104,7 @@ window.ONL_MANSION = (function () {
       g.restore();
       return;
     }
+    if (kind === 'face') { drawFace(g, st, x, y, t, moving, rage, A0, gl, off, jit, spd); g.restore(); return; }
     const m = MON[kind]; if (!m || !m.ready) { g.restore(); return; }
     const w = m.w, h = m.h;
     // walkers: a stiff, limping gait (the whole body rocks from foot to foot) and a head that snaps sideways
@@ -122,17 +123,53 @@ window.ONL_MANSION = (function () {
     g.restore();
     g.restore();
   }
+  // 떠도는 얼굴: only a huge face, drifting at chest height. It bobs and sways, flickers, leaves a smear of
+  // after-images behind it, and now and then its jaw-line jerks sideways. Its shadow stays on the floor.
+  let faceSmall = null;
+  function faceImg() {
+    if (faceSmall) return faceSmall;
+    const f = FACES.scream; if (!f || !f.ready) return null;
+    const im = f.img, H = 40, W = Math.round(im.width * H / im.height);
+    // scale down in two steps so it stays sharp and grim instead of a blur
+    const a = document.createElement('canvas'); a.width = W * 2; a.height = H * 2; const ac = a.getContext('2d'); ac.imageSmoothingQuality = 'high'; ac.drawImage(im, 0, 0, a.width, a.height);
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const cc = c.getContext('2d'); cc.imageSmoothingQuality = 'high'; cc.drawImage(a, 0, 0, W, H);
+    // a dark rim, so it reads against the dark
+    const d = cc.getImageData(0, 0, W, H);
+    for (let i = 0; i < d.data.length; i += 4) { d.data[i + 3] = d.data[i + 3] > 90 ? 255 : 0; }
+    cc.putImageData(d, 0, 0);
+    faceSmall = c; return c;
+  }
+  function drawFace(g, st, x, y, t, moving, rage, A0, gl, off, jit, spd) {
+    const im = faceImg(); if (!im) return;
+    const w = im.width, h = im.height;
+    const bob = Math.sin(t / 380) * 3 + Math.sin(t / 97) * (rage ? 1 : 0.4);
+    const sway = Math.sin(t / 610) * 0.09 + (gl ? off * 0.03 : 0);
+    const cy = y - 30 + bob;
+    st.ftrail = (st.ftrail || []).filter(q => t - q.at < 260);
+    if (moving && (!st.flast || t - st.flast > 45)) { st.flast = t; st.ftrail.push({ x, y: cy, at: t, r: sway }); }
+    // shadow on the floor, smaller when it floats higher
+    g.fillStyle = 'rgba(0,0,0,.45)'; g.beginPath(); g.ellipse(x, y, 10 - bob * 0.6, 2.5, 0, 0, Math.PI * 2); g.fill();
+    for (const q of st.ftrail) {
+      g.save(); g.globalAlpha = A0 * 0.22 * (1 - (t - q.at) / 260); g.translate(q.x, q.y); g.rotate(q.r); g.drawImage(im, -w / 2, -h / 2); g.restore();
+    }
+    // flicker: sometimes it is barely there for a frame
+    const flick = Math.random() < (rage ? 0.08 : 0.04) ? 0.35 : 1;
+    g.save(); g.globalAlpha = A0 * flick; g.translate(Math.round(x + jit), Math.round(cy)); g.rotate(sway);
+    const z = rage ? 1 + Math.sin(t / 60) * 0.04 : 1; g.scale(z, z);
+    drawBands(g, im, 0, 0, w, h, -w / 2, -h / 2, gl ? 2 : -1, off);   // the bottom third (mouth) jerks
+    g.restore();
+  }
   // a face that fills the screen for a moment when one of them catches you
   let scare = null;
   function jumpScare(kind, big) {
-    const f = FACES[kind]; if (!f || !f.ready) return;
+    const f = FACES[kind === 'face' ? 'scream' : kind]; if (!f || !f.ready) return;
     scare = { kind, at: now(), big: !!big }; shake = Math.max(shake, big ? 14 : 9);
     sfx('scare');
   }
   function drawScare(t) {
     if (!scare) return;
     const e = t - scare.at, D = scare.big ? 900 : 640; if (e > D) { scare = null; return; }
-    const f = FACES[scare.kind]; if (!f || !f.ready) return;
+    const f = FACES[scare.kind === 'face' ? 'scream' : scare.kind]; if (!f || !f.ready) return;
     if (e > 110 && e < 150) return;   // one flicker
     const a = e < D - 140 ? 1 : (D - e) / 140;
     g.fillStyle = `rgba(0,0,0,${0.8 * a})`; g.fillRect(0, 0, VW, VH);

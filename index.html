@@ -456,7 +456,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .hn-a { background: #8a1f24; color: #fff8ea; }
 .hn-b { background: var(--gold); color: var(--ink); }
 .hn-b:disabled { opacity: .45; }
-@media (hover: none), (max-width: 899px) { .hn-pad { display: flex; } .hn-stage { min-height: 200px; } }
+.hn-aimjoy { background: rgba(138,31,36,.16); border-color: rgba(138,31,36,.55); }
+.hn-aimknob { background: #8a1f24; }
+.hn-aimlab { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #fff8ea; text-shadow: 0 1px 0 #000, 0 0 3px #000; pointer-events: none; }
+.hn-aimjoy.cool .hn-aimknob { opacity: .45; }
+@media (hover: none), (max-width: 899px) {
+  /* phone: the sticks sit on top of the game (in the black margins), so nothing is pushed off the screen */
+  .hn-wrap { position: relative; }
+  .hn-stage { min-height: 0; }
+  .hn-pad { display: flex; position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 3; pointer-events: none; padding: 0; }
+  .hn-pad > * { pointer-events: auto; }
+  .hn-btns { flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
+  .hn-btns .hn-b { width: 64px; height: 64px; font-size: 12px; }
+  .hn-joy { width: 112px; height: 112px; background: rgba(255,248,234,.10); border-color: rgba(255,248,234,.35); }
+  .hn-aimjoy { background: rgba(138,31,36,.22); border-color: rgba(255,120,120,.5); }
+  .tg-card.tg-play .tg-body { padding: 4px; }
+}
+@media (hover: none) and (max-height: 500px) { .hn-joy { width: 96px; height: 96px; } .hn-btns .hn-b { width: 54px; height: 54px; } .tg-card.tg-play .tg-head { padding: 2px 8px; } }
 .hn-maps { display: grid; gap: 6px; }
 .hn-maprow { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
 .hn-map { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; white-space: normal; }

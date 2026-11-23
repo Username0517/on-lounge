@@ -1,5 +1,30 @@
 # Changelog
 
+## Hunt, round 3: new map layouts, the floating face, secret passages, energy drinks, fixes
+
+Files changed: `hunt.js`, `mansion.js`, `index.html` (the previous hunt patch, with the aim stick and the map-sync fix, had not been uploaded; it is included).
+
+- Bug: a movement key held while clicking into the chat box stayed "held", because its keyup was ignored while typing. Now a keyup always clears the key, and `releaseKeys()` runs on window blur, on focus moving into an input, and when the tab is hidden.
+- Hiding/unhiding with Enter checked on a non-host survivor: hides at once on every screen, comes out in front of the furniture, and can walk away.
+- Maps (`genMap`): 5x3 cells (66x36 tiles) instead of 4x3 small rooms joined by narrow tunnels. Room kinds: plain, small closet, pillared hall, courtyard with a block in the middle, L-shaped, and long two-cell galleries with pillar rows. Corridors are 2 or 3 tiles wide, with extra loops. Still only the seeded `R`. Flood-filled: every key/ladder/spawn/hide/drink/passage point is reachable from the cell door.
+- New: two **secret passages** per map (`M.passages`; a bookcase with a purple glint, survivors only, Enter teleports to the far bookcase, 6 s cooldown), and three **⚡ energy drinks** (`G.boost`; walk over one for 1.4x speed for 4 s, back after 25 s). Both show on the survivors' minimap only.
+- The monster's minimap no longer shows the ladder pieces (it never showed survivors).
+- Monsters: the hunt now uses `crawl` (거미손) and the new `face` (떠도는 얼굴: the screaming face from the user's art, floating with bob, sway, flicker and after-images; drawn by `drawFace` in `mansion.js`). The host picks in the lobby (`T.mon`: 0 crawler, the default; 1 face; -1 mixed).
+- Balance: bolt cooldown 2.5 → 1.2 s, stun 2 → 0.8 s (with 1 s of immunity after it), monster HP 30 → 60 (more arrows now), bolt hit boxes are wider (crawler ±25 px, face ±17 px).
+
+## Hunt balance patch, phone aim stick, stun, seeing the monster, a map sync fix
+
+Files changed: `hunt.js`, `index.html`. No SQL.
+
+- **Bug (old): screens built different maps.** `genMap` used `shuffle()` and `pick()` (Math.random) for wall decorations. Each client placed hiding spots and furniture in different places, so the host rejected hides ("too far"), people walked through furniture on other screens, and hiding or coming out seemed to fail. Map generation now uses only the seeded `R` (`shuffleR`). Checked: three separate page loads produce identical maps, and all three maps are still fully connected.
+- Hiding/unhiding takes effect at once on your own screen (`keepMine` keeps that answer against a host state that was sent just before the host heard you). Coming out puts you on the nearest free spot in front of the hiding place (`stepOut`); before, you came out inside the solid furniture.
+- Phones: the 🏹 button is now an aim stick (`aimStick`). Drag to aim (a dotted line shows the shot), let go to fire; a quick tap auto-aims at the nearest visible target. Monsters use it to strike. On a computer, clicking the game fires towards the mouse, and Space now snaps onto a target within about 30° of where you face (`aimDir`).
+- Phone layout: the sticks are drawn over the game instead of under it. The view stretches to the screen's shape (`VW`/`VH` set in `fit()`, at most 440 world px), so nothing is cut off. The hint line moves above the sticks on narrow screens.
+- Arrows stun: `G.stun[id]` holds when the stun ends. A hit stuns for 2 s (`STUN_MS`), and the monster cannot be stunned again for 1.5 s after it wakes (`STUN_IMMUNE`). A stunned monster cannot move or strike, and spinning stars and "💫 기절" show over it.
+- Seeing the monster: the survivor light is 118 (was 92) and the monster light 100 (was 106). Within 260 px (`SENSE_R`), survivors see the monster's red eyes in the dark, a blinking red dot on the minimap, and a red arrow with a distance at the edge of the screen.
+- Ladder pieces are on the map from the start.
+- Balance: monster HP 50 → 30, bolt cooldown 3 → 2.5 s, monster strike cooldown 0.9 → 1.1 s, strike reach 24 → 20. Survivor speed 66 → 68. The monster speeds up +3% a minute (was +4% every 40 s), at most +12% (was +28%). Ladder install 3 → 2 s. The key comes back after 8 s (was 15). Anyone in the jail for 45 s gets out on their own (`SELF_FREE_MS`), so camping the jail does not win.
+
 ## Fix: clicking did nothing outside (plaza, forest paths, mansion yard)
 
 Files changed: `app.js`.
