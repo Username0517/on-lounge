@@ -388,7 +388,7 @@ window.ONL_TALES = (function () {
     await fade(1, 160);
     const from = roomId;
     const [x, y, dir] = spawnFor(rid, back);
-    loadRoom(rid); pl.x = x; pl.y = y; pl.dir = dir; pl.hidden = null; pl.trail = []; unstick();
+    loadRoom(rid); pl.x = x; pl.y = y; pl.dir = dir; pl.hidden = null; pl.trail = []; pl.auto = null; unstick();
     ST.room = rid;
     for (const n of Object.values(ST.npc || {})) if (n.follow) { n.room = rid; n.x = x; n.y = y; }
     camSnap();
@@ -423,6 +423,8 @@ window.ONL_TALES = (function () {
   function movePlayer(dt, t) {
     if (!pl.hidden && blockedAt(pl.x, pl.y) === true) unstick();
     const d = (busy || pl.hidden) ? null : inputDir();
+    if (d || busy || pl.hidden) pl.auto = null;
+    if (!d && pl.auto) return autoStep(dt, t);
     pl.moving = !!d;
     if (!d) return;
     pl.dir = d;
@@ -435,10 +437,84 @@ window.ONL_TALES = (function () {
       if (blockedAt(nx, ny)) { if (b.door && t - bumpAt > 900) { bumpAt = t; tryDoorLetter(b.door); } pl.moving = false; return; }
     }
     pl.x = nx; pl.y = ny;
+    afterStep(t);
+  }
+  function afterStep(t) {
     if (t - stepAt > 380) { stepAt = t; sfx(room.step || CH.step || 'step'); }
     pl.trail.unshift([pl.x, pl.y, pl.dir]); if (pl.trail.length > 90) pl.trail.length = 90;
     const tx = Math.floor(pl.x / TS), ty = Math.floor((pl.y - 3) / TS), ch = tileAt(room, tx, ty);
     if (isDoorCh(ch) && doorOpen(room, ch)) { const dd = room.doors[ch]; goRoom(dd.to, dd.back, dd.quiet ? { quiet: 1 } : null); }
+  }
+  // ---- tap / click to walk (and to look at what was tapped when you get there) ----
+  function autoStep(dt, t) {
+    const A = pl.auto, wp = A.path[0];
+    if (!wp) { pl.auto = null; pl.moving = false; if (A.face) pl.dir = A.face; if (A.act) actQ = true; return; }
+    const dx = wp[0] - pl.x, dy = wp[1] - pl.y, dist = Math.hypot(dx, dy);
+    if (dist < 1.2) { A.path.shift(); return; }
+    const sp = Math.min(dist, PSPEED * dt * (ST.F.slow ? 0.7 : 1));
+    const nx = pl.x + dx / dist * sp, ny = pl.y + dy / dist * sp;
+    pl.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    const b = blockedAt(nx, ny);
+    if (b) {
+      if (b.door) { pl.auto = null; pl.moving = false; if (t - bumpAt > 900) { bumpAt = t; tryDoorLetter(b.door); } return; }
+      // try sliding along one axis
+      if (Math.abs(nx - pl.x) > 0.01 && !blockedAt(nx, pl.y)) pl.x = nx; else if (Math.abs(ny - pl.y) > 0.01 && !blockedAt(pl.x, ny)) pl.y = ny;
+    } else { pl.x = nx; pl.y = ny; }
+    // no progress for a moment: stop (and if we were right next to the thing, look at it anyway)
+    const nd = Math.hypot(wp[0] - pl.x, wp[1] - pl.y);
+    if (nd < dist - 0.05) A.stuck = 0; else A.stuck = (A.stuck || 0) + dt;
+    if (A.stuck > 0.35) { pl.auto = null; pl.moving = false; if (A.face && A.path.length <= 1) { pl.dir = A.face; if (A.act) actQ = true; } return; }
+    pl.moving = true;
+    afterStep(t);
+  }
+  function tapAt(ev) {
+    if (dlgNext()) return;
+    if (mode !== 'play' || ui.panel || busy || !room) return;
+    if (pl.hidden) { leaveHide(); return; }
+    const r = cv.getBoundingClientRect(); if (!r.width) return;
+    const wx = (ev.clientX - r.left) / r.width * VW + camX, wy = (ev.clientY - r.top) / r.height * VH + camY;
+    let face = null, act = false, goals = [];
+    // a person?
+    for (const [nm, q] of Object.entries(ST.npc || {})) {
+      if (q.room !== roomId || q.gone || q.follow) continue;
+      if (Math.abs(q.x - wx) < 10 && wy > q.y - 26 && wy < q.y + 3) { act = true; goals = [[q.x, q.y + 14, 'up'], [q.x, q.y - 13, 'down'], [q.x - 14, q.y, 'right'], [q.x + 14, q.y, 'left']]; break; }
+    }
+    // something to look at?
+    if (!act) {
+      let best = null, ba = 1e9;
+      for (const o of objs) {
+        if (!usable(o)) continue;
+        const rr = objRect(o), d = T[o.t], h = d.wall ? rr.h + 8 : rr.h;
+        if (wx >= rr.x - 3 && wx <= rr.x + rr.w + 3 && wy >= rr.y - (d.wall ? 0 : 10) && wy <= rr.y + h + 3 && rr.w * h < ba) { ba = rr.w * h; best = o; }
+      }
+      if (best) {
+        const rr = objRect(best), cx = rr.x + rr.w / 2, wall = T[best.t].wall; act = true;
+        goals = [[cx, rr.y + rr.h + 9, 'up']];
+        if (!wall) goals.push([cx, rr.y - 3, 'down'], [rr.x - 6, rr.y + rr.h - 3, 'right'], [rr.x + rr.w + 6, rr.y + rr.h - 3, 'left']);
+      }
+    }
+    if (!act) goals = [[wx, wy + 4, null]];
+    // pick the goal with the shortest walk on the tile grid
+    const sx = Math.floor(pl.x / TS), sy = Math.floor((pl.y - 4) / TS);
+    let pick_ = null;
+    for (let [gx, gy, f] of goals) {
+      let tx = Math.floor(gx / TS), ty = Math.floor((gy - 4) / TS);
+      const ch = tileAt(room, tx, ty);
+      if (!act && (ch === '#' || !grid.grid[ty * grid.W + tx]) && !isDoorCh(ch)) {
+        // tapped a wall or furniture: walk to the nearest open tile next to it
+        let bd = 1e9, bt = null; for (const [ax, ay] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1]]) { const ux = tx + ax, uy = ty + ay; if (grid.grid[uy * grid.W + ux] && Math.hypot(ax, ay) < bd) { bd = Math.hypot(ax, ay); bt = [ux, uy]; } }
+        if (!bt) continue; [tx, ty] = bt; gx = tx * TS + 8; gy = ty * TS + 11;
+      }
+      if (act && blockedAt(gx, gy)) continue;   // nowhere to stand on that side
+      const path = (sx === tx && sy === ty) ? [] : bfs(grid, sx, sy, tx, ty);
+      if (!path) continue;
+      if (!pick_ || path.length < pick_.path.length) pick_ = { path, gx, gy, f };
+    }
+    if (!pick_) { if (act) note('거기까지 갈 수 없어요.'); return; }
+    const pts = pick_.path.map(([cx, cy]) => [cx * TS + 8, cy * TS + 11]);
+    if (pts.length) pts.pop();
+    pts.push([clamp(pick_.gx, 6, room.pw - 6), clamp(pick_.gy, 8, room.ph - 4)]);
+    pl.auto = { path: pts, face: pick_.f, act, mark: [pick_.gx, pick_.gy], t0: now() };
   }
   function moveFollowers() {
     let k = 0;
@@ -503,7 +579,7 @@ window.ONL_TALES = (function () {
     const seen = !!(mon && !mon.gone && mon.room === roomId && mon.mode === 'chase' && Math.hypot(mon.x - pl.x, mon.y - pl.y) < 92);
     pl.hidden = { x: pl.x, y: pl.y, o, at: now(), seen };
     const r = objRect(o); pl.x = r.x + r.w / 2; pl.y = r.y + r.h - 2;
-    sfx('hide'); note(o.hideNote || '숨었다… 숨을 죽이자. (확인 버튼을 누르면 나와요)');
+    sfx('hide'); note(o.hideNote || '숨었다… 숨을 죽이자. (확인·방향키·화면을 누르면 나와요)');
   }
   async function leaveHide() {
     if (!pl.hidden) return;
@@ -623,7 +699,7 @@ window.ONL_TALES = (function () {
     if (!snap) return;
     const played = ST.t + (now() - playStart) / 1000;
     ST = JSON.parse(JSON.stringify(snap)); ST.t = played; mon = null; chaseMusic(false); redFlash = 0;
-    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'down'; pl.hidden = null; pl.trail = []; unstick();
+    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'down'; pl.hidden = null; pl.trail = []; pl.auto = null; unstick();
     for (const n of Object.values(ST.npc || {})) if (n.follow) { n.room = ST.room; n.x = pl.x; n.y = pl.y; }
     camSnap(); playStart = now(); if (CH.onRestore) CH.onRestore(); note('다시…');
   }
@@ -675,6 +751,7 @@ window.ONL_TALES = (function () {
         drawMonster(g, mon.kind, mon.x, mon.y, look, t, { alpha: a, moving: mon.moving, frozen, face: mon.face, rage: mon.mode === 'chase' && dd < 50, fast: mon.kind === 'kune' && dd < 80, amp: 1.4, lamp: true });
       } else if (e.draw) e.draw(g, t);
     }
+    if (pl.auto && pl.auto.mark && !pl.auto.act) { const [mx, my] = pl.auto.mark, k = (now() - pl.auto.t0) / 400 % 1; g.strokeStyle = `rgba(255,240,200,${0.6 - k * 0.5})`; g.lineWidth = 1; g.beginPath(); g.ellipse(Math.round(mx), Math.round(my), 3 + k * 4, 1.5 + k * 2, 0, 0, 7); g.stroke(); }
     if (!pl.hidden && !dlg.on) drawBubbles(t);
     g.setTransform(1, 0, 0, 1, 0, 0);
     const lit = CH.lightItem && has(CH.lightItem);
@@ -823,7 +900,7 @@ window.ONL_TALES = (function () {
     p._close = () => { closePanel(); busy--; };
   }
   const GUIDE = [
-    ['🎮', '움직이기', '방향키·WASD로 걸어요. 폰은 왼쪽 아래 패드를 써요.'],
+    ['🎮', '움직이기', '방향키·WASD로 걸어요. 화면을 클릭(폰은 터치)하면 그 자리로 걸어가고, 말풍선이 뜬 물건이나 사람을 누르면 가서 살펴봐요. 폰은 왼쪽 아래 패드도 돼요.'],
     ['👀', '살펴보기', '스페이스·엔터(폰은 확인 버튼)로 바라보는 것을 살펴봐요. 「…」 말풍선이 뜬 것만 살펴볼 수 있고, 바라보는 것은 노랗게 바뀌어요.'],
     ['🎒', '가방', 'X 키(폰은 가방 버튼). 모은 단서를 다시 읽고, 지금 해야 할 일(📌)도 볼 수 있어요.'],
     ['🔎', '추리', '퍼즐의 답은 쪽지·달력·사진·방송 같은 단서 속에 있어요. 막히면 가방의 단서를 다시 읽어 보세요.'],
@@ -948,7 +1025,7 @@ window.ONL_TALES = (function () {
         saltwater: { n: '소금물', d: '머그컵 가득 탄 진한 소금물. 쥐고 있으면 이상하게 마음이 놓인다.', i: '🥛' },
         matches: { n: '성냥갑', d: '「OO 노래방」이라고 적힌 성냥갑. 성냥이 몇 개비 남아 있다.', i: '🔥' }
       },
-      fresh: () => ({ v: 1, room: 'living', x: 8 * TS, y: 6 * TS + 6, dir: 'down', F: {}, inv: [], obj: {}, t: 0, npc: {} }),
+      fresh: () => ({ v: 1, room: 'living', x: 11 * TS, y: 5 * TS + 10, dir: 'left', F: {}, inv: [], obj: {}, t: 0, npc: {} }),
       goal: () => {
         const F = ST.F;
         if (!has('phone')) return '바닥에서 빛나는 휴대폰을 줍자.';
@@ -1759,7 +1836,7 @@ window.ONL_TALES = (function () {
     ST = resume && SV.runs[id] ? JSON.parse(JSON.stringify(SV.runs[id])) : C.fresh();
     if (!resume) { delete SV.runs[id]; storeSV(); }
     ui.title.textContent = `${C.icon} 제${id}장 · ${C.title}`; ui.bag.hidden = false; ui.menuBtn.hidden = false;
-    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'down'; pl.hidden = null; pl.trail = []; unstick();
+    loadRoom(ST.room); pl.x = ST.x; pl.y = ST.y; pl.dir = ST.dir || 'down'; pl.hidden = null; pl.trail = []; pl.auto = null; unstick();
     for (const n of Object.values(ST.npc || {})) if (n.follow) { n.room = ST.room; n.x = pl.x; n.y = pl.y; }
     camSnap(); snapshot(); playStart = now();
     if (C.onRestore) C.onRestore();
@@ -1807,7 +1884,7 @@ window.ONL_TALES = (function () {
     const btns = el('div', 'hr-btns');
     const bag = el('button', 'btn', '🎒 가방'); bag.type = 'button'; bag.addEventListener('click', () => { if (!busy && mode === 'play') openBag(); });
     const menuBtn = el('button', 'btn', '📖 목록'); menuBtn.type = 'button';
-    menuBtn.addEventListener('click', async () => { if (busy > 50 || mode !== 'play') return; const c = await choose('챕터 목록으로 갈까요? 진행 상황은 마지막 저장 지점에 남아요.', ['목록으로', '계속하기']); if (c === 0) toMenu(); });
+    menuBtn.addEventListener('click', async () => { if (mode !== 'play') return; if (busy || dlg.on || ui.panel) { note('대화나 창을 먼저 닫아 주세요.'); return; } const c = await choose('챕터 목록으로 갈까요? 진행 상황은 마지막 저장 지점에 남아요.', ['목록으로', '계속하기']); if (c === 0) toMenu(); });
     const out = el('button', 'btn', '나가기'); out.type = 'button';
     out.addEventListener('click', async () => { if (busy > 50) return; if (mode !== 'play') return close(); const c = await choose('숲으로 나갈까요? 진행 상황은 마지막 저장 지점에 남아요.', ['나가기', '계속하기']); if (c === 0) close(); });
     btns.append(bag, menuBtn, out); head.appendChild(btns); card.appendChild(head);
@@ -1815,6 +1892,7 @@ window.ONL_TALES = (function () {
     cv = el('canvas', 'hr-cv'); cv.width = VW; cv.height = VH; g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
     dk = document.createElement('canvas'); dk.width = VW; dk.height = VH; dkg = dk.getContext('2d');
     stage.appendChild(cv);
+    cv.addEventListener('pointerdown', ev => { ev.preventDefault(); ac(); tapAt(ev); });
     const dlgB = el('div', 'hr-dlg'); dlgB.hidden = true;
     const nm = el('b', 'hr-name'), tx = el('p', 'hr-text'), nx = el('span', 'hr-more', '▼');
     dlgB.append(nm, tx, nx); stage.appendChild(dlgB);
@@ -1828,7 +1906,7 @@ window.ONL_TALES = (function () {
     const dp = el('div', 'hr-dpad');
     for (const [d, sym] of [['up', '▲'], ['left', '◀'], ['right', '▶'], ['down', '▼']]) {
       const b = el('button', 'hr-k hr-' + d, sym); b.type = 'button'; b.setAttribute('aria-label', d);
-      const set = v => ev => { ev.preventDefault(); touch[d] = v; };
+      const set = v => ev => { ev.preventDefault(); touch[d] = v; if (v) unhideByMove(); };
       b.addEventListener('pointerdown', set(1)); b.addEventListener('pointerup', set(0)); b.addEventListener('pointerleave', set(0)); b.addEventListener('pointercancel', set(0));
       dp.appendChild(b);
     }
@@ -1836,7 +1914,7 @@ window.ONL_TALES = (function () {
     act.addEventListener('pointerdown', ev => { ev.preventDefault(); ac(); if (dlgNext()) return; if (mode === 'play') actQ = true; });
     pad.append(dp, act);
     card.appendChild(pad);
-    card.appendChild(el('p', 'hr-tip', '방향키·WASD 이동 · 스페이스/엔터 살펴보기·대화 넘기기 · X 가방 · 숨은 곳에서 확인을 누르면 나와요'));
+    card.appendChild(el('p', 'hr-tip', '방향키·WASD 또는 화면 클릭(터치)으로 이동 · 「…」 말풍선 물건을 클릭하면 가서 살펴봐요 · 스페이스/엔터 살펴보기·대화 넘기기 · X 가방'));
     root.appendChild(card);
     ui = { dlg: dlgB, dlgName: nm, dlgText: tx, note: nt, stage, panel: null, title, bag, menuBtn, cap, loading, skip };
   }
@@ -1847,7 +1925,7 @@ window.ONL_TALES = (function () {
     const c = e.code, down = e.type === 'keydown';
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(c)) {
       e.preventDefault(); keys[c] = down;
-      if (down) { order = order.filter(x => x !== c); order.push(c); }
+      if (down) { order = order.filter(x => x !== c); order.push(c); if (!e.repeat) unhideByMove(); }
       return;
     }
     if (!down) return;
@@ -1864,6 +1942,8 @@ window.ONL_TALES = (function () {
     if (c === 'KeyX' || c === 'KeyI' || c === 'Tab') { e.preventDefault(); if (ui.panel && ui.panel._close) ui.panel._close(); else if (!busy) bagQ = true; return; }
     if (c === 'Escape') { e.preventDefault(); if (mode === 'cine') return endCine(); if (ui.panel && ui.panel._close) ui.panel._close(); return; }
   }
+  // pressing a direction while hidden comes out (after a short moment, so the key you hid with does not count)
+  function unhideByMove() { if (mode === 'play' && pl.hidden && !busy && !dlg.on && !ui.panel && now() - pl.hidden.at > 350) leaveHide(); }
   function releaseKeys() { for (const k in keys) keys[k] = false; order = []; for (const d in touch) touch[d] = 0; }
   function fit() {
     if (!cv || !root || root.hidden) return;
@@ -1900,6 +1980,6 @@ window.ONL_TALES = (function () {
   // how loud the lounge's rain should be while we are open (the forest film is outside; the stories are mostly not)
   function rainLevel() { if (!open_) return 1; if (mode === 'cine') return 0.8; if (mode === 'menu') return 0.35; return CH && CH.id === 1 ? 0.3 : CH && CH.id === 2 ? 0.15 : 0; }
   const api = { open, close, isOpen: () => open_, rainLevel, loadArt, artUrl, hasProgress: () => Object.keys(SV.runs).length > 0 || Object.keys(SV.done).length > 0 };
-  if (/[?&]debug\b/.test(location.search)) api._dbg = () => ({ get ST() { return ST; }, get pl() { return pl; }, get mon() { return mon; }, get room() { return roomId; }, get mode() { return mode; }, get busy() { return busy; }, set busy(v) { busy = v; }, get CH() { return CH; }, get panel() { return ui.panel; }, get objs() { return objs; }, get checkpoint() { return checkpoint; }, SV: () => SV, get ROOMS() { return ROOMS; }, killMon: () => { mon = null; chaseMusic(false); }, goRoom, run, give, loadRoom, startChase, startChapter, showMenu, endCine, dlgNext, interact, finish, CHAPTERS });
+  if (/[?&]debug\b/.test(location.search)) api._dbg = () => ({ get ST() { return ST; }, get pl() { return pl; }, get mon() { return mon; }, get room() { return roomId; }, get mode() { return mode; }, get busy() { return busy; }, set busy(v) { busy = v; }, get CH() { return CH; }, get panel() { return ui.panel; }, get objs() { return objs; }, get checkpoint() { return checkpoint; }, SV: () => SV, get ROOMS() { return ROOMS; }, killMon: () => { mon = null; chaseMusic(false); }, get cam() { return [camX, camY]; }, tapAt, get grid() { return grid; }, spawnFor, blockedAt, pickAt, facingPoint, setST: v => { ST = v; }, setCH: id => { CH = CHAPTERS[id]; ROOMS = CH.rooms; ITEMS = CH.items; ST = CH.fresh(); }, goRoom, run, give, loadRoom, startChase, startChapter, showMenu, endCine, dlgNext, interact, finish, CHAPTERS });
   return api;
 })();

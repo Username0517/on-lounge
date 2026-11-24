@@ -1,5 +1,17 @@
 # Changelog
 
+## 괴담 수집: tap/click to walk, fixes from a full check
+
+Files changed: `tales.js`, `app.js`.
+
+- Checked: the repo matches the last upload (tales, tales-art, app, mansion, index, CHANGELOG, and the earlier hunt jail fix).
+- New in the tales: click (or tap on a phone) the picture to walk there; click a thing with a 「…」 bubble or a person to walk up to it and look at it; click a door to go through. Paths go round furniture; a white ring marks where you are going. Any key or pad press takes over. Tapping the picture also moves the dialogue on.
+- Hiding: pressing a direction (key or pad) or tapping the screen also comes out (not only 확인).
+- Bug: chapter 1 started inside the sofa (the player was pushed out at once, but it looked like a jump). New start spot in the living room.
+- Bug: the 📖 목록 button could open while a dialogue or another window was open, and a story script could keep running under the chapter list. It now asks you to close the dialogue first.
+- Checked by script for chapters 1–3: every room's doors and start points are reachable with the real collision, every 「…」 object and person can be looked at from somewhere you can stand, every door can be walked through; hiding while the bear searches (it leaves), being caught and restarting in each chapter (bear, white thing on the bridge, conductors); the forest 2 gap and the whole 길 없는 숲 by keyboard, mouse and touch (iPhone 13 size); the mansion story still plays to its true ending.
+- `app.js`: `__onl.worldToClient` (debug only, for tests).
+
 ## 괴담 수집: AI art, creepier monsters, horror effects
 
 Files changed: `tales.js`, `tales-art.js` (new), `app.js`, `index.html`.
