@@ -1,5 +1,18 @@
 # Changelog
 
+## Racing: phone controller without VPN, entry guide
+
+Files: `race.js`, `pad.html`, `race.sql` (run again), `app.js`, `index.html`, and **new repository** `on-lounge-pad` (`index.html` = the same controller page) on GitHub Pages.
+
+- Problem: in mainland China the lounge's servers (vercel.app, supabase.co) need a VPN, so a phone without VPN could not open the controller page or reach the realtime channel.
+- The controller page no longer uses Supabase at all. It is one self-contained file (`pad.html`; the same file as `index.html` in the public repo `on-lounge-pad`, served by GitHub Pages at `https://username0517.github.io/on-lounge-pad/`). The QR code now points there (`PAD_PAGE` in race.js).
+- The computer and the phone meet through public MQTT relays (EMQX: `broker-cn.emqx.io`, hosted in Shanghai, and `broker.emqx.io`; both are tried, whichever answers). A ~60-line MQTT client is built into race.js and pad.html (no library).
+- Everything through the relay is encrypted (AES-GCM) with a random key that only exists in the QR code after `#` (never sent to any server), so the relay cannot read inputs or connection details and nobody can fake inputs. Relay inputs carry a sequence number so late ones are dropped.
+- Direct WebRTC link as before, with STUN servers that answer from China added (Xiaomi, Bilibili) besides Cloudflare and Google.
+- `race.sql`: the `pad:%` realtime policies are removed again (nothing uses them any more). `app.js`: `ONL.channel` / `removeChannel` removed.
+- `app.js`: the plaza's east gate now opens a guide (`openRaceGuide`): what the game is, solo vs together, kart colours, keyboard, phone screen, phone-as-controller by QR (no VPN on the phone, WeChat scan may not open it), drift + mini boost timing, start boost, speed gauge, things on the road and drops. 「🏁 서킷으로 들어가기」 / 「다음에 할래요」, and a box to skip the guide next time.
+- Tested with a local MQTT broker: phone link through the relay with WebRTC and with WebRTC turned off, with one of the two relays down; the guide by keyboard (Enter at the gate) on desktop and iPhone size. Not testable from here: whether github.io and the EMQX relay open on a phone in China without VPN.
+
 ## New: 카트 레이싱 (east of the plaza), phone as controller, records per map
 
 Files: `race.js` (new), `pad.html` (new), `race.sql` (new, **run once in Supabase SQL Editor**), `app.js`, `index.html`.

@@ -1,6 +1,6 @@
--- ON-Lounge · 카트 레이싱 기록판 + 폰 컨트롤러 연결
+-- ON-Lounge · 카트 레이싱 기록판
 -- 1) 맵마다 각자의 가장 빠른 완주 시간을 저장하고 1~5등을 보여 줘요.
--- 2) QR을 찍은 폰(로그인 안 해도 됨)이 컴퓨터와 'pad:…' 채널에서만 만날 수 있게 해 줘요.
+-- 2) 예전 버전의 폰 컨트롤러 채널 규칙을 지워요 (이제 필요 없어요).
 -- 여러 번 실행해도 괜찮아요.
 
 create table if not exists public.race_times (
@@ -78,13 +78,7 @@ grant execute on function public.submit_race_time(text, integer) to authenticate
 grant execute on function public.top_race_times(text) to authenticated;
 grant execute on function public.my_race_time(text) to authenticated;
 
--- 폰 컨트롤러: 'pad:코드' 채널에서 broadcast만 주고받을 수 있어요 (로그인 안 한 폰도).
--- 라운지 채널('lounge:…')은 지금처럼 회원만 들어갈 수 있어요.
+-- 폰 컨트롤러는 이제 Supabase를 쓰지 않아요 (VPN 없는 폰도 되도록 다른 중계를 써요).
+-- 예전 버전이 만든 'pad:…' 채널 허용 규칙이 있으면 지워요. 라운지 채널('lounge:…')은 그대로 회원만 들어가요.
 drop policy if exists "pads listen" on realtime.messages;
-create policy "pads listen" on realtime.messages
-  for select to anon, authenticated
-  using (realtime.topic() like 'pad:%' and realtime.messages.extension = 'broadcast');
 drop policy if exists "pads send" on realtime.messages;
-create policy "pads send" on realtime.messages
-  for insert to anon, authenticated
-  with check (realtime.topic() like 'pad:%' and realtime.messages.extension = 'broadcast');

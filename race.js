@@ -1738,43 +1738,122 @@
     TG.register('race', 'raceway', INFO, GAME);
     root.ONL_RACE = { boardEl, fmt, maps: MAPS };
     if (/[?&]debug\b/.test(location.search)) root.__race = { get G() { return G; }, L, push, newRace, setupRace, hostTick, MAPS, PH, autoDrive, PAD: () => PAD, standings, fetchRec, REC, setColor };
+    // ================================================================================================
+    //  A phone as the controller: the computer shows a QR code, the phone opens the controller page.
+    // ================================================================================================
+    // The phone may have no VPN (in China the lounge's own servers are blocked), so the phone side needs
+    // nothing from them: the controller page is a single file on GitHub Pages, and the two find each other
+    // through a public MQTT relay that works from mainland China (EMQX, two addresses, whichever answers).
+    // Everything sent through the relay is encrypted with a key that only exists in the QR code (the part
+    // after #, which is never sent to any server), so nobody else can read it or fake inputs.
+    // Then they try a direct WebRTC link (quicker, no relay at all); if that fails, inputs stay on the relay.
+    const PAD_PAGE = root.ONL_PAD_PAGE || 'https://username0517.github.io/on-lounge-pad/';
+    const PAD_BROKERS = root.ONL_PAD_BROKERS || ['wss://broker-cn.emqx.io:8084/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+    const ICE = [{ urls: ['stun:stun.miwifi.com:3478', 'stun:stun.chat.bilibili.com:3478'] }, { urls: 'stun:stun.cloudflare.com:3478' }, { urls: ['stun:stun.l.google.com:19302'] }];
+    // the smallest MQTT 3.1.1 client that does the job: connect, subscribe, publish (QoS 0), ping
+    function mqtt(url, clientId, onMsg, onState) {
+      let ws = null, buf = new Uint8Array(0), ping = 0, up = false, closed = false, tries = 0;
+      const subs = [], te = new TextEncoder(), td = new TextDecoder();
+      const str = s => { const b = te.encode(s); return [b.length >> 8, b.length & 255, ...b]; };
+      const rl = n => { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; o.push(d); } while (n > 0); return o; };
+      const pkt = (h, body) => { const head = [h, ...rl(body.length)], out = new Uint8Array(head.length + body.length); out.set(head, 0); out.set(body, head.length); return out; };
+      const subPkt = t => pkt(0x82, [0, 1, ...str(t), 0]);
+      function open() {
+        if (closed) return;
+        try { ws = new WebSocket(url, 'mqtt'); } catch (e) { onState('down'); return; }
+        ws.binaryType = 'arraybuffer';
+        ws.onopen = () => { try { ws.send(pkt(0x10, [...str('MQTT'), 4, 2, 0, 45, ...str(clientId)])); } catch (e) {} };
+        ws.onmessage = ev => feed(new Uint8Array(ev.data));
+        ws.onclose = () => { const was = up; up = false; clearInterval(ping); onState('down', was); if (!closed) setTimeout(open, Math.min(15000, 2000 * ++tries)); };
+        ws.onerror = () => {};
+      }
+      function feed(d) {
+        const nb = new Uint8Array(buf.length + d.length); nb.set(buf, 0); nb.set(d, buf.length); buf = nb;
+        for (;;) {
+          if (buf.length < 2) return;
+          let i = 1, len = 0, mul = 1, b;
+          do { if (i >= buf.length) return; b = buf[i++]; len += (b & 127) * mul; mul *= 128; } while (b & 128);
+          if (buf.length < i + len) return;
+          const h = buf[0], body = buf.subarray(i, i + len); buf = buf.slice(i + len);
+          const type = h >> 4;
+          if (type === 2) {
+            if (body[1] !== 0) { onState('down'); try { ws.close(); } catch (e) {} return; }
+            up = true; tries = 0;
+            for (const t of subs) ws.send(subPkt(t));
+            clearInterval(ping); ping = setInterval(() => { try { ws.send(new Uint8Array([0xC0, 0])); } catch (e) {} }, 20000);
+            onState('up');
+          } else if (type === 3) {
+            const tl = (body[0] << 8) | body[1], topic = td.decode(body.subarray(2, 2 + tl)), q = (h >> 1) & 3;
+            onMsg(topic, body.slice(2 + tl + (q ? 2 : 0)));
+          }
+        }
+      }
+      open();
+      return {
+        sub(t) { subs.push(t); if (up) ws.send(subPkt(t)); },
+        pub(t, payload) { if (!up) return false; try { const s = str(t), body = new Uint8Array(s.length + payload.length); body.set(s, 0); body.set(payload, s.length); ws.send(pkt(0x30, body)); return true; } catch (e) { return false; } },
+        close() { closed = true; up = false; clearInterval(ping); try { if (ws && ws.readyState === 1) ws.send(new Uint8Array([0xE0, 0])); ws && ws.close(); } catch (e) {} },
+        get up() { return up; }
+      };
+    }
+    const b64u = a => btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    async function sealer(raw) {
+      const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']), te = new TextEncoder(), td = new TextDecoder();
+      return {
+        async seal(obj) { const iv = crypto.getRandomValues(new Uint8Array(12)), ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, te.encode(JSON.stringify(obj)))); const o = new Uint8Array(12 + ct.length); o.set(iv, 0); o.set(ct, 12); return o; },
+        async open(b) { try { if (b.length < 29) return null; return JSON.parse(td.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.subarray(0, 12) }, key, b.subarray(12)))); } catch (e) { return null; } }
+      };
+    }
 
-    // ================================================================================================
-    //  A phone as the controller: the computer shows a QR code, the phone opens pad.html and steers.
-    // ================================================================================================
-    // The two find each other on a realtime channel 'pad:<code>' (race.sql lets a phone that is not
-    // signed in use only these channels). Then they try a direct WebRTC link, which costs no realtime
-    // messages and is quicker; if that does not work, the inputs go over the channel, a few times a second.
     const PAD = (() => {
-      const S = { code: '', ch: null, state: 'off', phone: null, pc: null, dc: null, inp: null, at: 0, el: null, seenU: -1, seenE: -1, evU: false, evE: false, stAt: 0, fxAt: 0, bcIn: 0 };
+      const S = { code: '', key: '', box: null, links: [], state: 'off', phone: null, pc: null, dc: null, inp: null, at: 0, el: null, seenU: -1, seenE: -1, evU: false, evE: false, stAt: 0, fxAt: 0, bcIn: 0, lastN: -1, gen: 0 };
       const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      const newCode = () => { const a = new Uint32Array(10); (root.crypto || {}).getRandomValues ? crypto.getRandomValues(a) : a.forEach((_, i) => { a[i] = Math.random() * 1e9; }); return Array.from(a, v => ABC[v % ABC.length]).join(''); };
-      const padUrl = () => { const page = /test[^/]*\.html$/.test(location.pathname) ? 'test-pad.html' : 'pad.html'; return new URL(page, location.href).href.split('#')[0].split('?')[0] + '#' + S.code; };
-      function send(m) { m.from = 'pc'; try { if (S.ch) S.ch.send({ type: 'broadcast', event: 'pad', payload: m }); } catch (e) {} }
-      function start() {
-        if (S.ch) return;
-        if (!O.live() || !O.channel) { S.state = 'nort'; ui(); return; }
-        S.code = newCode(); S.state = 'connecting'; S.phone = null; S.inp = null;
-        const ch = O.channel('pad:' + S.code); S.ch = ch;
-        ch.on('broadcast', { event: 'pad' }, ({ payload }) => onMsg(payload));
-        ch.subscribe(st => {
-          if (S.ch !== ch) return;
-          if (st === 'SUBSCRIBED') { if (S.state === 'connecting' || S.state === 'err') S.state = 'wait'; }
-          else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' || st === 'CLOSED') S.state = 'err';
-          ui();
+      const padUrl = () => {
+        const page = /test[^/]*\.html$/.test(location.pathname) ? new URL('test-pad.html', location.href).href.split('#')[0] : PAD_PAGE;
+        return page + '#' + S.code + '.' + S.key;
+      };
+      async function send(m) {
+        if (!S.box) return;
+        m.from = 'pc';
+        const gen = S.gen, b = await S.box.seal(m); if (gen !== S.gen) return;
+        for (const L of S.links) L.pub('onlpad/' + S.code + '/pc', b);
+      }
+      async function start() {
+        if (S.links.length || S.state === 'connecting') return;
+        if (!root.crypto || !crypto.subtle || !root.WebSocket) { S.state = 'nort'; ui(); return; }
+        const gen = ++S.gen;
+        const raw = crypto.getRandomValues(new Uint8Array(16)), ids = crypto.getRandomValues(new Uint8Array(10));
+        S.code = Array.from(ids, v => ABC[v % ABC.length]).join(''); S.key = b64u(raw);
+        S.state = 'connecting'; S.phone = null; S.inp = null; S.lastN = -1; ui();
+        const box = await sealer(raw); if (gen !== S.gen) return;
+        S.box = box;
+        let downs = 0;
+        S.links = PAD_BROKERS.map(url => {
+          const L = mqtt(url, 'onlpc' + S.code.slice(0, 6) + Math.random().toString(36).slice(2, 8), async (topic, payload) => {
+            const m = await box.open(payload); if (gen !== S.gen || !m) return; onMsg(m);
+          }, st => {
+            if (gen !== S.gen) return;
+            if (st === 'up') { if (S.state === 'connecting' || S.state === 'err') S.state = 'wait'; }
+            else if (!S.links.some(x => x.up) && ++downs >= PAD_BROKERS.length && S.state === 'connecting') S.state = 'err';
+            ui();
+          });
+          L.sub('onlpad/' + S.code + '/ph');
+          return L;
         });
-        ui();
+        setTimeout(() => { if (gen === S.gen && S.state === 'connecting') { S.state = 'err'; ui(); } }, 12000);
       }
       function closePeer() { try { if (S.dc) S.dc.close(); } catch (e) {} try { if (S.pc) S.pc.close(); } catch (e) {} S.dc = null; S.pc = null; }
       function stop() {
-        if (S.ch) { send({ t: 'bye', to: S.phone }); const ch = S.ch; setTimeout(() => { try { O.removeChannel(ch); } catch (e) {} }, 200); }
-        closePeer(); S.ch = null; S.phone = null; S.inp = null; S.state = 'off'; S.code = ''; ui();
+        if (S.links.length && S.phone) send({ t: 'bye', to: S.phone });
+        const links = S.links; setTimeout(() => links.forEach(L => L.close()), 300);
+        closePeer(); S.gen++; S.links = []; S.box = null; S.phone = null; S.inp = null; S.state = 'off'; S.code = ''; S.key = ''; ui();
       }
       function onMsg(m) {
         if (!m || m.from !== 'ph' || typeof m.id !== 'string') return;
         if (m.t === 'hi') {
           if (S.phone && S.phone !== m.id) closePeer();
           const again = S.phone === m.id;
+          if (!again) S.lastN = -1;
           S.phone = m.id; S.at = now(); if (S.state !== 'p2p') S.state = 'bc';
           send({ t: 'ok', to: m.id, name: O.name() });
           if (!again || !S.pc) startPeer();
@@ -1791,7 +1870,7 @@
         closePeer();
         if (!root.RTCPeerConnection) return;
         try {
-          const pc = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }] });
+          const pc = new RTCPeerConnection({ iceServers: ICE });
           S.pc = pc;
           const dc = pc.createDataChannel('in', { ordered: false, maxRetransmits: 0 });
           dc.onopen = () => { if (S.pc !== pc) return; S.dc = dc; S.state = 'p2p'; ui(); };
@@ -1802,6 +1881,7 @@
         } catch (e) { S.pc = null; }
       }
       function take(m) {
+        const n = +m.n || 0; if (n && n <= S.lastN) return; if (n) S.lastN = n;   // relay messages can arrive out of order
         const u = m.u | 0, e = m.e | 0;
         if (S.seenU >= 0 && u !== S.seenU) S.evU = true;
         if (S.seenE >= 0 && e !== S.seenE) S.evE = true;
@@ -1844,7 +1924,7 @@
         if (!S.el) return;
         const st = S.el.querySelector('.rc-qrst'), cv = S.el.querySelector('canvas'), url = S.el.querySelector('.rc-qrurl');
         const lost = S.phone && now() - S.at > 3000;
-        const txt = { off: '', nort: '혼자 보는 체험 모드에서는 폰 컨트롤러를 쓸 수 없어요.', connecting: '연결 준비 중…', wait: '폰 카메라로 QR 코드를 찍어 주세요.', err: '연결에 실패했어요. 아래 「새 QR」을 눌러 다시 해 보세요.',
+        const txt = { off: '', nort: '이 브라우저에서는 폰 컨트롤러를 쓸 수 없어요.', connecting: '연결 준비 중…', wait: '폰 카메라로 QR 코드를 찍어 주세요.', err: '중계 서버에 연결하지 못했어요. 아래 「새 QR」을 눌러 다시 해 보세요.',
           bc: '✅ 폰이 연결됐어요! (기본 연결) 게임을 시작하면 폰으로 조종해요.', p2p: '✅ 폰이 연결됐어요! (빠른 연결) 게임을 시작하면 폰으로 조종해요.' }[S.state] || '';
         st.textContent = lost ? '⚠️ 폰 신호가 끊겼어요. 폰에서 컨트롤러 화면이 켜져 있는지 확인해 주세요.' : txt;
         st.className = 'rc-qrst ' + (S.phone && !lost ? 'ok' : '');
@@ -1862,17 +1942,17 @@
           const box = el('div', 'rc-qr');
           const cv = mk(10, 10); cv.className = 'rc-qrcv';
           const side = el('div', 'rc-qrside');
-          side.append(el('p', 'rc-qrst', ''), el('p', 'ct-tip', '폰의 카메라 앱으로 QR을 비추면 컨트롤러 화면이 열려요. 같은 와이파이가 아니어도 돼요. 폰은 가로로 들면 편해요.'), el('p', 'rc-qrurl', ''));
+          side.append(el('p', 'rc-qrst', ''), el('p', 'ct-tip', '폰의 기본 카메라 앱으로 QR을 비추면 컨트롤러 화면이 열려요. 폰은 VPN을 켜지 않아도 되고, 같은 와이파이가 아니어도 돼요. (위챗 스캔은 열리지 않을 수 있어요) 폰은 가로로 들면 편해요.'), el('p', 'rc-qrurl', ''));
           const again = el('button', 'btn', '🔄 새 QR'); again.type = 'button'; again.addEventListener('click', () => { stop(); start(); });
           side.appendChild(again);
           box.append(cv, side); S.el = box;
         }
-        if (!S.ch) start(); else ui();
+        if (!S.links.length && S.state !== 'connecting') start(); else ui();
         return S.el;
       }
       // leaving the raceway closes the link
-      setInterval(() => { if (S.ch && O.scene() !== 'raceway') stop(); else if (S.el && S.el.isConnected) ui(); }, 1000);
-      root.addEventListener('pagehide', () => { if (S.ch) send({ t: 'bye', to: S.phone }); });
+      setInterval(() => { if (S.links.length && O.scene() !== 'raceway') stop(); else if (S.el && S.el.isConnected) ui(); }, 1000);
+      root.addEventListener('pagehide', () => { if (S.links.length && S.phone) send({ t: 'bye', to: S.phone }); });
       return { start, stop, input, status, fx, chip, panel, get S() { return S; } };
     })();
 

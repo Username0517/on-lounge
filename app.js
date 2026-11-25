@@ -1170,7 +1170,7 @@
       spots: [
         { id: 'toBuilding', item: null, x: 128, y: 194, r: 15, ax: 128, ay: 182, hit: [106, 199, 44, 41], label: '건물로 들어가기', go: ['hall1', 'outside'] },
         { id: 'toForest', item: null, x: 128, y: 42, r: 15, ax: 128, ay: 12, hit: [112, 0, 32, 46], label: '검은 숲길로 들어가기', go: ['forest1', 'plaza'] },
-        { id: 'toRaceway', item: null, x: 244, y: 120, r: 15, ax: 243, ay: 80, hit: [232, 98, 24, 32], label: '레이싱 서킷으로 가기', go: ['raceway', 'plaza'] }
+        { id: 'toRaceway', item: null, x: 244, y: 120, r: 15, ax: 243, ay: 80, hit: [232, 98, 24, 32], label: '레이싱 서킷으로 가기' }
       ].concat(PLAZA_LOCKS.map(([id, x, y, nm]) => ({ id, item: null, x: clamp(x, 18, 238), y: Math.max(y + 12, 44), r: 15, ax: x, ay: y - 26, hit: [x - 12, y - 22, 24, 30], label: `${nm} (닫혀 있음)`, locked: true }))),
       labels: [{ x: 128, y: 2, t: '검은 숲길', align: 'center', count: 'forest1' }, { x: 226, y: 136, t: '🏎️ 레이싱 서킷', align: 'center', count: 'raceway' }]
         .concat(PLAZA_LOCKS.map(([id, x, y, nm]) => ({ x: clamp(x, 30, 226), y: y + 8, t: '🔒 ' + nm, align: 'center' }))) },
@@ -1362,7 +1362,7 @@
     if (sp.locked) return () => toast(pick(LOCKED_MSG));
     const RUN = {
       elevator: () => openElevator(), outside: () => goScene('plaza', 'hall1'), weather: () => openWeather(),
-      mansionDoor: () => openMansionDoor(), mansionSign: () => openMansionSign(), talesGate: () => openTalesGate(),
+      toRaceway: () => openRaceGuide(), mansionDoor: () => openMansionDoor(), mansionSign: () => openMansionSign(), talesGate: () => openTalesGate(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
       catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'), race: () => tgOpen('race'), raceBoard: () => openRaceBoard(),
       moses: () => openMoses(),
@@ -4379,6 +4379,36 @@
     $('modal').hidden = false;
   }
   // the hole under the dead tree: a notice, what it is, then the way in
+  // 레이싱 서킷 입구: what the game is and how to play, read before going in
+  function openRaceGuide() {
+    let skip = false; try { skip = localStorage.getItem('onl_race_guide_skip') === '1'; } catch (e) {}
+    if (skip) { goScene('raceway', 'plaza'); return; }
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🏎️ 레이싱 서킷 안내';
+    const w = el('div', 'small rc-guide');
+    w.innerHTML = [
+      '<p><b>🏁 어떤 게임?</b><br>카트를 타고 트랙을 몇 바퀴 돌아 결승선을 지나는 레이싱이에요. 서킷 가운데 <b>카트를 누르면</b> 자리를 열거나 친구 자리에 들어갈 수 있어요.</p>',
+      '<p><b>👤 혼자 할 때 (기록 도전)</b><br>맵 18개(난이도 하 6 · 중 6 · 상 6) 중 하나를 골라 완주 시간을 줄여요. 맵마다 <b>1~5등 기록판</b>이 있고, 내 최고 기록을 따라 달리는 <b>유령 카트</b>가 같이 나와요.</p>',
+      '<p><b>👥 같이 할 때 (2~6명)</b><br>방장이 맵을 고르고 시작해요. 먼저 결승선을 지나면 1등! <b>첫 사람이 들어오고 30초</b>가 지나면 끝나요. 같이 달린 완주 시간도 내 기록에 남아요. 진행 중인 레이스는 구경할 수 있어요.</p>',
+      '<p><b>🎨 카트</b><br>모든 카트의 성능은 똑같아요. 대기실에서 <b>색깔만</b> 고를 수 있어요 (친구와 같은 색은 안 돼요). 운전하는 건 내 캐릭터예요.</p>',
+      '<p><b>⌨️ 컴퓨터 · 키보드</b><br>↑ 가기 · ← → 방향 · ↓ 브레이크(멈추면 후진) · <b>Shift 또는 Space 드리프트</b> · R 길에 다시 서기</p>',
+      '<p><b>📱 폰으로만 할 때</b><br>위에는 게임 화면, 아래 왼쪽 <b>조이스틱</b>(위로 밀면 출발, 좌우로 방향), 오른쪽 <b>드리프트 · 브레이크</b> 버튼이에요. 가로로 들면 버튼이 화면 위에 떠요.</p>',
+      '<p><b>📱➡️🎮 폰을 컨트롤러로 (컴퓨터로 할 때)</b><br>대기실 「조작 방법」에서 <b>「폰을 컨트롤러로 (QR)」</b>을 누르면 QR 코드가 떠요. 폰 <b>기본 카메라</b>로 찍으면 폰이 바로 컨트롤러가 되고, 화면은 컴퓨터로 봐요. <b>폰은 VPN이 필요 없어요.</b> (위챗 스캔으로는 안 열릴 수 있어요)</p>',
+      '<p><b>💨 드리프트 + 순간 부스트</b><br>방향을 꺾은 채 드리프트를 누르고 있으면 미끄러지며 돌아요. 불꽃이 <b>파랑 → 주황</b>으로 바뀔 만큼 오래 할수록 좋아요. 드리프트를 놓자마자 <b>0.5초 안에 ↑를 다시 누르면</b>(폰은 조이스틱을 한 번 더 위로, 또는 드리프트 버튼 톡) 앞으로 <b>순간 대시</b>! 화면에 「↑ 다시!」가 깜빡일 때가 기회예요.</p>',
+      '<p><b>🚦 출발 부스트</b><br>카운트다운이 끝나고 <b>GO! 하는 순간에 맞춰 ↑</b>를 누르면 빠르게 출발해요. 너무 일찍 누르면 안 돼요.</p>',
+      '<p><b>📈 가속 게이지</b><br>안 부딪히고 깔끔하게 달리면 최고 속도가 조금씩 올라가요. 벽 · 콘 · 드럼통 · 바위 · 다른 카트에 부딪히거나 길 밖(잔디 · 모래)으로 나가면 느려지고 게이지가 줄어요.</p>',
+      '<p><b>🗺️ 길 위의 것들</b><br>노란 화살표 판 = 부스터 · 검은 기름 = 빙글 · 얼음 = 미끄러움 · 진흙 = 느림 · 움직이는 블록 = 피하기. 우주 · 절벽 · 무지개 맵과 바다 · 용암 옆은 <b>낭떠러지</b>라 떨어지면 조금 뒤에서 다시 출발해요.</p>'
+    ].join('');
+    body.appendChild(w);
+    const lab = el('label', 'small'); lab.style.cssText = 'display:flex;gap:6px;align-items:center;margin:6px 0';
+    const cb = el('input'); cb.type = 'checkbox'; lab.append(cb, document.createTextNode('다음부터는 안내 없이 바로 들어가기'));
+    body.appendChild(lab);
+    const col = el('div', 'mn-choices'); body.appendChild(col);
+    const btn = (text, cls, fn) => { const b = el('button', 'btn ' + (cls || ''), text); b.type = 'button'; b.addEventListener('click', fn); col.appendChild(b); };
+    btn('🏁 서킷으로 들어가기', 'btn-gold', () => { try { if (cb.checked) localStorage.setItem('onl_race_guide_skip', '1'); } catch (e) {} closeModal(); goScene('raceway', 'plaza'); });
+    btn('다음에 할래요', '', () => closeModal());
+    $('modal').hidden = false;
+  }
   // 레이싱 기록판: every map, 1st to 5th (race.sql)
   function openRaceBoard() {
     const RC = window.ONL_RACE;
@@ -4453,12 +4483,9 @@
     raceSubmit: async (map, ms) => { if (!LIVE) return 0; const { data, error } = await sb.rpc('submit_race_time', { p_map: String(map), p_ms: Math.round(ms) }); if (error) throw error; return data || 0; },
     raceTop: async map => { if (!LIVE) return []; const { data } = await sb.rpc('top_race_times', { p_map: String(map) }); return data || []; },
     raceMine: async map => { if (!LIVE) return 0; const { data } = await sb.rpc('my_race_time', { p_map: String(map) }); return data || 0; },
-    peers: () => net.remotes.size,
-    // the phone-controller link (race.js): a private channel 'pad:<code>' (race.sql)
-    channel: topic => LIVE && /^pad:[A-Z0-9]{6,16}$/.test(topic) ? sb.channel(topic, { config: { private: true, broadcast: { self: false } } }) : null,
-    removeChannel: ch => { try { if (ch) sb.removeChannel(ch); } catch (e) {} }
+    peers: () => net.remotes.size
   };
   if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('700 20px "Pixelify Sans"'), document.fonts.load('400 20px "Silkscreen"')]).then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
-  if (/[?&]debug\b/.test(location.search)) window.__onl = { worldToClient: (wx, wy) => { const rc = canvas.getBoundingClientRect(); return [rc.left + (wx - camX) * s, rc.top + (wy - camY) * s]; }, goScene, openForestWarn, openMansionDoor, openTalesGate, cam: () => ({ x: camX, y: camY, s }), scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
+  if (/[?&]debug\b/.test(location.search)) window.__onl = { worldToClient: (wx, wy) => { const rc = canvas.getBoundingClientRect(); return [rc.left + (wx - camX) * s, rc.top + (wy - camY) * s]; }, goScene, openForestWarn, openMansionDoor, openTalesGate, openRaceGuide, cam: () => ({ x: camX, y: camY, s }), scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };
   requestAnimationFrame(loop);
 })();
