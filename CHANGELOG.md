@@ -1,5 +1,16 @@
 # Changelog
 
+## Racing fixes: endless oil spin after falling, results button, quiet hidden tab
+
+Files: `race.js`, `CHANGELOG.md` (no SQL).
+
+- Bug: after falling off, you were put back on the middle of the road a little behind. On maps with oil in the middle of the road (수정 동굴, 네온 시티, 우주 정거장, …) that spot could be the oil. Standing still on oil started a spin, a spin blocks the throttle, so you never left the oil: "미끌!" and spinning forever (keyboard, phone and QR controller alike).
+  - Oil now only spins a kart that is moving (over 18), never in the second after you are put back, and gives 1.2 s of immunity after a spin, so a slow kart can always drive off it.
+  - Putting a kart back (after a fall or with R) now picks a clear spot further back: not on oil, not next to a cone/tyre/barrel/rock, not in a moving block's path (middle, then left/right of the road).
+- Closing the results with 닫기 left the host with no way to start the next race. A 🏁 결과 button now appears (bottom right) to bring the results back.
+- The engine hum kept playing when the tab was hidden (no frames to update it); it is silenced now.
+- Checked by a new script (`fuzz.js`, not uploaded) on all 18 maps: standing still on every oil spill, falling right after every oil spill, 3 minutes of random driving with random falls per map (no stuck spins, no karts through walls, no broken numbers), and the computer driver finishing every map while being dropped every 9 s. Browser: respawn after oil on 수정 동굴 (desktop and iPhone), results close/reopen/restart, 2-player race, keyboard start boost/drift/mini boost, watching, QR controller, phone stick.
+
 ## Racing: phone controller without VPN, entry guide
 
 Files: `race.js`, `pad.html`, `race.sql` (run again), `app.js`, `index.html`, and **new repository** `on-lounge-pad` (`index.html` = the same controller page) on GitHub Pages.

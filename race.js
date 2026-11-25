@@ -491,7 +491,7 @@
     return {
       x: g.x, y: g.y, a: g.a, m: g.a, v: 0, i: g.i, prog: g.i - tr.n, lapMax: -1, lapAt: 0, laps: [],
       streak: 0, boostT: 0, boostCap: 0, miniWin: 0, miniLvl: 0, drift: null, spinT: 0, fallT: 0, hitT: 0, safeT: 0,
-      slip: 0, off: false, wrongT: 0, fin: 0, z: 0, noDrift: false, lastHit: -9, bump: 0, sparkT: 0
+      slip: 0, oilT: 0, off: false, wrongT: 0, fin: 0, z: 0, noDrift: false, lastHit: -9, bump: 0, sparkT: 0
     };
   }
   // pushes the kart back inside the walls and tells what happened
@@ -501,8 +501,9 @@
       k.fallT -= dt; k.z = Math.min(k.z + dt * 30, 40);
       if (k.fallT <= 0) {
         // back on the road a little behind where you fell, standing still
-        const i = (k.i - 3 + tr.n) % tr.n;
-        k.prog -= 3; k.i = i; k.x = tr.X[i]; k.y = tr.Y[i]; k.a = k.m = tr.A[i]; k.v = 0; k.z = 0; k.safeT = 1.2; k.drift = null; k.boostT = 0; k.spinT = 0;
+        // (never onto oil, an obstacle or a moving block's path: you could get stuck there)
+        const sp = safeSpot(tr, k.i);
+        k.prog -= sp.back; k.i = sp.i; k.x = sp.x; k.y = sp.y; k.a = k.m = tr.A[sp.i]; k.v = 0; k.z = 0; k.safeT = 1.2; k.drift = null; k.boostT = 0; k.spinT = 0; k.oilT = 1.2; k.miniWin = 0;
         ctx.fx('respawn', k);
       }
       return;
@@ -597,9 +598,11 @@
       const p = moverPos(tr, m, t), dx = k.x - p.x, dy = k.y - p.y, dd = Math.hypot(dx, dy), need = m.r + PH.kartR;
       if (dd < need) bounce(k, dx, dy, dd, need, t, ctx, 0.45);
     }
+    if (k.oilT > 0) k.oilT -= dt;
     for (const o of tr.oils) {
-      if (k.spinT > 0 || k.boostT > 0.2) continue;
-      if (Math.hypot(k.x - o.x, k.y - o.y) < o.r) { k.spinT = 0.85; k.v *= 0.7; k.drift = null; k.streak = Math.max(0, k.streak - 0.3); k.lastHit = t; ctx.fx('oil', k); }
+      // only when moving, and not again right after a spin (otherwise a kart standing on oil spins forever)
+      if (k.spinT > 0 || k.boostT > 0.2 || k.oilT > 0 || k.safeT > 0 || Math.abs(k.v) < 18) continue;
+      if (Math.hypot(k.x - o.x, k.y - o.y) < o.r) { k.spinT = 0.85; k.oilT = 0.85 + 1.2; k.v *= 0.7; k.drift = null; k.streak = Math.max(0, k.streak - 0.3); k.lastHit = t; ctx.fx('oil', k); }
     }
     for (const p of tr.pads) {
       const dx = k.x - p.x, dy = k.y - p.y, u = dx * Math.cos(p.a) + dy * Math.sin(p.a), vv = -dx * Math.sin(p.a) + dy * Math.cos(p.a);
@@ -621,6 +624,22 @@
     k.wrongT = fwd < -0.3 && k.v > 12 ? k.wrongT + dt : Math.max(0, k.wrongT - dt * 2);
     if (k.hitT > 0) k.hitT -= dt;
     if (k.sparkT > 0) k.sparkT -= dt;
+  }
+  // a clear place on the road, a little behind sample i
+  function safeSpot(tr, i0) {
+    const n = tr.n;
+    for (let back = 3; back < 80; back++) {
+      const i = ((i0 - back) % n + n) % n;
+      if (tr.movers.some(m => Math.min((m.i - i + n) % n, (i - m.i + n) % n) < 8)) continue;
+      for (const f of [0, 0.4, -0.4, 0.7, -0.7]) {
+        const lat = f * tr.W[i], x = tr.X[i] - tr.TY[i] * lat, y = tr.Y[i] + tr.TX[i] * lat;
+        if (tr.oils.some(o => Math.hypot(x - o.x, y - o.y) < o.r + 5)) continue;
+        if (tr.objs.some(o => Math.hypot(x - o.x, y - o.y) < o.r + 5)) continue;
+        return { i, x, y, back };
+      }
+    }
+    const i = ((i0 - 3) % n + n) % n;
+    return { i, x: tr.X[i], y: tr.Y[i], back: 3 };
   }
   function bounce(k, dx, dy, dd, need, t, ctx, keep) {
     dd = dd || 0.01; const nx = dx / dd, ny = dy / dd;
@@ -652,7 +671,7 @@
     return { steer, thr: curve > 1.4 && k.v > 80 ? 0.6 : 1, brake: 0, drift: Math.abs(diff) > 0.38 && k.v > 60 && skill > 0.8, evUp: !!(k.miniWin > 0 && Math.random() < 0.3), evDrift: false };
   }
 
-  const CORE = { THEMES, MAPS, MAP_BY, compile, nearest, moverPos, validate, buildTexture, placeProps, groundTile, C32, mix32, shade32, hash2, seeded, clamp, lerp, wrapA, TAU, SP, PH, newKart, stepKart, autoDrive };
+  const CORE = { THEMES, MAPS, MAP_BY, compile, nearest, moverPos, validate, buildTexture, placeProps, groundTile, C32, mix32, shade32, hash2, seeded, clamp, lerp, wrapA, TAU, SP, PH, newKart, stepKart, autoDrive, safeSpot };
   root.ONL_RACE_CORE = CORE;
 
   // ================================================================================================
@@ -1010,7 +1029,11 @@
       if (down && !ev.repeat && !L.keys[k]) { if (k === 'up') L.evUp = true; if (k === 'drift') L.evDrift = true; if (k === 'reset') resetKart(); audio(); }
       L.keys[k] = down;
     }
-    function releaseKeys() { L.keys = Object.create(null); L.tDrift = L.tBrake = false; L.joy.on = false; L.joy.x = L.joy.y = 0; }
+    function releaseKeys() {
+      L.keys = Object.create(null); L.tDrift = L.tBrake = false; L.joy.on = false; L.joy.x = L.joy.y = 0;
+      // a hidden tab draws no frames: silence the engine instead of leaving it humming
+      if (SND.ctx && SND.eng) { SND.eng.g.gain.value = 0; SND.sq.g.gain.value = 0; }
+    }
     function gatherInput(dt) {
       const K = L.keys;
       // keyboard steering eases in and out, so a tap is a small correction and holding is a full turn
@@ -1376,6 +1399,8 @@
       setText(H.msg, 'msg', msg); if (L.hudKey.msgc !== cls) { L.hudKey.msgc = cls; H.msg.className = 'rc-msg ' + cls; }
       minimap(D);
       setText(H.padChip, 'pc', PAD.chip());
+      // the results were closed: a button to bring them back (the host restarts from there)
+      const showRes = !!(L.endShown && L.dom.end.hidden); if (H.resBtn.hidden === showRes) H.resBtn.hidden = !showRes;
       PAD.status({ st: G.phase, lap: k ? clamp(k.lapMax + 1, 1, laps) : 0, laps, pos: H.pos.textContent, n: G.racers.length });
       // the end of the race
       const key = G.phase === 'end' ? 'end' : (k && k.fin ? 'fin' : '');
@@ -1544,7 +1569,10 @@
       const br = el('div', 'rc-br');
       const snd = el('button', 'rc-snd', SND.mute ? '🔇' : '🔊'); snd.type = 'button'; snd.title = '소리 켜기/끄기';
       snd.addEventListener('click', () => { setMute(!SND.mute); snd.textContent = SND.mute ? '🔇' : '🔊'; });
-      H.padChip = el('span', 'rc-padchip', ''); br.append(H.padChip, snd);
+      H.padChip = el('span', 'rc-padchip', '');
+      H.resBtn = el('button', 'rc-snd', '🏁 결과'); H.resBtn.type = 'button'; H.resBtn.hidden = true;
+      H.resBtn.addEventListener('click', () => showEnd());
+      br.append(H.padChip, H.resBtn, snd);
       H.box = hudEl;
       hudEl.append(tl, tr, bl, H.msg, H.mini, br);
       const end = el('div', 'rc-end'); end.hidden = true;
