@@ -808,7 +808,7 @@
 
   // ---- 광장 ----
   const PLAZA_W = 256, PLAZA_H = 240;
-  const PLAZA_LOCKS = [['lockNW', 34, 30, '서쪽 언덕길'], ['lockNE', 222, 30, '동쪽 언덕길'], ['lockW', 12, 120, '항구로 가는 길'], ['lockE', 244, 120, '시장으로 가는 길']];
+  const PLAZA_LOCKS = [['lockNW', 34, 30, '서쪽 언덕길'], ['lockNE', 222, 30, '동쪽 언덕길'], ['lockW', 12, 120, '항구로 가는 길']];
   function bgPlaza(g, w, h) {
     const R = rnd32(777);
     // grass all round, cobbles in the middle
@@ -858,13 +858,80 @@
     { id: 'pz-lamp3', label: '가로등', fixed: true, box: [62, 152, 12, 36], sortY: 186, obs: [[64, 182, 8, 5]], draw: g => lampPost(g, 68, 186) },
     { id: 'pz-lamp4', label: '가로등', fixed: true, box: [182, 152, 12, 36], sortY: 186, obs: [[184, 182, 8, 5]], draw: g => lampPost(g, 188, 186) },
     { id: 'pz-bench1', label: '벤치', fixed: true, box: [86, 150, 24, 14], sortY: 160, obs: [[87, 154, 22, 6]], draw: g => benchSide(g, 87, 156) },
-    { id: 'pz-bench2', label: '벤치', fixed: true, box: [146, 150, 24, 14], sortY: 160, obs: [[147, 154, 22, 6]], draw: g => benchSide(g, 147, 156) }
+    { id: 'pz-bench2', label: '벤치', fixed: true, box: [146, 150, 24, 14], sortY: 160, obs: [[147, 154, 22, 6]], draw: g => benchSide(g, 147, 156) },
+    { id: 'pz-raceGate', label: '레이싱 서킷 입구', fixed: true, box: [230, 92, 26, 36], sortY: 126, obs: [[230, 100, 4, 6], [252, 100, 4, 6]], draw: g => {
+      // an open arch to the race track, with a chequered banner
+      P(g, 230, 96, 4, 28, '#7d7466'); P(g, 252, 96, 4, 28, '#7d7466'); P(g, 230, 93, 26, 5, '#e03131');
+      for (let i = 0; i < 12; i++) P(g, 232 + i * 2, 98 + (i % 2), 2, 2, i % 2 ? '#111' : '#fff');
+      P(g, 241, 86, 1, 8, '#2b2233'); for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) P(g, 242 + i * 2, 86 + j * 2, 2, 2, (i + j) % 2 ? '#111' : '#fff');
+    } }
   ].concat(PLAZA_LOCKS.map(([id, x, y]) => ({ id: 'pz-' + id, label: '닫힌 문', fixed: true, box: [x - 12, y - 22, 24, 30], sortY: y + 6, obs: [], draw: g => {
     // a little stone arch with a locked iron gate
     P(g, x - 12, y - 20, 4, 26, '#7d7466'); P(g, x + 8, y - 20, 4, 26, '#7d7466'); P(g, x - 12, y - 22, 24, 5, '#8d8476');
     for (let i = -7; i <= 6; i += 3) P(g, x + i, y - 17, 1, 22, '#2b2233');
     P(g, x - 8, y - 6, 16, 1, '#2b2233'); P(g, x - 3, y - 9, 6, 6, '#ffcc4d'); P(g, x - 1, y - 7, 2, 2, '#251c2c');
   } })));
+
+  // ---- 레이싱 서킷 (광장 동쪽) ----
+  const RW_W = 256, RW_H = 192;
+  function bgRaceway(g, w, h) {
+    const R = rnd32(4242);
+    P(g, 0, 0, w, h, '#6fb34f');
+    for (let i = 0; i < 400; i++) P(g, R() * w | 0, 44 + R() * (h - 44) | 0, 1, 2, R() < 0.5 ? '#62a545' : '#86c46a');
+    // grandstand at the top: rows of seats full of tiny people
+    P(g, 0, 0, w, 30, '#5b6170');
+    for (let r = 0; r < 4; r++) { P(g, 0, 4 + r * 6, w, 5, r % 2 ? '#c9ccd6' : '#b3b7c4'); for (let x = 2 + (r % 2) * 3; x < w; x += 6) if (R() < 0.7) { P(g, x, 2 + r * 6, 3, 3, ['#e03131', '#1c7ed6', '#f2b705', '#2f9e44', '#e64980', '#fff'][R() * 6 | 0]); P(g, x + 1, 1 + r * 6, 1, 1, '#f2c9a0'); } }
+    P(g, 0, 28, w, 3, '#343a40'); P(g, 96, 0, 64, 8, '#e03131'); P(g, 98, 2, 60, 4, '#fff');
+    for (let x = 100; x < 156; x += 4) P(g, x, 3, 2, 2, '#e03131');
+    // fence
+    P(g, 0, 31, w, 2, '#adb5bd'); for (let x = 0; x < w; x += 8) P(g, x, 31, 1, 9, '#868e96'); P(g, 0, 38, w, 1, '#adb5bd');
+    // the track running across, kerbs, start line
+    P(g, 0, 44, w, 44, '#5c5f6b');
+    for (let i = 0; i < 300; i++) P(g, R() * w | 0, 46 + R() * 40 | 0, 2, 1, R() < 0.5 ? '#555865' : '#666a76');
+    for (let x = 0; x < w; x += 8) { P(g, x, 42, 4, 3, '#e03131'); P(g, x + 4, 42, 4, 3, '#f1f3f5'); P(g, x, 87, 4, 3, '#f1f3f5'); P(g, x + 4, 87, 4, 3, '#e03131'); }
+    for (let x = 4; x < w; x += 20) P(g, x, 65, 10, 2, '#f1f3f5');
+    for (let y = 44; y < 87; y += 3) for (let k = 0; k < 2; k++) P(g, 150 + k * 3, y, 3, 3, ((y / 3 | 0) + k) % 2 ? '#111' : '#fff');
+    // the road from the plaza on the left
+    P(g, 0, 104, 40, 32, '#cbc2b2');
+    for (let y = 104; y < 136; y += 5) for (let x = (y / 5 % 2) * 3; x < 40; x += 6) { P(g, x, y, 5, 4, R() < 0.5 ? '#d6cebf' : '#c3b9a8'); P(g, x, y + 4, 5, 1, '#a99f8e'); }
+    // paddock: concrete with parking lines
+    P(g, 40, 96, 216, 96, '#9ea3ad'); for (let i = 0; i < 300; i++) P(g, 40 + R() * 216 | 0, 96 + R() * 96 | 0, 1, 1, R() < 0.5 ? '#949aa4' : '#a9aeb7');
+    for (let x = 52; x < 170; x += 22) P(g, x, 160, 1, 24, '#f1f3f5');
+    P(g, 40, 96, 216, 2, '#868e96');
+  }
+  // a parked kart, seen from above and a little in front
+  function rwKart(g, x, y, c, dark) {
+    P(g, x - 10, y - 4, 4, 6, '#1b1b20'); P(g, x + 6, y - 4, 4, 6, '#1b1b20'); P(g, x - 10, y + 5, 4, 6, '#1b1b20'); P(g, x + 6, y + 5, 4, 6, '#1b1b20');
+    P(g, x - 7, y - 6, 14, 18, '#2b2233'); P(g, x - 6, y - 5, 12, 16, c); P(g, x - 6, y - 5, 12, 2, '#ffffff55');
+    P(g, x - 4, y + 1, 8, 6, dark); P(g, x - 3, y - 3, 6, 2, '#bfe8ff'); P(g, x - 7, y + 11, 14, 2, '#2b2233');
+    P(g, x - 5, y - 6, 2, 1, '#fff3bf'); P(g, x + 3, y - 6, 2, 1, '#fff3bf');
+  }
+  const racewayItems = [
+    { id: 'rw-gantry', label: '출발선', fixed: true, box: [138, 26, 34, 24], sortY: 40, obs: [], draw: g => {
+      P(g, 138, 30, 3, 18, '#495057'); P(g, 169, 30, 3, 18, '#495057'); P(g, 136, 26, 38, 6, '#212529');
+      for (let i = 0; i < 4; i++) { P(g, 140 + i * 8, 27, 5, 4, '#2b0a0a'); P(g, 141 + i * 8, 28, 3, 2, i === 3 ? '#51cf66' : '#e03131'); }
+    } },
+    { id: 'rw-kart', label: '레이싱 카트', fixed: true, box: [134, 66, 44, 30], sortY: 92, obs: [[136, 72, 40, 18]], draw: g => {
+      rwKart(g, 146, 76, '#e03131', '#8a1f24'); rwKart(g, 166, 76, '#1c7ed6', '#174a8a');
+      P(g, 152, 92, 8, 2, '#ffd43b');
+    } },
+    { id: 'rw-board', label: '레이싱 기록판', fixed: true, box: [56, 104, 34, 34], sortY: 136, obs: [[62, 130, 22, 6]], draw: g => {
+      P(g, 64, 118, 2, 18, '#495057'); P(g, 80, 118, 2, 18, '#495057');
+      P(g, 56, 104, 34, 20, '#2b2233'); P(g, 57, 105, 32, 18, '#212529');
+      P(g, 59, 107, 6, 3, '#ffd43b'); P(g, 67, 107, 18, 2, '#f1f3f5'); P(g, 59, 112, 6, 3, '#ced4da'); P(g, 67, 112, 14, 2, '#f1f3f5'); P(g, 59, 117, 6, 3, '#e8a35a'); P(g, 67, 117, 16, 2, '#f1f3f5');
+    } },
+    { id: 'rw-garage', label: '정비소', fixed: true, box: [180, 104, 70, 50], sortY: 150, obs: [[182, 118, 66, 32]], draw: g => {
+      P(g, 180, 112, 70, 40, '#2b2233'); P(g, 181, 113, 68, 38, '#dee2e6'); P(g, 178, 106, 74, 8, '#e03131'); P(g, 180, 108, 70, 2, '#ff6b6b');
+      for (const x0 of [186, 216]) { P(g, x0, 124, 26, 27, '#495057'); for (let y = 126; y < 151; y += 3) P(g, x0 + 1, y, 24, 1, '#6c727a'); }
+      for (let i = 0; i < 10; i++) P(g, 184 + i * 6, 114, 3, 3, i % 2 ? '#111' : '#fff');
+    } },
+    { id: 'rw-tyres1', label: '타이어', fixed: true, box: [100, 98, 16, 16], sortY: 112, obs: [[101, 104, 14, 8]], draw: g => {
+      for (const [x, y] of [[101, 104], [108, 104], [104.5, 99]]) { P(g, x, y, 7, 7, '#1b1b20'); P(g, x + 2, y + 2, 3, 3, '#495057'); }
+    } },
+    { id: 'rw-cones', label: '콘', fixed: true, box: [120, 166, 50, 10], sortY: 176, obs: [], draw: g => {
+      for (let i = 0; i < 4; i++) { const x = 122 + i * 12; P(g, x, 170, 7, 2, '#e8590c'); P(g, x + 2, 166, 3, 4, '#f76707'); P(g, x + 2, 167, 3, 1, '#fff'); }
+    } }
+  ];
 
   // ---- 검은 숲길 1 (밝게 시작해 점점 썩어 가요) ----
   const FOREST1 = forestScene({ w: 192, h: 480, seed: 9101, decay0: 0.0, decay1: 0.72,
@@ -1099,12 +1166,13 @@
     f1r3: { name: '1층 ROOM 3 · 낙서 골목', w: 192, h: 176, bounds: [10, 48, 182, 162], drawBg: bgGraffiti, items: graffitiItems, seats: graffitiSeats, spawns: { door: [96, 156, 'up'] },
       spots: [exitSpot, { id: 'drawgame', item: 'dr-easel', x: 96, y: 92, r: 16, ax: 96, ay: 40, label: '그림 퀴즈 하기' }] },
     plaza: { name: '광장', w: PLAZA_W, h: PLAZA_H, bounds: [8, 38, 248, 194], drawBg: bgPlaza, items: plazaItems, seats: [], outdoor: true,
-      spawns: { hall1: [128, 190, 'up'], forest: [128, 44, 'down'] },
+      spawns: { hall1: [128, 190, 'up'], forest: [128, 44, 'down'], raceway: [232, 120, 'left'] },
       spots: [
         { id: 'toBuilding', item: null, x: 128, y: 194, r: 15, ax: 128, ay: 182, hit: [106, 199, 44, 41], label: '건물로 들어가기', go: ['hall1', 'outside'] },
-        { id: 'toForest', item: null, x: 128, y: 42, r: 15, ax: 128, ay: 12, hit: [112, 0, 32, 46], label: '검은 숲길로 들어가기', go: ['forest1', 'plaza'] }
+        { id: 'toForest', item: null, x: 128, y: 42, r: 15, ax: 128, ay: 12, hit: [112, 0, 32, 46], label: '검은 숲길로 들어가기', go: ['forest1', 'plaza'] },
+        { id: 'toRaceway', item: null, x: 244, y: 120, r: 15, ax: 243, ay: 80, hit: [232, 98, 24, 32], label: '레이싱 서킷으로 가기', go: ['raceway', 'plaza'] }
       ].concat(PLAZA_LOCKS.map(([id, x, y, nm]) => ({ id, item: null, x: clamp(x, 18, 238), y: Math.max(y + 12, 44), r: 15, ax: x, ay: y - 26, hit: [x - 12, y - 22, 24, 30], label: `${nm} (닫혀 있음)`, locked: true }))),
-      labels: [{ x: 128, y: 2, t: '검은 숲길', align: 'center', count: 'forest1' }]
+      labels: [{ x: 128, y: 2, t: '검은 숲길', align: 'center', count: 'forest1' }, { x: 226, y: 136, t: '🏎️ 레이싱 서킷', align: 'center', count: 'raceway' }]
         .concat(PLAZA_LOCKS.map(([id, x, y, nm]) => ({ x: clamp(x, 30, 226), y: y + 8, t: '🔒 ' + nm, align: 'center' }))) },
     forest1: { name: '검은 숲길 · 입구', w: 192, h: FOREST1_H, bounds: [6, 8, 186, 474], drawBg: FOREST1.draw, items: forestItems('f1', FOREST1), seats: [], outdoor: true, fx: forestFx1,
       spawns: { plaza: [(96 + Math.round(Math.sin(466 / 62) * 20)), 466, 'up'], forest2: [(96 + Math.round(Math.sin(16 / 62) * 20)), 16, 'down'] },
@@ -1132,13 +1200,21 @@
         { id: 'mansionSign', item: 'mn-sign', x: 72, y: 252, r: 14, ax: 72, ay: 222, label: '팻말 읽기' },
         { id: 'toForest2', item: null, x: 128, y: 282, r: 16, ax: 128, ay: 262, hit: [100, 266, 56, 22], label: '숲으로 돌아가기', go: ['forest2', 'mansion'] }
       ] },
+    raceway: { name: '레이싱 서킷', w: RW_W, h: RW_H, bounds: [8, 92, 248, 186], drawBg: bgRaceway, items: racewayItems, seats: [], outdoor: true,
+      spawns: { plaza: [22, 120, 'right'] },
+      spots: [
+        { id: 'toPlaza', item: null, x: 10, y: 120, r: 14, ax: 12, ay: 98, hit: [0, 104, 14, 32], label: '광장으로 돌아가기', go: ['plaza', 'raceway'] },
+        { id: 'race', item: 'rw-kart', x: 156, y: 102, r: 18, ax: 156, ay: 60, label: '카트 레이싱 하기' },
+        { id: 'raceBoard', item: 'rw-board', x: 73, y: 144, r: 14, ax: 73, ay: 100, label: '레이싱 기록판 보기' }
+      ],
+      labels: [{ x: 4, y: 140, t: '광장', align: 'left', count: 'plaza' }] },
     roof: { name: '3층 · 옥상', w: 192, h: 200, bounds: [8, 52, 184, 186], drawBg: bgRoof, items: roofItems, seats: roofSeats, weather: true, spawns: { elevator: [96, 178, 'up'] },
       spots: [ELEV_SPOT(192, 200), { id: 'weather', item: 'rf-sign', x: 163, y: 134, r: 14, ax: 163, ay: 88, label: '오늘 베이징 날씨 보기' }] },
     soccer: { name: '축구장', w: FIELD.w, h: FIELD.h, bounds: [8, 20, 312, 196], drawBg: bgSoccer, items: [], seats: [], soccer: true, spawns: { w: [110, 108, 'right'], b: [210, 108, 'left'] },
       spots: [{ id: 'leaveField', item: null, x: 160, y: 194, r: 12, ax: 160, ay: 182, hit: [146, 198, 28, 10], label: '락커룸으로 돌아가기' }] }
   };
   const HALL_OF = { room1: 'hall', room2: 'hall', room3: 'hall', room4: 'hall', f1r1: 'hall1', f1r2: 'hall1', f1r3: 'hall1', f1r4: 'hall1' };
-  const OUTSIDE = ['plaza', 'forest1', 'forest2', 'darkwood', 'mansion'];
+  const OUTSIDE = ['plaza', 'forest1', 'forest2', 'darkwood', 'mansion', 'raceway'];
   const FLOOR_OF = id => id === 'roof' ? 3 : (id === 'hall1' || id === 'f1r1' || id === 'f1r2' || id === 'f1r3' || id === 'f1r4' || id === 'soccer' || OUTSIDE.includes(id)) ? 1 : 2;
   const ALL_ITEMS = Object.values(SCENES).flatMap(sc => sc.items);
   const itemById = Object.fromEntries(ALL_ITEMS.map(it => [it.id, it]));
@@ -1288,7 +1364,7 @@
       elevator: () => openElevator(), outside: () => goScene('plaza', 'hall1'), weather: () => openWeather(),
       mansionDoor: () => openMansionDoor(), mansionSign: () => openMansionSign(), talesGate: () => openTalesGate(),
       pitch: () => openParty(), leaveField: () => leaveMatch(true),
-      catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'),
+      catan: () => tgOpen('catan'), drawgame: () => tgOpen('draw'), chess: () => tgOpen('chess'), race: () => tgOpen('race'), raceBoard: () => openRaceBoard(),
       moses: () => openMoses(),
       stand: () => openQt(), qr: () => openQr(), board: () => openModal('board'), prayer: () => openPrayers(),
       eq: () => { lightMode = (lightMode + 1) % LIGHTS.length; const inst = EQ_INST[eqStep++ % EQ_INST.length]; eqFx(inst, 1); lobbySend('lights', { mode: lightMode, inst }); },
@@ -3520,7 +3596,7 @@
       camInit = false; resize();
       $('sceneTag').textContent = scene.name; gmLabel(); fbLabel(); chatLock(); plazaBtnSync();
       logEl.innerHTML = '';
-      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 지금은 북쪽 검은 숲길만 열려 있어요. 다른 길들은 곧 열릴 거예요!' : id === 'forest1' ? '검은 숲길에 들어섰어요… 비가 내리기 시작했어요. 여기부터는 혼자 걷는 길이에요. 함께 온 사람들은 저택에서 다시 만나요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'darkwood' ? '길이 없는 숲이에요. 빗속, 덤불 사이에서 빨간 눈들이 깜빡여요… 오른쪽 끝에 무언가 있는 것 같아요.' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 먼저 도착한 사람들이 여기 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
+      log('', id === 'hall' || id === 'hall1' ? `${scene.name}로 나왔어요. 방에 들어가면 그 방 사람들끼리만 대화해요.` : id === 'roof' ? '옥상에 올라왔어요! 하늘은 지금 베이징 날씨를 따라가요. 날씨판을 눌러 보세요.' : id === 'f1r1' ? '락커룸이에요. 축구장 문이나 벤치를 누르면 축구 파티를 만들거나 참가할 수 있어요.' : id === 'soccer' ? '축구장에 들어왔어요!' : id === 'f1r2' ? '카탄 섬에 도착했어요! 가운데 테이블을 누르면 카탄을 할 수 있어요. (2~6명)' : id === 'f1r3' ? '낙서 골목이에요! 가운데 그림판을 누르면 그림 퀴즈를 할 수 있어요. (2~6명)' : id === 'plaza' ? '건물 밖 광장이에요. 북쪽은 검은 숲길, 동쪽은 레이싱 서킷이에요. 다른 길들은 곧 열릴 거예요!' : id === 'raceway' ? '레이싱 서킷에 왔어요! 가운데 카트를 누르면 혼자 기록에 도전하거나 최대 6명이 함께 달릴 수 있어요. 컴퓨터는 폰을 컨트롤러로 쓸 수도 있어요.' : id === 'forest1' ? '검은 숲길에 들어섰어요… 비가 내리기 시작했어요. 여기부터는 혼자 걷는 길이에요. 함께 온 사람들은 저택에서 다시 만나요.' : id === 'forest2' ? '안개가 짙어졌어요. 무언가 지켜보는 느낌이에요…' : id === 'darkwood' ? '길이 없는 숲이에요. 빗속, 덤불 사이에서 빨간 눈들이 깜빡여요… 오른쪽 끝에 무언가 있는 것 같아요.' : id === 'mansion' ? '숲 끝에 낡은 저택이 서 있어요. 먼저 도착한 사람들이 여기 있어요. 정문을 눌러 들어갈 수 있어요.' : `${scene.name}에 들어왔어요. 여기 대화는 이 방 사람들에게만 보여요.`, 'sys');
       if (LIVE) { lobbyTrack(); joinSceneChannel(); loadHistory(); }
       if (id === 'roof') loadWeather();
       if (id === 'soccer') onSoccerEnter();
@@ -4254,9 +4330,9 @@
   }
   // ---- 숲속 저택 정문 ----
   // everything past the plaza (forest paths, the mansion — and whatever opens there later) has a one-tap way back
-  const PAST_PLAZA = { forest1: 1, forest2: 1, darkwood: 1, mansion: 1 };
+  const PAST_PLAZA = { forest1: 1, forest2: 1, darkwood: 1, mansion: 1, raceway: 1 };
   function plazaBtnSync() { const b = $('plazaBtn'); if (b) b.hidden = !PAST_PLAZA[sceneId]; }
-  if ($('plazaBtn')) $('plazaBtn').addEventListener('click', () => { if (PAST_PLAZA[sceneId]) goScene('plaza', 'forest'); });
+  if ($('plazaBtn')) $('plazaBtn').addEventListener('click', () => { if (PAST_PLAZA[sceneId]) goScene('plaza', sceneId === 'raceway' ? 'raceway' : 'forest'); });
   function openForestWarn() {
     const body = $('modalBody'); body.innerHTML = '';
     $('modalTitle').textContent = '🌲 검은 숲길 입구';
@@ -4303,6 +4379,25 @@
     $('modal').hidden = false;
   }
   // the hole under the dead tree: a notice, what it is, then the way in
+  // 레이싱 기록판: every map, 1st to 5th (race.sql)
+  function openRaceBoard() {
+    const RC = window.ONL_RACE;
+    const body = $('modalBody'); body.innerHTML = '';
+    $('modalTitle').textContent = '🏆 레이싱 기록판';
+    if (!RC) { body.appendChild(el('p', 'small', '레이싱을 불러오지 못했어요. 새로고침해 주세요.')); $('modal').hidden = false; return; }
+    if (!LIVE) body.appendChild(el('p', 'small', '혼자 보는 체험 모드에서는 기록이 저장되지 않아요.'));
+    const tabs = el('div', 'rc-tabs'), grid = el('div', 'rc-bmaps'), slot = el('div', '');
+    let lv = 1, cur = RC.maps[0].id;
+    const draw = () => {
+      tabs.innerHTML = ''; grid.innerHTML = '';
+      [1, 2, 3].forEach(l => { const b = el('button', 'btn gm-chip', '난이도 ' + ['', '하', '중', '상'][l]); b.type = 'button'; b.setAttribute('aria-pressed', String(l === lv)); b.addEventListener('click', () => { lv = l; cur = RC.maps.find(m => m.lv === l).id; draw(); }); tabs.appendChild(b); });
+      RC.maps.filter(m => m.lv === lv).forEach(m => { const b = el('button', 'btn gm-chip' + (m.id === cur ? ' btn-gold' : ''), m.name); b.type = 'button'; b.addEventListener('click', () => { cur = m.id; draw(); }); grid.appendChild(b); });
+      slot.innerHTML = ''; slot.appendChild(RC.boardEl(cur));
+    };
+    body.append(tabs, grid, slot); draw();
+    body.appendChild(el('p', 'small', '서킷 가운데 카트를 눌러 기록에 도전해 보세요. 혼자 달려도, 같이 달려도 내 완주 시간이 기록돼요.'));
+    $('modal').hidden = false;
+  }
   function openTalesGate() {
     const TL = window.ONL_TALES;
     const body = $('modalBody'); body.innerHTML = '';
@@ -4353,7 +4448,15 @@
     submitScore: async (game, score) => { if (!LIVE) return 0; const { data } = await sb.rpc('submit_score', { p_game: game, p_score: Math.max(0, Math.min(1000000, Math.round(score))) }); return data || 0; },
     topScores: async game => { if (!LIVE) return []; const { data } = await sb.rpc('top_scores', { p_game: game }); return data || []; },
     myScore: async game => { if (!LIVE) return 0; const { data } = await sb.rpc('my_score', { p_game: game }); return data || 0; },
-    bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; }
+    bubble: text => { player.bubble = { text, until: performance.now() + 3000 }; },
+    // racing (race.sql): best time per map, lower is better
+    raceSubmit: async (map, ms) => { if (!LIVE) return 0; const { data, error } = await sb.rpc('submit_race_time', { p_map: String(map), p_ms: Math.round(ms) }); if (error) throw error; return data || 0; },
+    raceTop: async map => { if (!LIVE) return []; const { data } = await sb.rpc('top_race_times', { p_map: String(map) }); return data || []; },
+    raceMine: async map => { if (!LIVE) return 0; const { data } = await sb.rpc('my_race_time', { p_map: String(map) }); return data || 0; },
+    peers: () => net.remotes.size,
+    // the phone-controller link (race.js): a private channel 'pad:<code>' (race.sql)
+    channel: topic => LIVE && /^pad:[A-Z0-9]{6,16}$/.test(topic) ? sb.channel(topic, { config: { private: true, broadcast: { self: false } } }) : null,
+    removeChannel: ch => { try { if (ch) sb.removeChannel(ch); } catch (e) {} }
   };
   if (document.fonts && document.fonts.load) Promise.all([document.fonts.load('700 20px "Pixelify Sans"'), document.fonts.load('400 20px "Silkscreen"')]).then(() => { if (sceneId === 'f1r3') loadSceneArt(); }).catch(() => {});
   if (/[?&]debug\b/.test(location.search)) window.__onl = { worldToClient: (wx, wy) => { const rc = canvas.getBoundingClientRect(); return [rc.left + (wx - camX) * s, rc.top + (wy - camY) * s]; }, goScene, openForestWarn, openMansionDoor, openTalesGate, cam: () => ({ x: camX, y: camY, s }), scene: () => sceneId, openPrayers, SCENES, player: () => player, net, goTo, findPath, blocked, update: (dt, n) => update(dt, n), sfxTest: k => { actx = null; sfx(k); }, doPunch, setBall: (x, y, vx, vy) => { if (ball) Object.assign(ball, { x, y, vx: vx || 0, vy: vy || 0, own: null, tx: null, kickAt: 0 }); }, soccer: () => match && { score: match.score, rem: match.rem, phase: match.phase, host: matchHost(), teams: match.teams, ball: ball && [Math.round(ball.x), Math.round(ball.y)] }, fb: () => ball && { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy, own: ball.own, ks: ball.ks, host: matchHost() === net.uid }, kick, chars: () => chars, near: () => near, SCENES: () => SCENES, openMoses, setWx: o => Object.assign(WX, o), wx: () => WX, floaters: () => floaters, sit, seatApproach, nearestCell, gw: () => [GW, GH, walk], pty: { createParty, joinParty, setReady, startMatch, canStart, get: () => party } };

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#251c2c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>ON-Lounge 레이싱 컨트롤러</title>
+<style>
+  :root { --ink: #251c2c; --gold: #ffcc4d; --cream: #fff8ea; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #1b1424; color: var(--cream); font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; overflow: hidden; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #2b2233; border-bottom: 3px solid #000; flex: none; }
+  header b { font-size: 15px; }
+  #st { margin-left: auto; font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 6px; background: #444; }
+  #st.ok { background: #2b8a3e; } #st.bad { background: #c92a2a; }
+  #info { display: flex; justify-content: center; gap: 18px; padding: 6px; font-weight: 800; font-size: 18px; flex: none; min-height: 34px; }
+  #info span:empty { display: none; }
+  #pad { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 10px 18px 18px; gap: 16px; }
+  #joy { position: relative; width: min(46vw, 220px); aspect-ratio: 1; border-radius: 50%; background: rgba(255,248,234,.08); border: 4px solid rgba(255,248,234,.35); touch-action: none; flex: none; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 40%; height: 40%; transform: translate(-50%, -50%); border-radius: 50%; background: #e03131; border: 4px solid #000; box-shadow: 0 4px 0 rgba(0,0,0,.4); pointer-events: none; }
+  #joy .lab { position: absolute; left: 0; right: 0; top: 8px; text-align: center; font-size: 12px; font-weight: 800; opacity: .6; pointer-events: none; }
+  #btns { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .b { border-radius: 50%; border: 4px solid #000; box-shadow: 0 5px 0 #000; font: inherit; font-weight: 900; touch-action: none; padding: 0; -webkit-user-select: none; user-select: none; }
+  #drift { width: min(34vw, 150px); aspect-ratio: 1; background: var(--gold); color: var(--ink); font-size: 18px; }
+  #brake { width: min(24vw, 100px); aspect-ratio: 1; background: #8a1f24; color: var(--cream); font-size: 14px; }
+  .b.on { transform: translateY(4px); box-shadow: 0 1px 0 #000; filter: brightness(1.15); }
+  #msg { text-align: center; font-size: 13px; opacity: .8; padding: 0 12px 8px; flex: none; }
+  #codeBox { display: none; flex-direction: column; align-items: center; gap: 10px; padding: 30px 16px; }
+  #codeBox input { font-size: 22px; text-transform: uppercase; text-align: center; width: 14ch; padding: 8px; border-radius: 8px; border: 3px solid #000; }
+  #codeBox button { font-size: 18px; padding: 8px 20px; border-radius: 8px; border: 3px solid #000; background: var(--gold); font-weight: 800; }
+  @media (orientation: portrait) { #pad { flex-direction: row; } #hint { display: block; } }
+  #hint { display: none; text-align: center; font-size: 12px; opacity: .6; padding-bottom: 4px; }
+  @media (orientation: landscape) and (max-height: 500px) { #info { font-size: 15px; min-height: 26px; padding: 2px; } header { padding: 4px 12px; } #joy { width: min(40vh, 200px); width: min(60vh, 220px); } #drift { width: min(40vh, 150px); } #brake { width: min(28vh, 100px); } }
+</style>
+</head>
+<body>
+<header><b>🏎️ ON-Lounge 컨트롤러</b><span id="st">연결 중…</span></header>
+<div id="codeBox">
+  <p>컴퓨터 화면에 보이는 연결 코드를 입력해 주세요.</p>
+  <input id="codeIn" maxlength="16" autocomplete="off" autocapitalize="characters">
+  <button id="codeGo" type="button">연결하기</button>
+</div>
+<div id="info"><span id="lap"></span><span id="pos"></span></div>
+<div id="pad">
+  <div id="joy"><div id="knob"></div><span class="lab">▲ 위로 밀면 출발</span></div>
+  <div id="btns"><button class="b" id="drift" type="button">드리프트</button><button class="b" id="brake" type="button">브레이크</button></div>
+</div>
+<p id="hint">폰을 가로로 돌리면 더 편해요</p>
+<p id="msg">왼손: 조이스틱 (위 = 가기, 좌우 = 방향) · 오른손: 드리프트 · 브레이크<br>드리프트를 놓자마자 조이스틱을 한 번 더 위로 밀면 순간 부스트!</p>
+<script src="supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const st = (t, cls) => { $('st').textContent = t; $('st').className = cls || ''; };
+  let code = (location.hash || '').slice(1).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!code) {
+    $('codeBox').style.display = 'flex'; $('pad').style.display = 'none'; st('코드 필요');
+    $('codeGo').addEventListener('click', () => { const c = $('codeIn').value.toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length >= 6) { location.hash = c; location.reload(); } });
+    return;
+  }
+  const cfg = window.ONLOUNGE_CONFIG || {};
+  if (!window.supabase || !cfg.supabaseUrl || /여기에/.test(cfg.supabaseUrl)) { st('설정 없음', 'bad'); return; }
+  const sb = supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  const myId = 'p' + Math.random().toString(36).slice(2, 10);
+  let ch = null, linked = false, okAt = 0, pc = null, dc = null, lastHeard = 0;
+  const S = { x: 0, y: 0, d: 0, b: 0, u: 0, e: 0 };
+  let upHeld = false;
+  function send(m) { m.from = 'ph'; m.id = myId; try { if (ch) ch.send({ type: 'broadcast', event: 'pad', payload: m }); } catch (e) {} }
+  function status() {
+    if (!linked) { st('컴퓨터 찾는 중…'); return; }
+    if (Date.now() - lastHeard > 8000) { st('컴퓨터 신호 없음', 'bad'); return; }
+    st(dc && dc.readyState === 'open' ? '✅ 연결됨 (빠름)' : '✅ 연결됨', 'ok');
+  }
+  function onMsg(m) {
+    if (!m || m.from !== 'pc' || (m.to && m.to !== myId)) return;
+    lastHeard = Date.now();
+    if (m.t === 'ok') { if (!linked) { linked = true; okAt = Date.now(); try { navigator.vibrate && navigator.vibrate(30); } catch (e) {} } status(); }
+    else if (m.t === 'sdp' && m.d && m.d.type === 'offer') answer(m.d);
+    else if (m.t === 'ice' && pc && m.c) pc.addIceCandidate(m.c).catch(() => {});
+    else if (m.t === 'st') show(m);
+    else if (m.t === 'bye') { linked = false; st('컴퓨터가 연결을 끊었어요', 'bad'); closePeer(); }
+  }
+  function show(m) {
+    $('lap').textContent = m.laps && (m.st === 'race' || m.st === 'count') ? `🏁 ${m.lap}/${m.laps}바퀴` : m.st === 'end' ? '🏁 레이스 끝!' : '';
+    $('pos').textContent = m.n > 1 && m.pos && m.st !== 'end' ? `${m.pos}등 / ${m.n}` : '';
+  }
+  function closePeer() { try { dc && dc.close(); } catch (e) {} try { pc && pc.close(); } catch (e) {} pc = null; dc = null; }
+  function answer(offer) {
+    closePeer();
+    if (!window.RTCPeerConnection) return;
+    try {
+      const p = new RTCPeerConnection({ iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }] });
+      pc = p;
+      p.ondatachannel = ev => {
+        const c = ev.channel;
+        c.onopen = () => { if (pc === p) { dc = c; status(); } };
+        c.onclose = () => { if (dc === c) { dc = null; status(); } };
+        c.onmessage = e2 => { try { const m = JSON.parse(e2.data); lastHeard = Date.now(); if (m.t === 'st') show(m); if (m.t === 'fx') { try { navigator.vibrate && navigator.vibrate(Math.min(120, m.ms | 0)); } catch (e) {} } } catch (e) {} };
+      };
+      p.onicecandidate = ev => { if (ev.candidate && pc === p) send({ t: 'ice', c: ev.candidate.toJSON() }); };
+      p.setRemoteDescription(offer).then(() => p.createAnswer()).then(a => p.setLocalDescription(a)).then(() => { if (pc === p) send({ t: 'sdp', d: { type: p.localDescription.type, sdp: p.localDescription.sdp } }); }).catch(() => {});
+    } catch (e) { pc = null; }
+  }
+  async function connect() {
+    try { await sb.realtime.setAuth(); } catch (e) {}
+    ch = sb.channel('pad:' + code, { config: { private: true, broadcast: { self: false } } });
+    ch.on('broadcast', { event: 'pad' }, ({ payload }) => onMsg(payload));
+    ch.subscribe(s => {
+      if (s === 'SUBSCRIBED') { send({ t: 'hi' }); status(); }
+      else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') st('연결 실패 · 잠시 후 다시', 'bad');
+    });
+  }
+  connect();
+  // keep saying hello until the computer answers; then a slow heartbeat
+  setInterval(() => { if (!ch) return; if (!linked) send({ t: 'hi' }); status(); }, 1500);
+
+  // ---- the stick ----
+  const joy = $('joy'), knob = $('knob'); let jid = null;
+  function jmove(ev) {
+    const r = joy.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, max = r.width / 2;
+    let dx = (ev.clientX - cx) / max, dy = (ev.clientY - cy) / max; const d = Math.hypot(dx, dy); if (d > 1) { dx /= d; dy /= d; }
+    S.x = Math.round(dx * 100); S.y = Math.round(-dy * 100);
+    knob.style.transform = `translate(calc(-50% + ${dx * max * 0.62}px), calc(-50% + ${dy * max * 0.62}px))`;
+    const up = S.y > 40; if (up && !upHeld) S.u++; upHeld = up || (upHeld && S.y > 15);
+  }
+  joy.addEventListener('pointerdown', ev => { ev.preventDefault(); jid = ev.pointerId; try { joy.setPointerCapture(jid); } catch (e) {} jmove(ev); });
+  joy.addEventListener('pointermove', ev => { if (ev.pointerId === jid) jmove(ev); });
+  const joff = ev => { if (ev.pointerId !== jid) return; jid = null; S.x = S.y = 0; upHeld = false; knob.style.transform = 'translate(-50%, -50%)'; };
+  joy.addEventListener('pointerup', joff); joy.addEventListener('pointercancel', joff); joy.addEventListener('lostpointercapture', joff);
+  function hold(b, key) {
+    b.addEventListener('pointerdown', ev => { ev.preventDefault(); try { b.setPointerCapture(ev.pointerId); } catch (e) {} if (!S[key]) { S[key] = 1; if (key === 'd') S.e++; } b.classList.add('on'); });
+    const up = () => { S[key] = 0; b.classList.remove('on'); };
+    b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  hold($('drift'), 'd'); hold($('brake'), 'b');
+  document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+  // ---- sending: 30 times a second over the direct link, or a few times a second over the channel ----
+  let last = '', lastAt = 0;
+  setInterval(() => {
+    if (!linked) return;
+    const t = Date.now(), fast = dc && dc.readyState === 'open';
+    const q = fast ? S : { x: Math.round(S.x / 10) * 10, y: Math.round(S.y / 10) * 10, d: S.d, b: S.b, u: S.u, e: S.e };
+    const key = JSON.stringify(q);
+    if (fast) { if (key !== last || t - lastAt > 200) { try { dc.send(JSON.stringify(Object.assign({ t: 'in' }, q))); } catch (e) {} last = key; lastAt = t; } return; }
+    if ((key !== last && t - lastAt > 160) || t - lastAt > 1000) { send(Object.assign({ t: 'in' }, q)); last = key; lastAt = t; }
+  }, 33);
+
+  // keep the screen on while playing
+  let lock = null;
+  async function wake() { try { if (navigator.wakeLock && !lock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch (e) {} }
+  document.addEventListener('pointerdown', wake, { once: false });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { wake(); if (ch) send({ t: 'hi' }); } });
+  window.addEventListener('pagehide', () => send({ t: 'bye' }));
+})();
+</script>
+</body>
+</html>
